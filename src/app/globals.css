@@ -114,3 +114,20 @@ body {
 .animate-slide-up {
   animation: slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* Tiptap / ProseMirror */
+.ProseMirror {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  min-height: 100%;
+}
+.ProseMirror:focus {
+  outline: none;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--fg-subtle);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

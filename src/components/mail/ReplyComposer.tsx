@@ -15,13 +15,8 @@ import {
 import type { Email } from "@/lib/types";
 import { displayName } from "./helpers";
 import { ScheduleDialog } from "./ScheduleDialog";
-import {
-  buildSegments,
-  hasPending,
-  pendingCount,
-  resolveText,
-  type Segment,
-} from "@/lib/diff";
+import { buildSegments, pendingCount } from "@/lib/diff";
+import { DraftEditor, type DraftEditorHandle } from "./tiptap/DraftEditor";
 
 const QUICK_PROMPTS = ["もっと丁寧に", "もっと短く", "カジュアルに", "英語にして", "感謝を加えて"];
 
@@ -29,7 +24,7 @@ interface HistoryItem {
   id: string;
   instruction: string;
   scope: "selection" | "whole";
-  count: number; // 提案件数
+  count: number;
 }
 
 export function ReplyComposer({
@@ -46,21 +41,20 @@ export function ReplyComposer({
   const [subject, setSubject] = useState(
     email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
   );
+  const [initialDraft, setInitialDraft] = useState<string | null>(null);
   const [body, setBody] = useState("");
+  const [pending, setPending] = useState(0);
   const [generating, setGenerating] = useState(true);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [input, setInput] = useState("");
-  const [segments, setSegments] = useState<Segment[] | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [selection, setSelection] = useState<{ start: number; end: number; text: string } | null>(
-    null,
-  );
   const [note, setNote] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [selectionText, setSelectionText] = useState("");
+  const editorRef = useRef<DraftEditorHandle>(null);
 
-  const reviewing = segments !== null;
+  const reviewing = pending > 0;
 
   // Initial draft.
   useEffect(() => {
@@ -76,11 +70,13 @@ export function ReplyComposer({
         const data = await res.json();
         if (active && data.draft) {
           setSubject(data.draft.subject);
-          setBody(data.draft.body);
+          setInitialDraft(data.draft.body);
         }
       } catch {
         if (active)
-          setBody(`${displayName(email.from)} 様\n\nご連絡ありがとうございます。\n\n\nよろしくお願いいたします。`);
+          setInitialDraft(
+            `${displayName(email.from)} 様\n\nご連絡ありがとうございます。\n\n\nよろしくお願いいたします。`,
+          );
       } finally {
         if (active) setGenerating(false);
       }
@@ -91,20 +87,9 @@ export function ReplyComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function captureSelection() {
-    const el = textareaRef.current;
-    if (!el) return;
-    const { selectionStart: s, selectionEnd: e } = el;
-    if (s != null && e != null && e > s) {
-      setSelection({ start: s, end: e, text: body.slice(s, e) });
-    } else {
-      setSelection(null);
-    }
-  }
-
   async function runSuggest(instruction: string, scope: "selection" | "whole") {
     if (!instruction.trim() || busy || reviewing) return;
-    const sel = scope === "selection" ? selection : null;
+    const sel = scope === "selection" && selectionText ? selectionText : null;
     setBusy(true);
     setNote(null);
     setInput("");
@@ -112,52 +97,28 @@ export function ReplyComposer({
       const res = await fetch("/api/ai/suggest", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, draft: body, instruction, selection: sel }),
+        body: JSON.stringify({
+          email,
+          draft: body,
+          instruction,
+          selection: sel ? { start: 0, end: 0, text: sel } : undefined,
+        }),
       });
       const data = await res.json();
       const revised: string = data.revised ?? body;
       const segs = buildSegments(body, revised);
       const changes = pendingCount(segs);
-      setHistory((h) => [
-        ...h,
-        { id: `t${h.length}`, instruction, scope, count: changes },
-      ]);
+      setHistory((h) => [...h, { id: `t${h.length}`, instruction, scope, count: changes }]);
       if (changes === 0) {
         setNote(data.ai === false ? "AIキー未設定のため変更なし" : "変更はありませんでした");
       } else {
-        setSegments(segs);
-        setSelection(null);
+        editorRef.current?.loadReview(segs);
       }
     } catch {
       setNote("提案の生成に失敗しました");
     } finally {
       setBusy(false);
     }
-  }
-
-  function decide(id: string, status: "accepted" | "rejected") {
-    setSegments((prev) => {
-      if (!prev) return prev;
-      const next = prev.map((s) =>
-        s.type === "hunk" && s.id === id ? { ...s, status } : s,
-      );
-      if (!hasPending(next)) {
-        setBody(resolveText(next));
-        return null; // exit review
-      }
-      return next;
-    });
-  }
-
-  function decideAll(status: "accepted" | "rejected") {
-    setSegments((prev) => {
-      if (!prev) return prev;
-      const next = prev.map((s) =>
-        s.type === "hunk" && s.status === "pending" ? { ...s, status } : s,
-      );
-      setBody(resolveText(next));
-      return null;
-    });
   }
 
   async function sendNow() {
@@ -224,7 +185,7 @@ export function ReplyComposer({
           />
 
           {/* Selection action bar */}
-          {selection && !reviewing && !generating && (
+          {selectionText && !reviewing && !generating && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs animate-in">
               <Wand2 className="size-3.5 text-accent" />
               <span className="text-accent">選択範囲を修正:</span>
@@ -242,22 +203,20 @@ export function ReplyComposer({
           )}
 
           <div className="relative mt-3 flex-1 overflow-y-auto">
-            {generating ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-fg-subtle">
+            <DraftEditor
+              ref={editorRef}
+              loadText={initialDraft}
+              onChange={({ text, pending }) => {
+                setBody(text);
+                setPending(pending);
+              }}
+              onSelectionChange={setSelectionText}
+            />
+            {generating && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg text-fg-subtle">
                 <Loader2 className="size-5 animate-spin text-accent" />
                 <p className="text-sm">AIが返信を下書きしています…</p>
               </div>
-            ) : reviewing ? (
-              <DiffView segments={segments!} onDecide={decide} />
-            ) : (
-              <textarea
-                ref={textareaRef}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                onSelect={captureSelection}
-                placeholder="本文"
-                className="h-full w-full resize-none bg-transparent text-[15px] leading-7 outline-none placeholder:text-fg-subtle"
-              />
             )}
             {busy && (
               <div className="pointer-events-none absolute right-2 top-0 flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs text-accent">
@@ -270,19 +229,17 @@ export function ReplyComposer({
         {/* Review bar OR send controls */}
         {reviewing ? (
           <div className="flex items-center gap-2 border-t border-border bg-surface px-6 py-3">
-            <span className="text-sm font-medium text-accent">
-              {pendingCount(segments!)}件の提案を確認してください
-            </span>
+            <span className="text-sm font-medium text-accent">{pending}件の提案を確認してください</span>
             <span className="text-xs text-fg-subtle">緑=追加 / 取り消し線=削除</span>
             <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={() => decideAll("rejected")}
+                onClick={() => editorRef.current?.resolveAll("before")}
                 className="rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2"
               >
                 すべて却下
               </button>
               <button
-                onClick={() => decideAll("accepted")}
+                onClick={() => editorRef.current?.resolveAll("after")}
                 className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg"
               >
                 <CheckCheck className="size-4" />
@@ -379,16 +336,16 @@ export function ReplyComposer({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  runSuggest(input, selection ? "selection" : "whole");
+                  runSuggest(input, selectionText ? "selection" : "whole");
                 }
               }}
               rows={1}
-              placeholder={selection ? "選択範囲への指示…" : "全体への指示…"}
+              placeholder={selectionText ? "選択範囲への指示…" : "全体への指示…"}
               disabled={reviewing}
               className="max-h-24 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-fg-subtle disabled:opacity-50"
             />
             <button
-              onClick={() => runSuggest(input, selection ? "selection" : "whole")}
+              onClick={() => runSuggest(input, selectionText ? "selection" : "whole")}
               disabled={busy || generating || reviewing || !input.trim()}
               className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-accent-fg transition-opacity disabled:opacity-40"
             >
@@ -401,55 +358,6 @@ export function ReplyComposer({
       {showSchedule && (
         <ScheduleDialog onSchedule={schedule} onClose={() => setShowSchedule(false)} />
       )}
-    </div>
-  );
-}
-
-function DiffView({
-  segments,
-  onDecide,
-}: {
-  segments: Segment[];
-  onDecide: (id: string, status: "accepted" | "rejected") => void;
-}) {
-  return (
-    <div className="whitespace-pre-wrap text-[15px] leading-7">
-      {segments.map((s, i) => {
-        if (s.type === "same") return <span key={i}>{s.text}</span>;
-        if (s.status === "accepted") return <span key={s.id}>{s.after}</span>;
-        if (s.status === "rejected") return <span key={s.id}>{s.before}</span>;
-        return (
-          <span
-            key={s.id}
-            className="mx-0.5 inline rounded-md bg-accent-soft/60 px-1 align-baseline ring-1 ring-accent/30"
-          >
-            {s.before && (
-              <span className="bg-high-soft text-high line-through">{s.before}</span>
-            )}
-            {s.after && (
-              <span className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                {s.after}
-              </span>
-            )}
-            <span className="ml-1 inline-flex translate-y-[2px] gap-0.5">
-              <button
-                onClick={() => onDecide(s.id, "accepted")}
-                title="採用"
-                className="grid size-5 place-items-center rounded bg-accent text-accent-fg hover:opacity-90"
-              >
-                <Check className="size-3" />
-              </button>
-              <button
-                onClick={() => onDecide(s.id, "rejected")}
-                title="却下"
-                className="grid size-5 place-items-center rounded border border-border bg-surface text-fg-muted hover:text-high"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
-          </span>
-        );
-      })}
     </div>
   );
 }
