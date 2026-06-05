@@ -1,26 +1,116 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Design tokens — a calm, focused mail surface (light + dark).
+--------------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #fbfbfc;
+  --border: #e9e9ec;
+  --border-strong: #dadadf;
+  --fg: #1a1a1e;
+  --fg-muted: #6b6b73;
+  --fg-subtle: #9a9aa3;
+  --accent: #6d5efc;
+  --accent-fg: #ffffff;
+  --accent-soft: #efedff;
+  --high: #e5484d;
+  --high-soft: #fdecec;
+  --low: #8e8e96;
+  --shadow: 0 1px 2px rgba(17, 17, 26, 0.04), 0 8px 24px rgba(17, 17, 26, 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0c0c0f;
+    --surface: #141418;
+    --surface-2: #1a1a1f;
+    --border: #26262d;
+    --border-strong: #34343d;
+    --fg: #ececf1;
+    --fg-muted: #9a9aa6;
+    --fg-subtle: #6a6a76;
+    --accent: #8b7dff;
+    --accent-fg: #0c0c0f;
+    --accent-soft: #221f3a;
+    --high: #ff6369;
+    --high-soft: #2a1718;
+    --low: #6a6a76;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
   }
 }
 
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-high: var(--high);
+  --color-high-soft: var(--high-soft);
+  --color-low: var(--low);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  border-color: var(--border);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-subtle);
+  background-clip: content-box;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-in {
+  animation: fade-in 0.18s ease-out;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-slide-up {
+  animation: slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }

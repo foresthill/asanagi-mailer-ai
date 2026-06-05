@@ -1,7 +1,15 @@
 {
-  "name": "ai-mailer",
+  "name": "asanagi",
   "version": "0.1.0",
   "private": true,
+  "description": "Asanagi（朝凪） — AIネイティブなメールクライアント。返信提案・会話で一箇所ずつ添削・スケジュール送信・AI重要度学習。",
+  "license": "AGPL-3.0-or-later",
+  "author": "foresthill",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foresthill/asanagi-mailer-ai.git"
+  },
+  "homepage": "https://github.com/foresthill/asanagi-mailer-ai#readme",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,13 +17,29 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.81",
+    "@ai-sdk/openai": "^3.0.67",
+    "@ai-sdk/react": "^3.0.197",
+    "@openrouter/ai-sdk-provider": "^2.9.0",
+    "ai": "^6.0.195",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "diff": "^9.0.0",
+    "googleapis": "^173.0.0",
+    "imapflow": "^1.3.5",
+    "lucide-react": "^1.17.0",
     "next": "16.2.7",
+    "nodemailer": "^8.0.10",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/diff": "^7.0.2",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

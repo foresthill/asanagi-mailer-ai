@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Asanagi（朝凪）
 
-## Getting Started
+> 朝、受信箱が澄んでいる。
 
-First, run the development server:
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+![Status: Phase 1 MVP](https://img.shields.io/badge/status-Phase%201%20MVP-orange)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+
+AIネイティブ・AIファーストなメールクライアント。受信したメールに対してAIが返信下書きを提案し、**会話で一箇所ずつ添削**しながら、**即時送信**または**スケジュール送信**できます。さばいたメールはアーカイブ／ゴミ箱へ送って受信箱をきれいに保ちます。重要度はAIが判定し、あなたのフィードバックを学習していきます。
+
+**Asanagi（朝凪）** = 朝、海風がやんで波が静まる凪。一日の始まりに、受信箱が澄みきっている状態を名前にしました。
+
+> ステータス: **Phase 1 MVP（動作確認済み）**。APIキーなしでもモックの受信箱で全機能を試せます。
+
+## 主な機能（Phase 1）
+
+- **受信箱 / アーカイブ / ゴミ箱** — 3ペインUI、ホバー＆キーボードで素早く処理
+- **AIで返信** — 受信メールから返信下書きを自動生成
+- **会話で添削** — 「もっと丁寧に」「日程を月曜に」などと指示すると下書きに反映（ストリーミング）
+- **即時送信 / スケジュール送信** — 1時間後・明日朝・任意日時を指定可能
+- **送信＆アーカイブ** — 返信したら元メールを自動でアーカイブ（受信箱を片付ける）
+- **AI重要度判定 + 学習** — high/normal/low を判定。`重要/通常/低` のフィードバックがその送信者・ドメインのシグナルとして蓄積され、次回以降の判定に反映（per-userナレッジの種）
+- **キーボード操作** — `j`/`k` 移動、`e` アーカイブ、`r` 返信、`#`/`Backspace` ゴミ箱
+
+## アーキテクチャ（差し替え可能な抽象化）
+
+| 層 | 抽象化 | 実装 |
+|----|--------|------|
+| AI | `src/lib/ai/model.ts` | Claude（Anthropic）/ OpenAI / OpenRouter / Vercel AI Gateway を env で切替。将来ローカルLLMも追加可 |
+| Email | `src/lib/email/provider.ts` | Gmail API / 汎用IMAP+SMTP / モック（資格情報なしで動く）を自動判定 |
+| 永続化 | `src/lib/store.ts` | ローカルJSON（`.data/`）。Phase2でDBに差し替え予定 |
+
+機能コード（UI / APIルート）はこれらのインターフェースだけに依存し、Gmail/IMAPやClaude/OpenRouterの具体に直接依存しません。
+
+## セットアップ
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev            # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+キーなしでもモック受信箱で全フローを試せます（返信生成・重要度はキーワードベースの簡易モード）。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### AI・メールを実接続する
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`.env.example` を `.env.local` にコピーして設定:
 
-## Learn More
+```bash
+# AIプロバイダ（いずれか）
+ANTHROPIC_API_KEY=sk-ant-...        # Claude直接（推奨）
+# OPENROUTER_API_KEY=sk-or-...      # OpenRouter
+# AI_GATEWAY_API_KEY=...            # Vercel AI Gateway
+AI_PROVIDER=anthropic
+# AI_MODEL=claude-sonnet-4-5        # 利用プロバイダの最新モデルIDを指定
 
-To learn more about Next.js, take a look at the following resources:
+# メールバックエンド（いずれか。未設定ならモック）
+# Gmail (OAuth2): GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN
+# IMAP+SMTP:      IMAP_HOST / IMAP_USER / IMAP_PASSWORD / SMTP_HOST ...
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+> モデルIDは変わるため、`AI_MODEL` には利用プロバイダが現在公開しているIDを設定してください。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## スクリプト
 
-## Deploy on Vercel
+```bash
+npm run dev      # 開発サーバ
+npm run build    # 本番ビルド（型チェック込み）
+npm run lint     # ESLint
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 設計書（docs/）
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+実装の前提となる設計は [`docs/`](docs/) にあります。
+
+- [00 — 全体概要・フェーズ・原則](docs/00-overview.md)
+- [01 — 逐次的な返信添削UX（一箇所ずつ提案→採用/却下）](docs/01-incremental-reply-editing.md)
+- [02 — 重要度の仕分け画面とユーザーごとの学習機構](docs/02-importance-triage-learning.md)
+- [03 — プロバイダ・同期戦略（新着のみ）・Macネイティブ](docs/03-providers-sync-native.md)
+- [04 — スレッド表示とインボックス整理（バンドル/ビュー）](docs/04-threads-and-organization.md)
+
+## ロードマップ
+
+- **Phase 1** — Gmail API・AI返信＋添削・重要度判定＋学習・送信/予約・アーカイブ/ゴミ箱（Web）
+- **Phase 2** — IMAP/SMTP（会社メール）、**Macネイティブ（Tauri想定）**、**スレッド表示**、**インボックス整理（バンドル/送信者レーン/スマートビュー）**、PIIマスキング、ローカルLLM/ローカル学習、新着のみ同期
+- **Phase 3** — **承認ワークフロー**（上長レビュー → 送信）、重要度学習の高度化（埋め込みRAG＋軽量分類器）
+
+## 技術スタック
+
+Next.js 16 (App Router) / React 19 / Tailwind CSS v4 / Vercel AI SDK v6 / TypeScript
+
+## コントリビュート
+
+歓迎します！ [CONTRIBUTING.md](CONTRIBUTING.md) と [`docs/`](docs/) を読んでから、`feature/` ブランチで PR をお願いします。脆弱性報告は [SECURITY.md](SECURITY.md) を参照（公開Issueは立てないでください）。
+
+## ライセンス
+
+[GNU AGPL-3.0-or-later](LICENSE) © 2026 foresthill
+
+> AGPL を選んだ理由: Asanagi は「メールを端末から出さない」プライバシー優先のメーラーを目指します。誰かが改変版をネットワーク経由のサービスとして提供する場合も、そのソース公開を義務づけることで、ユーザーが常に検証・自衛できる状態を守ります。
