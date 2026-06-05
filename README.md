@@ -2,8 +2,9 @@
 
 > 朝、受信箱が澄んでいる。
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![Status: Phase 1 MVP](https://img.shields.io/badge/status-Phase%201%20MVP-orange)
+![Maintenance: as-is](https://img.shields.io/badge/maintenance-as--is%20%2F%20no%20support-lightgrey)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 
 AIネイティブ・AIファーストなメールクライアント。受信したメールに対してAIが返信下書きを提案し、**会話で一箇所ずつ添削**しながら、**即時送信**または**スケジュール送信**できます。さばいたメールはアーカイブ／ゴミ箱へ送って受信箱をきれいに保ちます。重要度はAIが判定し、あなたのフィードバックを学習していきます。
@@ -88,12 +89,15 @@ npm run lint     # ESLint
 
 Next.js 16 (App Router) / React 19 / Tailwind CSS v4 / Vercel AI SDK v6 / TypeScript
 
-## コントリビュート
+## プロジェクトの状態 / サポート方針
 
-歓迎します！ [CONTRIBUTING.md](CONTRIBUTING.md) と [`docs/`](docs/) を読んでから、`feature/` ブランチで PR をお願いします。脆弱性報告は [SECURITY.md](SECURITY.md) を参照（公開Issueは立てないでください）。
+- **個人プロジェクトです。現状有姿（as-is）で提供**し、**能動的なサポートは行いません**。
+- **自由に使って、フォークして、自分で直してください。** それが推奨スタンスです。
+- Issue / 機能要望 / 修正依頼への返信は**保証しません**（見られないこともあります）。
+- 改善を共有したい方は PR を歓迎しますが、レビュー・マージも保証はありません。気軽にフォークしてどうぞ。
 
 ## ライセンス
 
-[GNU AGPL-3.0-or-later](LICENSE) © 2026 foresthill
+[MIT License](LICENSE) © 2026 foresthill
 
-> AGPL を選んだ理由: Asanagi は「メールを端末から出さない」プライバシー優先のメーラーを目指します。誰かが改変版をネットワーク経由のサービスとして提供する場合も、そのソース公開を義務づけることで、ユーザーが常に検証・自衛できる状態を守ります。
+自由に利用・改変・再配布・商用利用（SaaS化を含む）して構いません。無保証です。
