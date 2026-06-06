@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateText } from "ai";
-import { isAIConfigured, resolveModel } from "@/lib/ai/model";
+import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { REFINE_SYSTEM, emailContext } from "@/lib/ai/prompts";
 import type { Email } from "@/lib/types";
 
@@ -16,9 +16,10 @@ interface Body {
 
 export async function POST(req: Request) {
   const { email, draft, instruction, selection } = (await req.json()) as Body;
+  const cfg = await loadAIConfig();
 
   // No key: return the draft unchanged → client computes "変更なし".
-  if (!isAIConfigured()) {
+  if (!cfg.configured) {
     return NextResponse.json({ revised: draft, ai: false });
   }
 
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
 
   try {
     const { text } = await generateText({
-      model: resolveModel(),
+      model: resolveModel(cfg),
       system: REFINE_SYSTEM,
       prompt: [
         "以下のメール下書きを、指示に従って修正してください。",

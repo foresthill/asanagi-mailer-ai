@@ -1,6 +1,9 @@
 import { MailApp } from "@/components/mail/MailApp";
-import { isAIConfigured } from "@/lib/ai/model";
+import { loadAIConfig } from "@/lib/ai/model";
 
-export default function Home() {
-  return <MailApp aiConfigured={isAIConfigured()} />;
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const cfg = await loadAIConfig();
+  return <MailApp aiConfigured={cfg.configured} />;
 }

@@ -1,6 +1,12 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { ImportanceSignal, Importance, ScheduledSend } from "@/lib/types";
+import type {
+  AIProvider,
+  AISettings,
+  ImportanceSignal,
+  Importance,
+  ScheduledSend,
+} from "@/lib/types";
 
 /**
  * Tiny file-backed JSON store. Good enough for local MVP persistence
@@ -25,6 +31,36 @@ async function writeJson<T>(file: string, data: T): Promise<void> {
 
 // Exposed so the mock provider can persist mailbox mutations.
 export const store = { readJson, writeJson };
+
+// ---------------------------------------------------------------------------
+// AI connection settings (BYOK) — stored locally, never leaves the device
+// ---------------------------------------------------------------------------
+const AI_SETTINGS = "ai-settings.json";
+
+export async function getAISettings(): Promise<AISettings> {
+  return readJson<AISettings>(AI_SETTINGS, {});
+}
+
+/**
+ * Merge a patch into stored AI settings. Keys merge per-provider; passing an
+ * empty/blank string for a provider clears that key.
+ */
+export async function saveAISettings(patch: AISettings): Promise<AISettings> {
+  const cur = await getAISettings();
+  const next: AISettings = {
+    ...cur,
+    ...patch,
+    keys: { ...(cur.keys ?? {}), ...(patch.keys ?? {}) },
+  };
+  if (next.keys) {
+    for (const k of Object.keys(next.keys) as AIProvider[]) {
+      if (!next.keys[k]?.trim()) delete next.keys[k];
+    }
+    if (Object.keys(next.keys).length === 0) delete next.keys;
+  }
+  await writeJson(AI_SETTINGS, next);
+  return next;
+}
 
 // ---------------------------------------------------------------------------
 // Scheduled sends

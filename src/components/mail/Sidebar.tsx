@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Inbox, Trash2, Sparkles, Clock } from "lucide-react";
+import { Archive, Inbox, Trash2, Sparkles, Clock, Settings } from "lucide-react";
 import type { MailboxState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -16,12 +16,14 @@ export function Sidebar({
   scheduledCount,
   aiConfigured,
   onSelect,
+  onOpenSettings,
 }: {
   folder: MailboxState;
   counts: Partial<Record<MailboxState, number>>;
   scheduledCount: number;
   aiConfigured: boolean;
   onSelect: (f: MailboxState) => void;
+  onOpenSettings: () => void;
 }) {
   return (
     <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface-2 px-3 py-4">
@@ -71,10 +73,14 @@ export function Sidebar({
       </div>
 
       <div className="mt-auto px-2">
-        <div
+        <button
+          onClick={onOpenSettings}
+          title="AI 接続設定"
           className={cn(
-            "flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs",
-            aiConfigured ? "text-fg-subtle" : "bg-high-soft text-high",
+            "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors",
+            aiConfigured
+              ? "text-fg-subtle hover:bg-surface hover:text-fg"
+              : "bg-high-soft text-high hover:opacity-90",
           )}
         >
           <span
@@ -83,8 +89,11 @@ export function Sidebar({
               aiConfigured ? "bg-emerald-500" : "bg-high",
             )}
           />
-          {aiConfigured ? "AI 接続済み" : "AIキー未設定（簡易モード）"}
-        </div>
+          <span className="flex-1 text-left">
+            {aiConfigured ? "AI 接続済み" : "AIキー未設定（簡易モード）"}
+          </span>
+          <Settings className="size-3.5" />
+        </button>
       </div>
     </aside>
   );

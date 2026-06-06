@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { isAIConfigured, resolveModel } from "@/lib/ai/model";
+import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { REPLY_SYSTEM, emailContext } from "@/lib/ai/prompts";
 import type { DraftRequest } from "@/lib/types";
 
@@ -14,9 +14,10 @@ const draftSchema = z.object({
 
 export async function POST(req: Request) {
   const { email, guidance } = (await req.json()) as DraftRequest;
+  const cfg = await loadAIConfig();
 
   // Graceful fallback so the app works before any API key is configured.
-  if (!isAIConfigured()) {
+  if (!cfg.configured) {
     const subject = email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`;
     const body = `${email.from.name ?? email.from.email} 様
 
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
 
   try {
     const { object } = await generateObject({
-      model: resolveModel(),
+      model: resolveModel(cfg),
       schema: draftSchema,
       system: REPLY_SYSTEM,
       prompt: [

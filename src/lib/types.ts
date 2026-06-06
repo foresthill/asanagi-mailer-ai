@@ -76,3 +76,22 @@ export interface ImportanceSignal {
   weight: number;
   updatedAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// AI provider configuration (BYOK)
+// ---------------------------------------------------------------------------
+
+export type AIProvider = "anthropic" | "openai" | "openrouter" | "gateway";
+
+/**
+ * User-supplied AI connection settings (Bring Your Own Key). Persisted
+ * locally; keys never leave the device. `provider: "auto"` lets the app
+ * pick a provider from whichever keys are present.
+ */
+export interface AISettings {
+  provider?: AIProvider | "auto";
+  /** Provider-specific model id. Empty → sensible per-provider default. */
+  model?: string;
+  /** API keys keyed by provider. Stored locally only. */
+  keys?: Partial<Record<AIProvider, string>>;
+}
