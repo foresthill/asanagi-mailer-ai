@@ -6,9 +6,12 @@ import { Sidebar } from "./Sidebar";
 import { EmailList } from "./EmailList";
 import { EmailReader } from "./EmailReader";
 import { ReplyComposer } from "./ReplyComposer";
+import { ConnectionsSettings } from "./ConnectionsSettings";
 
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<MailboxState>("inbox");
+  const [aiOk, setAiOk] = useState(aiConfigured);
+  const [showSettings, setShowSettings] = useState(false);
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -186,8 +189,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         folder={folder}
         counts={counts}
         scheduledCount={scheduledCount}
-        aiConfigured={aiConfigured}
+        aiConfigured={aiOk}
         onSelect={changeFolder}
+        onOpenSettings={() => setShowSettings(true)}
       />
       {!replying && (
         <EmailList
@@ -203,7 +207,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       {replying && selected ? (
         <ReplyComposer
           email={selected}
-          aiConfigured={aiConfigured}
+          aiConfigured={aiOk}
           onSent={onSent}
           onClose={() => setReplying(false)}
         />
@@ -225,6 +229,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           {toast}
         </div>
       )}
+
+      <ConnectionsSettings
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+        onSaved={setAiOk}
+      />
     </div>
   );
 }
