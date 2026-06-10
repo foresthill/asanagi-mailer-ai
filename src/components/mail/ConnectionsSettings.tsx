@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { X, Loader2, Check, AlertCircle, KeyRound } from "lucide-react";
+import { X, Loader2, Check, AlertCircle, KeyRound, Sparkles } from "lucide-react";
 import type { AIProvider } from "@/lib/types";
+import { GmailConnectSection } from "./GmailConnectSection";
 
 type ProviderChoice = AIProvider | "auto";
 
@@ -134,12 +135,12 @@ export function ConnectionsSettings({
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]"
+        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-border px-5 py-3.5">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3.5">
           <KeyRound className="size-4 text-accent" />
-          <h2 className="text-sm font-semibold">AI 接続設定（BYOK）</h2>
+          <h2 className="text-sm font-semibold">接続設定（AI・メール）</h2>
           <button
             onClick={onClose}
             className="ml-auto grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
@@ -153,7 +154,11 @@ export function ConnectionsSettings({
             <Loader2 className="size-5 animate-spin" />
           </div>
         ) : (
-          <div className="flex flex-col gap-4 px-5 py-4">
+          <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-4 text-accent" />
+              <h3 className="text-xs font-semibold">AI（BYOK）</h3>
+            </div>
             {/* Provider */}
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-fg-muted">プロバイダ</span>
@@ -254,17 +259,21 @@ export function ConnectionsSettings({
                 <span className="break-all">{test.msg}</span>
               </div>
             )}
+
+            <div className="border-t border-border pt-4">
+              <GmailConnectSection />
+            </div>
           </div>
         )}
 
-        <div className="flex items-center gap-2 border-t border-border px-5 py-3">
+        <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3">
           <button
             onClick={handleTest}
             disabled={loading || saving || testing}
             className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2 disabled:opacity-50"
           >
             {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            接続テスト
+            AI 接続テスト
           </button>
           <button
             onClick={handleSave}
@@ -272,7 +281,7 @@ export function ConnectionsSettings({
             className="ml-auto flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            保存
+            AI 設定を保存
           </button>
         </div>
       </div>

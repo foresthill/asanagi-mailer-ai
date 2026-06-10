@@ -3,26 +3,37 @@ import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/t
 import type { EmailProvider } from "./provider";
 
 /**
- * Gmail adapter (OAuth2). Activates when these env vars are set:
+ * Gmail adapter (OAuth2). Credentials come from the in-app connect flow
+ * (stored locally in .data) or from env vars — resolution happens in the
+ * provider factory (lib/email/index.ts):
  *   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
- * Obtain the refresh token once via the OAuth consent flow with scope
- *   https://mail.google.com/  (or gmail.modify + gmail.send).
+ * The in-app flow requests scope gmail.modify only (no permanent delete) —
+ * enough for inbox/archive/trash/read/send. remove() needs the full
+ * https://mail.google.com/ scope and will fail under gmail.modify.
  */
-function client(): gmail_v1.Gmail {
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-  );
-  auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+export interface GmailCreds {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+}
+
+function client(creds: GmailCreds): gmail_v1.Gmail {
+  const auth = new google.auth.OAuth2(creds.clientId, creds.clientSecret);
+  auth.setCredentials({ refresh_token: creds.refreshToken });
   return google.gmail({ version: "v1", auth });
 }
 
-export function gmailConfigured(): boolean {
-  return Boolean(
-    process.env.GOOGLE_CLIENT_ID &&
-      process.env.GOOGLE_CLIENT_SECRET &&
-      process.env.GOOGLE_REFRESH_TOKEN,
-  );
+/** Gmail credentials from env vars, if fully present. */
+export function envGmailCreds(): GmailCreds | null {
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN } = process.env;
+  if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REFRESH_TOKEN) {
+    return {
+      clientId: GOOGLE_CLIENT_ID,
+      clientSecret: GOOGLE_CLIENT_SECRET,
+      refreshToken: GOOGLE_REFRESH_TOKEN,
+    };
+  }
+  return null;
 }
 
 function parseAddress(raw?: string | null): EmailAddress {
@@ -96,7 +107,11 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
 
 export class GmailProvider implements EmailProvider {
   readonly name = "gmail";
-  private gmail = client();
+  private gmail: gmail_v1.Gmail;
+
+  constructor(creds: GmailCreds) {
+    this.gmail = client(creds);
+  }
 
   async list(state: MailboxState): Promise<Email[]> {
     const q = state === "inbox" ? "in:inbox" : state === "trashed" ? "in:trash" : "-in:inbox -in:trash";

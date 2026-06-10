@@ -6,7 +6,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const state = (url.searchParams.get("state") as MailboxState) || "inbox";
   try {
-    const emails = await getProvider().list(state);
+    const provider = await getProvider();
+    const emails = await provider.list(state);
     return NextResponse.json({ emails });
   } catch (err) {
     return NextResponse.json(

@@ -95,3 +95,23 @@ export interface AISettings {
   /** API keys keyed by provider. Stored locally only. */
   keys?: Partial<Record<AIProvider, string>>;
 }
+
+// ---------------------------------------------------------------------------
+// Email account configuration (in-app connect)
+// ---------------------------------------------------------------------------
+
+/**
+ * User-supplied email connection settings. Like AISettings these are
+ * persisted locally only — OAuth tokens never leave the device.
+ */
+export interface EmailSettings {
+  gmail?: {
+    /** Your own Google Cloud OAuth client (BYO client). */
+    clientId?: string;
+    clientSecret?: string;
+    /** Issued once via the consent flow; presence = connected. */
+    refreshToken?: string;
+    /** Connected account address, for display. */
+    address?: string;
+  };
+}

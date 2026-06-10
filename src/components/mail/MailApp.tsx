@@ -73,6 +73,22 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setTimeout(() => setToast(null), 2600);
   };
 
+  // Surface the result of the Gmail OAuth round-trip (?gmail= / ?gmail_error=).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ok = params.get("gmail");
+    const err = params.get("gmail_error");
+    if (!ok && !err) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setToast(
+      ok === "connected"
+        ? "Gmail を接続しました"
+        : `Gmail 接続に失敗しました（${err}）`,
+    );
+    setTimeout(() => setToast(null), 4000);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
   const classify = useCallback(async (email: Email) => {
     if (email.importance) return;
     const token = ++classifyToken.current;

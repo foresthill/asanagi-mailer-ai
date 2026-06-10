@@ -3,6 +3,7 @@ import path from "node:path";
 import type {
   AIProvider,
   AISettings,
+  EmailSettings,
   ImportanceSignal,
   Importance,
   ScheduledSend,
@@ -59,6 +60,31 @@ export async function saveAISettings(patch: AISettings): Promise<AISettings> {
     if (Object.keys(next.keys).length === 0) delete next.keys;
   }
   await writeJson(AI_SETTINGS, next);
+  return next;
+}
+
+// ---------------------------------------------------------------------------
+// Email connection settings — stored locally, never leaves the device
+// ---------------------------------------------------------------------------
+const EMAIL_SETTINGS = "email-settings.json";
+
+export async function getEmailSettings(): Promise<EmailSettings> {
+  return readJson<EmailSettings>(EMAIL_SETTINGS, {});
+}
+
+/**
+ * Merge a patch into stored email settings. Within `gmail`, blank strings
+ * clear that field (e.g. disconnect = save { gmail: { refreshToken: "" } }).
+ */
+export async function saveEmailSettings(patch: EmailSettings): Promise<EmailSettings> {
+  const cur = await getEmailSettings();
+  const gmail = { ...(cur.gmail ?? {}), ...(patch.gmail ?? {}) };
+  for (const k of Object.keys(gmail) as (keyof typeof gmail)[]) {
+    if (!gmail[k]?.trim()) delete gmail[k];
+  }
+  const next: EmailSettings = { ...cur, ...patch, gmail };
+  if (Object.keys(gmail).length === 0) delete next.gmail;
+  await writeJson(EMAIL_SETTINGS, next);
   return next;
 }
 
