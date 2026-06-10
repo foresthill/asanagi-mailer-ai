@@ -6,9 +6,11 @@ import type { OutgoingMessage, ScheduledSend } from "@/lib/types";
 /** Flush any sends whose time has arrived. Called on every poll (dev cron). */
 async function flushDue() {
   const due = await dueScheduled();
+  if (!due.length) return 0;
+  const provider = await getProvider();
   for (const item of due) {
     try {
-      await getProvider().send(item);
+      await provider.send(item);
       await updateScheduled(item.id, { status: "sent" });
     } catch (err) {
       await updateScheduled(item.id, {

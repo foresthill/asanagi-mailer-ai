@@ -12,7 +12,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await getProvider().send(message);
+    const provider = await getProvider();
+    const result = await provider.send(message);
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     return NextResponse.json(
