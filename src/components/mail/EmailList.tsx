@@ -178,12 +178,18 @@ function EmailListItem({
           </div>
           <div className="mt-0.5 flex items-center gap-1.5">
             {email.importance === "high" && (
-              <span className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high">
+              <span
+                title="簡易判定: 重要（学習シグナル/キーワード。開くとAIが精密判定）"
+                className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high"
+              >
                 重要
               </span>
             )}
             {email.importance === "low" && (
-              <span className="shrink-0 rounded bg-surface-2 px-1 text-[10px] text-fg-subtle">
+              <span
+                title="簡易判定: 低（ニュースレター等。開くとAIが精密判定）"
+                className="shrink-0 rounded bg-surface-2 px-1 text-[10px] text-fg-subtle"
+              >
                 低
               </span>
             )}

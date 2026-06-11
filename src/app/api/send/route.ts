@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
+import { upsertEmails } from "@/lib/db";
 import type { OutgoingMessage } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -18,6 +20,18 @@ export async function POST(req: Request) {
       ? await getProviderFor(message.account)
       : await getProvider();
     const result = await provider.send(message);
+
+    // Refresh the sent-folder cache right away (after the response) so the
+    // just-sent reply joins its thread and the ↩ replied marker appears
+    // without the user having to open 送信箱 first.
+    after(async () => {
+      try {
+        upsertEmails(provider.name, await provider.list("sent"));
+      } catch {
+        /* cache refresh is best-effort */
+      }
+    });
+
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     return NextResponse.json(

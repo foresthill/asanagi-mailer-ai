@@ -101,6 +101,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const changeFolder = (f: MailboxState) => {
     setView("mail");
     setFolder(f);
+    // Folder clicks must visibly switch even while showing search results.
+    setSearchQuery("");
+    setSearchResults(null);
     setSelectedId(null);
     setSelected(null);
     setThread(null);
@@ -109,6 +112,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   const changeAccount = (key: string) => {
     setAccount(key);
+    setSearchQuery("");
+    setSearchResults(null);
     setSelectedId(null);
     setSelected(null);
     setThread(null);

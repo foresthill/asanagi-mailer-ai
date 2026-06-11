@@ -367,13 +367,20 @@ export function ReplyComposer({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key !== "Enter") return;
+                // Never fire while the IME is composing (Japanese input:
+                // the conversion-confirm Enter must not send).
+                if (e.nativeEvent.isComposing) return;
+                // Enter = newline; Shift/Cmd/Ctrl+Enter = send.
+                if (e.shiftKey || e.metaKey || e.ctrlKey) {
                   e.preventDefault();
                   runSuggest(input, selectionText ? "selection" : "whole");
                 }
               }}
               rows={1}
-              placeholder={selectionText ? "選択範囲への指示…" : "全体への指示…"}
+              placeholder={
+                (selectionText ? "選択範囲への指示" : "全体への指示") + "（Shift+Enterで送信）"
+              }
               disabled={reviewing}
               className="max-h-24 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-fg-subtle disabled:opacity-50"
             />

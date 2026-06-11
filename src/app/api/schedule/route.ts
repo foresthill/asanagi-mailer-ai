@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
+import { upsertEmails } from "@/lib/db";
 import { addScheduled, dueScheduled, listScheduled, updateScheduled } from "@/lib/store";
+import type { EmailProvider } from "@/lib/email";
 import type { OutgoingMessage, ScheduledSend } from "@/lib/types";
 
 /** Flush any sends whose time has arrived. Called on every poll (dev cron). */
 async function flushDue() {
   const due = await dueScheduled();
   if (!due.length) return 0;
+  const sentVia = new Map<string, EmailProvider>();
   for (const item of due) {
     try {
       // Send from the account the item was scheduled for.
@@ -15,6 +19,7 @@ async function flushDue() {
         ? await getProviderFor(item.account)
         : await getProvider();
       await provider.send(item);
+      sentVia.set(provider.name, provider);
       await updateScheduled(item.id, { status: "sent" });
     } catch (err) {
       await updateScheduled(item.id, {
@@ -23,6 +28,16 @@ async function flushDue() {
       });
     }
   }
+  // Refresh sent-folder caches so flushed sends join threads/replied marks.
+  after(async () => {
+    for (const [name, provider] of sentVia) {
+      try {
+        upsertEmails(name, await provider.list("sent"));
+      } catch {
+        /* best-effort */
+      }
+    }
+  });
   return due.length;
 }
 
