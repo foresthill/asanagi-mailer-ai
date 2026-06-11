@@ -58,7 +58,7 @@ export function EmailReader({
     <div className="flex flex-1 flex-col overflow-hidden bg-bg">
       {/* Action bar */}
       <div className="flex items-center gap-1 border-b border-border bg-surface px-5 py-2.5">
-        {folder !== "archived" && (
+        {folder !== "archived" && folder !== "sent" && (
           <ActionButton icon={Archive} label="アーカイブ" onClick={onArchive} />
         )}
         {folder !== "trashed" ? (

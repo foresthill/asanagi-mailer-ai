@@ -32,6 +32,7 @@ export async function resolveImapCreds(): Promise<ImapCreds | null> {
       password: i.password,
       archiveFolder: i.archiveFolder || "Archive",
       trashFolder: i.trashFolder || "Trash",
+      sentFolder: i.sentFolder || "Sent",
       smtp: {
         host: i.smtpHost || i.host,
         port: Number(i.smtpPort || 465),

@@ -170,7 +170,7 @@ export class MockProvider implements EmailProvider {
       body: message.body,
       date: new Date().toISOString(),
       read: true,
-      state: "archived",
+      state: "sent",
       messageId: `<${id}@mock.local>`,
     });
     await save(all);

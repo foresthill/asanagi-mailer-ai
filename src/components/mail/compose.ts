@@ -64,16 +64,22 @@ export function buildCompose(
 
   const base = { account: source.account, source };
 
+  // Replying to a mail WE sent (sent folder) should target its recipients,
+  // not ourselves.
+  const ownMail = self.has(source.from.email.toLowerCase());
+  const replyTo = ownMail ? others(source.to, self) : [source.from];
+  const greetTarget = replyTo[0] ?? source.from;
+
   switch (kind) {
     case "reply":
       return {
         ...base,
         kind,
         mode,
-        to: [source.from],
+        to: replyTo.length ? replyTo : [source.from],
         cc: [],
         subject: rePrefix(source.subject),
-        body: `${displayName(source.from)} 様\n\n`,
+        body: `${displayName(greetTarget)} 様\n\n`,
         inReplyTo: source.messageId,
       };
     case "replyAll": {
@@ -86,7 +92,7 @@ export function buildCompose(
         to: to.length ? to : [source.from],
         cc: others(source.cc, self),
         subject: rePrefix(source.subject),
-        body: `${displayName(source.from)} 様\n\n`,
+        body: `${displayName(to[0] ?? source.from)} 様\n\n`,
         inReplyTo: source.messageId,
       };
     }

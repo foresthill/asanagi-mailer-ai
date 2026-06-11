@@ -75,17 +75,25 @@ function labelFor(state: MailboxState): { add: string[]; remove: string[] } {
       return { add: [], remove: ["INBOX"] };
     case "trashed":
       return { add: ["TRASH"], remove: ["INBOX"] };
+    case "sent":
+      // SENT is system-managed; never a target of a user move.
+      return { add: [], remove: [] };
   }
+}
+
+/** Mailbox state from Gmail labels. Self-addressed mail (SENT+INBOX) counts
+ *  as inbox; TRASH wins over everything. */
+function stateFromLabels(labels: string[]): MailboxState {
+  if (labels.includes("TRASH")) return "trashed";
+  if (labels.includes("INBOX")) return "inbox";
+  if (labels.includes("SENT")) return "sent";
+  return "archived";
 }
 
 function toEmail(msg: gmail_v1.Schema$Message): Email {
   const headers = msg.payload?.headers;
   const labels = msg.labelIds ?? [];
-  const state: MailboxState = labels.includes("TRASH")
-    ? "trashed"
-    : labels.includes("INBOX")
-      ? "inbox"
-      : "archived";
+  const state = stateFromLabels(labels);
   const body = decodeBody(msg.payload);
   return {
     id: msg.id!,
@@ -114,7 +122,14 @@ export class GmailProvider implements EmailProvider {
   }
 
   async list(state: MailboxState): Promise<Email[]> {
-    const q = state === "inbox" ? "in:inbox" : state === "trashed" ? "in:trash" : "-in:inbox -in:trash";
+    const q =
+      state === "inbox"
+        ? "in:inbox"
+        : state === "trashed"
+          ? "in:trash"
+          : state === "sent"
+            ? "in:sent"
+            : "-in:inbox -in:trash -in:sent"; // archived: exclude sent too
     const res = await this.gmail.users.messages.list({ userId: "me", q, maxResults: 50 });
     const ids = res.data.messages ?? [];
     const full = await Promise.all(

@@ -241,7 +241,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       } else if (e.key === "k") {
         e.preventDefault();
         selectEmail(emails[Math.max(0, idx - 1)]?.id ?? emails[0].id);
-      } else if (e.key === "e" && selectedId && folder !== "archived") {
+      } else if (e.key === "e" && selectedId && folder !== "archived" && folder !== "sent") {
         archive(selectedId);
       } else if ((e.key === "#" || e.key === "Backspace") && selectedId && folder !== "trashed") {
         trash(selectedId);

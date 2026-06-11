@@ -16,6 +16,7 @@ const IMAP_PLAIN_FIELDS = [
   "user",
   "archiveFolder",
   "trashFolder",
+  "sentFolder",
   "smtpHost",
   "smtpPort",
   "smtpSecure",
