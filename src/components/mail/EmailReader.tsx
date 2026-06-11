@@ -14,6 +14,7 @@ import {
 import type { Email, Importance, MailboxState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
+import { ThreadView } from "./ThreadView";
 import type { ComposeAI, ComposeKind } from "./compose";
 
 const IMPORTANCE_LABEL: Record<Importance, string> = {
@@ -24,6 +25,7 @@ const IMPORTANCE_LABEL: Record<Importance, string> = {
 
 export function EmailReader({
   email,
+  thread,
   folder,
   classifying,
   onArchive,
@@ -33,6 +35,8 @@ export function EmailReader({
   onImportanceFeedback,
 }: {
   email: Email | null;
+  /** Conversation containing the email (oldest first); null while loading. */
+  thread: Email[] | null;
   folder: MailboxState;
   classifying: boolean;
   onArchive: () => void;
@@ -128,9 +132,13 @@ export function EmailReader({
             onFeedback={onImportanceFeedback}
           />
 
-          <article className="mt-6 whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
-            {email.body}
-          </article>
+          {thread && thread.length > 1 ? (
+            <ThreadView messages={thread} selectedId={email.id} />
+          ) : (
+            <article className="mt-6 whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
+              {email.body}
+            </article>
+          )}
         </div>
       </div>
     </div>

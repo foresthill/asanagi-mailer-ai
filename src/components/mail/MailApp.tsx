@@ -25,6 +25,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Email | null>(null);
+  const [thread, setThread] = useState<Email[] | null>(null);
+  const threadToken = useRef(0);
   // null = not composing; otherwise the prepared compose state.
   const [compose, setCompose] = useState<ComposeInit | null>(null);
   const replying = compose !== null;
@@ -75,6 +77,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setFolder(f);
     setSelectedId(null);
     setSelected(null);
+    setThread(null);
     setCompose(null);
   };
 
@@ -82,6 +85,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setAccount(key);
     setSelectedId(null);
     setSelected(null);
+    setThread(null);
     setCompose(null);
   };
 
@@ -145,6 +149,22 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     }
   }, []);
 
+  // Load the conversation for the opened email (cache/server-side threading).
+  const loadThread = useCallback(async (email: Email) => {
+    const token = ++threadToken.current;
+    setThread(null);
+    if (!email.account || !email.threadId) return;
+    try {
+      const res = await fetch(
+        `/api/threads/${encodeURIComponent(`${email.account}/${email.threadId}`)}`,
+      );
+      const data = await res.json();
+      if (token === threadToken.current) setThread(data.messages ?? null);
+    } catch {
+      /* thread view is progressive enhancement */
+    }
+  }, []);
+
   const selectEmail = useCallback(
     async (id: string) => {
       setSelectedId(id);
@@ -155,9 +175,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       if (data.email) {
         setSelected(data.email);
         classify(data.email);
+        loadThread(data.email);
       }
     },
-    [classify],
+    [classify, loadThread],
   );
 
   const mutateState = useCallback(
@@ -166,6 +187,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       if (selectedId === id) {
         setSelectedId(null);
         setSelected(null);
+        setThread(null);
         setCompose(null);
       }
       await fetch(`/api/emails/${encodeURIComponent(id)}`, {
@@ -304,6 +326,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       ) : (
         <EmailReader
           email={selected}
+          thread={thread}
           folder={folder}
           classifying={classifying}
           onArchive={() => selected && archive(selected.id)}

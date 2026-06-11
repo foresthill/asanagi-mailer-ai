@@ -150,6 +150,18 @@ export class GmailProvider implements EmailProvider {
     return res.data ? toEmail(res.data) : null;
   }
 
+  /** Server-side conversation: every message of the thread, oldest first. */
+  async thread(threadId: string): Promise<Email[]> {
+    const res = await this.gmail.users.threads.get({
+      userId: "me",
+      id: threadId,
+      format: "full",
+    });
+    return (res.data.messages ?? [])
+      .map(toEmail)
+      .sort((a, b) => +new Date(a.date) - +new Date(b.date));
+  }
+
   async setState(id: string, state: MailboxState): Promise<void> {
     if (state === "trashed") {
       await this.gmail.users.messages.trash({ userId: "me", id });

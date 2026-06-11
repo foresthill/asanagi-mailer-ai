@@ -137,6 +137,16 @@ export function cachedGet(account: string, id: string): Email | null {
   return row ? rowToEmail(row) : null;
 }
 
+/** Conversation from the local cache (spans folders), oldest first. */
+export function cachedThread(account: string, threadId: string): Email[] {
+  const rows = getDb()
+    .prepare(
+      "SELECT * FROM messages WHERE account = ? AND thread_id = ? ORDER BY date ASC LIMIT 50",
+    )
+    .all(account, threadId) as Record<string, unknown>[];
+  return rows.map(rowToEmail);
+}
+
 /** Keep the cache in sync with provider-side mutations (read/move). */
 export function updateCached(
   account: string,

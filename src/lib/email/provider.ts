@@ -25,4 +25,11 @@ export interface EmailProvider {
 
   /** Send a message now. Returns the provider message id when available. */
   send(message: OutgoingMessage): Promise<{ messageId?: string }>;
+
+  /**
+   * All messages of a conversation, oldest first — across folders (inbox,
+   * sent, archive). Optional: backends without server-side threading fall
+   * back to the local cache (see /api/threads).
+   */
+  thread?(threadId: string): Promise<Email[]>;
 }
