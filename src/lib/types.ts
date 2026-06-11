@@ -59,6 +59,12 @@ export interface OutgoingMessage {
   body: string;
   /** messageId of the email being replied to, for threading. */
   inReplyTo?: string;
+  /**
+   * Conversation to attach the reply to. Gmail requires this threadId on
+   * the send request (headers alone don't thread); for IMAP it is the root
+   * Message-ID and goes into the References chain.
+   */
+  threadId?: string;
   /** Account to send from (gmail | imap | mock). Default: auto-detected. */
   account?: string;
 }
