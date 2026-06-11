@@ -31,6 +31,8 @@ export interface Email {
   messageId?: string;
   /** Which connected account this email belongs to (gmail | imap | mock). */
   account?: string;
+  /** True when we have sent a message in this conversation (返信済み). */
+  replied?: boolean;
 }
 
 export interface DraftRequest {

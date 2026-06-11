@@ -251,8 +251,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // Keyboard shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Never hijack OS/browser shortcuts (Cmd+C copy, Cmd+R reload, …).
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || replying) return;
+      // Don't steal "c" etc. while the user has text selected for copying.
+      if (!window.getSelection()?.isCollapsed) return;
       if (e.key === "c") {
         // Compose new — works even with an empty list.
         e.preventDefault();

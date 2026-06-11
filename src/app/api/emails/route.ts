@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listAccounts, getProviderFor } from "@/lib/email/accounts";
-import { cachedList, upsertEmails } from "@/lib/db";
+import { cachedList, repliedThreadIds, upsertEmails } from "@/lib/db";
 import type { Email, MailboxState } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +8,17 @@ export const dynamic = "force-dynamic";
 /** API ids are account-qualified: `${account}/${providerId}`. */
 function tag(account: string, e: Email): Email {
   return { ...e, account, id: `${account}/${e.id}` };
+}
+
+/** Mark conversations we've replied to (own sent message in the thread). */
+function markReplied(account: string, emails: Email[]): Email[] {
+  const replied = repliedThreadIds(
+    account,
+    emails.map((e) => e.threadId),
+  );
+  return emails.map((e) =>
+    e.state !== "sent" && replied.has(e.threadId) ? { ...e, replied: true } : e,
+  );
 }
 
 /**
@@ -35,11 +46,11 @@ export async function GET(req: Request) {
           const provider = await getProviderFor(a.key);
           const emails = await provider.list(state);
           upsertEmails(a.key, emails); // write-through (raw provider ids)
-          return emails.map((e) => tag(a.key, e));
+          return markReplied(a.key, emails).map((e) => tag(a.key, e));
         } catch {
           // Provider unreachable → serve the local cache for this account.
           stale.push(a.key);
-          return cachedList([a.key], state).map((e) => ({
+          return markReplied(a.key, cachedList([a.key], state)).map((e) => ({
             ...e,
             id: `${a.key}/${e.id}`,
           }));
