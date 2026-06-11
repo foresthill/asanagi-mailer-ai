@@ -247,9 +247,10 @@ export interface ContactInfo {
 
 /**
  * Address book derived from the cache: senders of received mail plus
- * recipients of our sent mail, ranked by recency. Own addresses excluded.
+ * recipients (To and Cc) of our sent mail, ranked by recency. Own addresses
+ * excluded.
  */
-export function contactsList(selfEmails: string[], limit = 200): ContactInfo[] {
+export function contactsList(selfEmails: string[], limit = 500): ContactInfo[] {
   const d = getDb();
   const map = new Map<string, ContactInfo>();
   const self = new Set(selfEmails.map((s) => s.toLowerCase()));
@@ -272,30 +273,34 @@ export function contactsList(selfEmails: string[], limit = 200): ContactInfo[] {
     });
   }
 
-  const sentRows = d
-    .prepare(
-      `SELECT LOWER(json_extract(j.value, '$.email')) AS email,
-              json_extract(j.value, '$.name') AS name,
-              COUNT(*) AS count, MAX(m.date) AS last
-       FROM messages m, json_each(m.to_json) j
-       WHERE m.state = 'sent' GROUP BY LOWER(json_extract(j.value, '$.email'))`,
-    )
-    .all() as { email: string | null; name: string | null; count: number; last: string }[];
-  for (const r of sentRows) {
-    if (!r.email || self.has(r.email)) continue;
-    const cur = map.get(r.email);
-    if (cur) {
-      cur.sent = Number(r.count);
-      cur.name = cur.name ?? r.name ?? undefined;
-      if (r.last > cur.lastDate) cur.lastDate = r.last;
-    } else {
-      map.set(r.email, {
-        email: r.email,
-        name: r.name ?? undefined,
-        received: 0,
-        sent: Number(r.count),
-        lastDate: r.last,
-      });
+  // To AND Cc of our sent mail — people we only ever Cc'd were previously
+  // invisible here (取りこぼし).
+  for (const column of ["to_json", "cc_json"]) {
+    const sentRows = d
+      .prepare(
+        `SELECT LOWER(json_extract(j.value, '$.email')) AS email,
+                json_extract(j.value, '$.name') AS name,
+                COUNT(*) AS count, MAX(m.date) AS last
+         FROM messages m, json_each(m.${column}) j
+         WHERE m.state = 'sent' GROUP BY LOWER(json_extract(j.value, '$.email'))`,
+      )
+      .all() as { email: string | null; name: string | null; count: number; last: string }[];
+    for (const r of sentRows) {
+      if (!r.email || self.has(r.email)) continue;
+      const cur = map.get(r.email);
+      if (cur) {
+        cur.sent += Number(r.count);
+        cur.name = cur.name ?? r.name ?? undefined;
+        if (r.last > cur.lastDate) cur.lastDate = r.last;
+      } else {
+        map.set(r.email, {
+          email: r.email,
+          name: r.name ?? undefined,
+          received: 0,
+          sent: Number(r.count),
+          lastDate: r.last,
+        });
+      }
     }
   }
 
