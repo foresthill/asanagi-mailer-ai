@@ -1,6 +1,7 @@
 import { google, type gmail_v1 } from "googleapis";
 import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
+import { repairMojibake } from "./encoding";
 
 /**
  * Gmail adapter (OAuth2). Credentials come from the in-app connect flow
@@ -94,15 +95,17 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
   const headers = msg.payload?.headers;
   const labels = msg.labelIds ?? [];
   const state = stateFromLabels(labels);
-  const body = decodeBody(msg.payload);
+  const body = repairMojibake(decodeBody(msg.payload));
+  const fixAddr = (a: EmailAddress): EmailAddress =>
+    a.name ? { ...a, name: repairMojibake(a.name) } : a;
   return {
     id: msg.id!,
     threadId: msg.threadId ?? msg.id!,
-    from: parseAddress(header(headers, "From")),
-    to: (header(headers, "To") ?? "").split(",").filter(Boolean).map(parseAddress),
-    cc: (header(headers, "Cc") ?? "").split(",").filter(Boolean).map(parseAddress),
-    subject: header(headers, "Subject") ?? "(件名なし)",
-    snippet: msg.snippet ?? body.slice(0, 140),
+    from: fixAddr(parseAddress(header(headers, "From"))),
+    to: (header(headers, "To") ?? "").split(",").filter(Boolean).map(parseAddress).map(fixAddr),
+    cc: (header(headers, "Cc") ?? "").split(",").filter(Boolean).map(parseAddress).map(fixAddr),
+    subject: repairMojibake(header(headers, "Subject") ?? "(件名なし)"),
+    snippet: repairMojibake(msg.snippet ?? body.slice(0, 140)),
     body,
     date: header(headers, "Date")
       ? new Date(header(headers, "Date")!).toISOString()
