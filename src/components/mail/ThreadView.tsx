@@ -11,13 +11,31 @@ import { ConversationBubbles } from "./ConversationBubbles";
  * Thread rendering, oldest first, with two display modes:
  *  - cards: collapsible message cards (latest + opened start expanded)
  *  - chat:  LINE-style bubbles (own messages right) via ConversationBubbles
+ * The choice is a personal preference, so it persists across emails and
+ * sessions (localStorage) — default is the classic mailer card view.
  */
+const VIEW_PREF_KEY = "asanagi:thread-view";
+
+function loadViewPref(): "cards" | "chat" {
+  if (typeof window === "undefined") return "cards";
+  return localStorage.getItem(VIEW_PREF_KEY) === "chat" ? "chat" : "cards";
+}
+
 export function ThreadView({ messages, selectedId }: { messages: Email[]; selectedId: string }) {
   const lastId = messages[messages.length - 1]?.id;
-  const [view, setView] = useState<"cards" | "chat">("cards");
+  const [view, setView] = useState<"cards" | "chat">(loadViewPref);
   const [open, setOpen] = useState<Set<string>>(
     () => new Set([selectedId, lastId].filter(Boolean) as string[]),
   );
+
+  const changeView = (v: "cards" | "chat") => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_PREF_KEY, v);
+    } catch {
+      /* private mode etc. — preference just won't stick */
+    }
+  };
 
   const toggle = (id: string) =>
     setOpen((prev) => {
@@ -34,13 +52,13 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
         icon={Rows3}
         label="カード"
         active={view === "cards"}
-        onClick={() => setView("cards")}
+        onClick={() => changeView("cards")}
       />
       <ModeButton
         icon={MessageCircle}
         label="会話"
         active={view === "chat"}
-        onClick={() => setView("chat")}
+        onClick={() => changeView("chat")}
       />
     </div>
   );
