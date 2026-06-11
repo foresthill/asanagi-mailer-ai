@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Trash2, Loader2, Inbox } from "lucide-react";
+import { Archive, Trash2, Loader2, Inbox, RefreshCw } from "lucide-react";
 import type { Email, MailboxState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, initials, relativeTime } from "./helpers";
@@ -19,6 +19,7 @@ export function EmailList({
   onSelect,
   onArchive,
   onTrash,
+  onRefresh,
 }: {
   folder: MailboxState;
   emails: Email[];
@@ -27,12 +28,21 @@ export function EmailList({
   onSelect: (id: string) => void;
   onArchive: (id: string) => void;
   onTrash: (id: string) => void;
+  onRefresh: () => void;
 }) {
   return (
     <div className="flex w-[384px] shrink-0 flex-col border-r border-border bg-surface">
-      <header className="flex items-center justify-between px-5 pb-3 pt-5">
+      <header className="flex items-center gap-2 px-5 pb-3 pt-5">
         <h1 className="text-base font-semibold tracking-tight">{FOLDER_LABEL[folder]}</h1>
-        <span className="text-xs text-fg-subtle">{emails.length}件</span>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          title="更新"
+          className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-50"
+        >
+          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+        </button>
+        <span className="ml-auto text-xs text-fg-subtle">{emails.length}件</span>
       </header>
 
       <div className="flex-1 overflow-y-auto px-2 pb-4">

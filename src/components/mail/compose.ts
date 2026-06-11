@@ -1,0 +1,133 @@
+import type { Email, EmailAddress } from "@/lib/types";
+import { displayName, fullTime } from "./helpers";
+
+/**
+ * Pure helpers that turn (kind, source email) into the composer's initial
+ * state. Note: BCC of a received email is never visible to recipients (mail
+ * protocol), so "reply all" carries over From + To + Cc only.
+ */
+export type ComposeKind = "reply" | "replyAll" | "forward" | "new";
+export type ComposeAI = "ai" | "plain";
+
+export interface ComposeInit {
+  kind: ComposeKind;
+  mode: ComposeAI;
+  /** Account to send from (and AI/threading context source). */
+  account?: string;
+  to: EmailAddress[];
+  cc: EmailAddress[];
+  subject: string;
+  /** Initial body for plain modes ("ai" fetches a draft instead). */
+  body: string;
+  inReplyTo?: string;
+  /** Original email — AI context for replies, quote source for forward. */
+  source?: Email;
+}
+
+const KIND_LABEL: Record<ComposeKind, string> = {
+  reply: "返信を作成",
+  replyAll: "全員に返信",
+  forward: "転送",
+  new: "新規メール",
+};
+
+export function composeTitle(init: ComposeInit): string {
+  return init.mode === "ai" ? `AIで${KIND_LABEL[init.kind]}` : KIND_LABEL[init.kind];
+}
+
+function rePrefix(subject: string): string {
+  return subject.startsWith("Re:") ? subject : `Re: ${subject}`;
+}
+
+/** Everyone on the original mail except our own addresses, de-duplicated. */
+function others(list: EmailAddress[] | undefined, self: Set<string>): EmailAddress[] {
+  const seen = new Set<string>();
+  return (list ?? []).filter((a) => {
+    const key = a.email.toLowerCase();
+    if (!key || self.has(key) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function buildCompose(
+  kind: ComposeKind,
+  mode: ComposeAI,
+  source?: Email,
+  selfAddresses: string[] = [],
+): ComposeInit {
+  const self = new Set(selfAddresses.map((s) => s.toLowerCase()));
+
+  if (kind === "new" || !source) {
+    return { kind: "new", mode: "plain", to: [], cc: [], subject: "", body: "" };
+  }
+
+  const base = { account: source.account, source };
+
+  switch (kind) {
+    case "reply":
+      return {
+        ...base,
+        kind,
+        mode,
+        to: [source.from],
+        cc: [],
+        subject: rePrefix(source.subject),
+        body: `${displayName(source.from)} 様\n\n`,
+        inReplyTo: source.messageId,
+      };
+    case "replyAll": {
+      // From + the other To recipients; Cc carried over (minus ourselves).
+      const to = others([source.from, ...source.to], self);
+      return {
+        ...base,
+        kind,
+        mode,
+        to: to.length ? to : [source.from],
+        cc: others(source.cc, self),
+        subject: rePrefix(source.subject),
+        body: `${displayName(source.from)} 様\n\n`,
+        inReplyTo: source.messageId,
+      };
+    }
+    case "forward":
+      return {
+        ...base,
+        kind,
+        mode: "plain",
+        to: [],
+        cc: [],
+        subject: source.subject.startsWith("Fwd:") ? source.subject : `Fwd: ${source.subject}`,
+        body: [
+          "",
+          "",
+          "---------- 転送メッセージ ----------",
+          `From: ${displayName(source.from)} <${source.from.email}>`,
+          `Date: ${fullTime(source.date)}`,
+          `Subject: ${source.subject}`,
+          `To: ${source.to.map((a) => a.email).join(", ")}`,
+          "",
+          source.body,
+        ].join("\n"),
+      };
+  }
+}
+
+/** Parse a comma/space separated address line into EmailAddress[]. */
+export function parseAddressList(input: string): EmailAddress[] {
+  return input
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((email) => ({ email }));
+}
+
+/** Loose validity check used to enable the send button. */
+export function looksLikeAddressList(input: string): boolean {
+  const list = parseAddressList(input);
+  return list.length > 0 && list.every((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email));
+}
+
+export function formatAddressList(list: EmailAddress[]): string {
+  return list.map((a) => a.email).join(", ");
+}

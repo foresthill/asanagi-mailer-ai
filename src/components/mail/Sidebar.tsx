@@ -1,6 +1,16 @@
 "use client";
 
-import { Archive, Inbox, Trash2, Sparkles, Clock, Settings, Layers, AtSign } from "lucide-react";
+import {
+  Archive,
+  Inbox,
+  Trash2,
+  Sparkles,
+  Clock,
+  Settings,
+  Layers,
+  AtSign,
+  SquarePen,
+} from "lucide-react";
 import type { MailboxState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StorageMeter, type StorageInfo } from "./StorageMeter";
@@ -23,6 +33,7 @@ export function Sidebar({
   onSelect,
   onSelectAccount,
   onOpenSettings,
+  onCompose,
 }: {
   folder: MailboxState;
   counts: Partial<Record<MailboxState, number>>;
@@ -34,6 +45,7 @@ export function Sidebar({
   onSelect: (f: MailboxState) => void;
   onSelectAccount: (key: string) => void;
   onOpenSettings: () => void;
+  onCompose: () => void;
 }) {
   return (
     <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface-2 px-3 py-4">
@@ -46,6 +58,15 @@ export function Sidebar({
           <span className="mt-0.5 text-[10px] text-fg-subtle">朝凪</span>
         </div>
       </div>
+
+      <button
+        onClick={onCompose}
+        title="新規メールを作成 (C)"
+        className="mb-2 flex items-center justify-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.01] active:scale-95"
+      >
+        <SquarePen className="size-4" />
+        作成
+      </button>
 
       <nav className="flex flex-col gap-0.5">
         {FOLDERS.map(({ key, label, icon: Icon }) => {

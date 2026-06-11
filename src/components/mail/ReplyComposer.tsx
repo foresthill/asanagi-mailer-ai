@@ -12,11 +12,17 @@ import {
   Wand2,
   CheckCheck,
 } from "lucide-react";
-import type { Email } from "@/lib/types";
-import { displayName } from "./helpers";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { buildSegments, pendingCount } from "@/lib/diff";
 import { DraftEditor, type DraftEditorHandle } from "./tiptap/DraftEditor";
+import { RecipientFields, type RecipientValues } from "./RecipientFields";
+import {
+  composeTitle,
+  formatAddressList,
+  looksLikeAddressList,
+  parseAddressList,
+  type ComposeInit,
+} from "./compose";
 
 const QUICK_PROMPTS = ["もっと丁寧に", "もっと短く", "カジュアルに", "英語にして", "感謝を加えて"];
 
@@ -28,26 +34,27 @@ interface HistoryItem {
 }
 
 export function ReplyComposer({
-  email,
-  mode,
+  init,
   aiConfigured,
   onSent,
   onClose,
 }: {
-  email: Email;
-  /** "ai" = AI drafts the reply first; "plain" = start from a blank reply. */
-  mode: "ai" | "plain";
+  /** Prepared initial state (kind/mode/recipients/subject/body) — compose.ts. */
+  init: ComposeInit;
   aiConfigured: boolean;
   onSent: (kind: "sent" | "scheduled") => void;
   onClose: () => void;
 }) {
-  const [subject, setSubject] = useState(
-    email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
-  );
+  const [subject, setSubject] = useState(init.subject);
+  const [recipients, setRecipients] = useState<RecipientValues>({
+    to: formatAddressList(init.to),
+    cc: formatAddressList(init.cc),
+    bcc: "",
+  });
   const [initialDraft, setInitialDraft] = useState<string | null>(null);
   const [body, setBody] = useState("");
   const [pending, setPending] = useState(0);
-  const [generating, setGenerating] = useState(mode === "ai");
+  const [generating, setGenerating] = useState(init.mode === "ai");
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -59,15 +66,16 @@ export function ReplyComposer({
 
   const reviewing = pending > 0;
 
-  // Initial draft. Plain mode skips the AI entirely — just a bare greeting
-  // skeleton so the user writes the reply themselves.
+  // Initial draft. Plain modes (plain reply / forward / new) start from the
+  // prepared body; "ai" asks the model to draft a reply to the source email.
   useEffect(() => {
-    if (mode === "plain") {
+    if (init.mode === "plain" || !init.source) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot init, no fetch
-      setInitialDraft(`${displayName(email.from)} 様\n\n`);
+      setInitialDraft(init.body);
       setGenerating(false);
       return;
     }
+    const source = init.source;
     let active = true;
     (async () => {
       setGenerating(true);
@@ -75,7 +83,7 @@ export function ReplyComposer({
         const res = await fetch("/api/ai/reply", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({ email: source }),
         });
         const data = await res.json();
         if (active && data.draft) {
@@ -83,10 +91,7 @@ export function ReplyComposer({
           setInitialDraft(data.draft.body);
         }
       } catch {
-        if (active)
-          setInitialDraft(
-            `${displayName(email.from)} 様\n\nご連絡ありがとうございます。\n\n\nよろしくお願いいたします。`,
-          );
+        if (active) setInitialDraft(init.body);
       } finally {
         if (active) setGenerating(false);
       }
@@ -108,7 +113,7 @@ export function ReplyComposer({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          email,
+          email: init.source, // optional context (absent for new/forward)
           draft: body,
           instruction,
           selection: sel ? { start: 0, end: 0, text: sel } : undefined,
@@ -131,19 +136,26 @@ export function ReplyComposer({
     }
   }
 
+  /** Outgoing message built from the editable recipient fields. */
+  function outgoing() {
+    return {
+      to: parseAddressList(recipients.to),
+      cc: parseAddressList(recipients.cc),
+      bcc: parseAddressList(recipients.bcc),
+      subject,
+      body,
+      inReplyTo: init.inReplyTo,
+      account: init.account, // send from the account the thread belongs to
+    };
+  }
+
   async function sendNow() {
     setSending(true);
     try {
       const res = await fetch("/api/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          to: [email.from],
-          subject,
-          body,
-          inReplyTo: email.messageId,
-          account: email.account, // reply from the account the email belongs to
-        }),
+        body: JSON.stringify(outgoing()),
       });
       if (!res.ok) throw new Error("送信に失敗しました");
       onSent("sent");
@@ -160,16 +172,7 @@ export function ReplyComposer({
       const res = await fetch("/api/schedule", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          message: {
-            to: [email.from],
-            subject,
-            body,
-            inReplyTo: email.messageId,
-            account: email.account,
-          },
-          sendAt: iso,
-        }),
+        body: JSON.stringify({ message: outgoing(), sendAt: iso }),
       });
       if (!res.ok) throw new Error("予約に失敗しました");
       onSent("scheduled");
@@ -179,19 +182,24 @@ export function ReplyComposer({
     }
   }
 
-  const canSend = !sending && !generating && !busy && !reviewing && !!body;
+  const canSend =
+    !sending &&
+    !generating &&
+    !busy &&
+    !reviewing &&
+    !!body &&
+    !!subject.trim() &&
+    looksLikeAddressList(recipients.to);
 
   return (
     <div className="flex flex-1 overflow-hidden bg-bg">
       {/* Draft editor */}
       <div className="flex flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-border bg-surface px-5 py-3">
-          <h2 className="text-sm font-semibold">
-            {mode === "ai" ? "AIで返信を作成" : "返信を作成"}
-          </h2>
-          <span className="truncate text-xs text-fg-subtle">
-            宛先: {displayName(email.from)} &lt;{email.from.email}&gt;
-          </span>
+          <h2 className="text-sm font-semibold">{composeTitle(init)}</h2>
+          {init.account && (
+            <span className="truncate text-xs text-fg-subtle">送信元: {init.account}</span>
+          )}
           <button
             onClick={onClose}
             className="ml-auto grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
@@ -201,11 +209,12 @@ export function ReplyComposer({
         </div>
 
         <div className="flex flex-1 flex-col overflow-hidden px-6 py-4">
+          <RecipientFields values={recipients} onChange={setRecipients} disabled={sending} />
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="件名"
-            className="w-full border-b border-border bg-transparent pb-2 text-base font-medium outline-none placeholder:text-fg-subtle"
+            className="mt-1.5 w-full border-b border-border bg-transparent pb-2 text-base font-medium outline-none placeholder:text-fg-subtle"
           />
 
           {/* Selection action bar */}
