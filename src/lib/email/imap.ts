@@ -124,7 +124,9 @@ export class ImapProvider implements EmailProvider {
     const flags: Set<string> = msg.flags ?? new Set();
     return {
       id: `${this.folders[state]}:${msg.uid}`,
-      threadId: env.messageId ?? String(msg.uid),
+      // Pairwise chaining: a reply joins its parent's cluster. Full
+      // References-walking is a later refinement.
+      threadId: env.inReplyTo ?? env.messageId ?? String(msg.uid),
       from: addr(env.from?.[0]),
       to: (env.to ?? []).map(addr),
       cc: (env.cc ?? []).map(addr),
