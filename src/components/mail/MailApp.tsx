@@ -13,6 +13,15 @@ import { TriageView } from "./TriageView";
 import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
 import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from "./compose";
+import { buildRows } from "./threadList";
+
+/** スレッド表示（1会話=1行）の永続化キー。既定はON。 */
+const GROUPING_PREF_KEY = "asanagi:list-grouping";
+
+function loadGroupingPref(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(GROUPING_PREF_KEY) !== "off";
+}
 
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<FolderView>("inbox");
@@ -29,6 +38,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // Cache-wide search (all accounts & folders); null = not searching.
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Email[] | null>(null);
+  // Gmail-style flat conversation rows (docs/04 §1.6); off = 1 mail = 1 row.
+  const [grouping, setGrouping] = useState(loadGroupingPref);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Email | null>(null);
@@ -213,28 +224,50 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     [classify, loadThread],
   );
 
+  // Thread-unit by default: a conversation row carries every member id, so
+  // archiving a row clears the whole conversation (docs/04 §1.4).
   const mutateState = useCallback(
-    async (id: string, state: MailboxState, label: string) => {
-      setEmails((list) => list.filter((e) => e.id !== id));
-      if (selectedId === id) {
+    async (ids: string[], state: MailboxState, label: string) => {
+      const set = new Set(ids);
+      setEmails((list) => list.filter((e) => !set.has(e.id)));
+      if (selectedId && set.has(selectedId)) {
         setSelectedId(null);
         setSelected(null);
         setThread(null);
         setCompose(null);
       }
-      await fetch(`/api/emails/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ state }),
-      });
-      showToast(label);
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/emails/${encodeURIComponent(id)}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ state }),
+          }),
+        ),
+      );
+      showToast(ids.length > 1 ? `${label}（会話${ids.length}通）` : label);
     },
     [selectedId],
   );
 
-  const archive = (id: string) => mutateState(id, "archived", "アーカイブしました");
-  const trash = (id: string) => mutateState(id, "trashed", "ゴミ箱に移動しました");
-  const restore = (id: string) => mutateState(id, "inbox", "受信箱に戻しました");
+  const archive = (ids: string[]) => mutateState(ids, "archived", "アーカイブしました");
+  const trash = (ids: string[]) => mutateState(ids, "trashed", "ゴミ箱に移動しました");
+  const restore = (ids: string[]) => mutateState(ids, "inbox", "受信箱に戻しました");
+
+  const toggleGrouping = () =>
+    setGrouping((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(GROUPING_PREF_KEY, next ? "on" : "off");
+      } catch {
+        /* private mode etc. — preference just won't stick */
+      }
+      return next;
+    });
+
+  // Search results stay ungrouped: they span folders and the user is
+  // locating a specific mail, not triaging conversations.
+  const rows = buildRows(searchResults ?? emails, grouping && searchResults === null);
 
   /** Star toggle — optimistic UI, server-synced (Gmail STARRED / IMAP \Flagged). */
   const toggleStar = useCallback(
@@ -300,7 +333,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setCompose(null);
     if (wasReply && selected && folder === "inbox") {
       // Send & archive — keep the inbox clean (replies only; not forward/new).
-      mutateState(selected.id, "archived", kind === "sent" ? "送信してアーカイブしました" : "予約してアーカイブしました");
+      mutateState([selected.id], "archived", kind === "sent" ? "送信してアーカイブしました" : "予約してアーカイブしました");
     } else {
       showToast(kind === "sent" ? "送信しました" : "予約しました");
     }
@@ -321,21 +354,23 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         openCompose("new", "plain");
         return;
       }
-      if (view !== "mail" || !emails.length) return;
-      const idx = emails.findIndex((m) => m.id === selectedId);
+      if (view !== "mail" || !rows.length) return;
+      // Navigation and bulk actions operate on conversation rows.
+      const idx = rows.findIndex((r) => r.email.id === selectedId);
+      const rowIds = idx >= 0 ? rows[idx].ids : selectedId ? [selectedId] : [];
       if (e.key === "j") {
         e.preventDefault();
-        selectEmail(emails[Math.min(emails.length - 1, idx + 1)]?.id ?? emails[0].id);
+        selectEmail(rows[Math.min(rows.length - 1, idx + 1)]?.email.id ?? rows[0].email.id);
       } else if (e.key === "k") {
         e.preventDefault();
-        selectEmail(emails[Math.max(0, idx - 1)]?.id ?? emails[0].id);
+        selectEmail(rows[Math.max(0, idx - 1)]?.email.id ?? rows[0].email.id);
       } else if (e.key === "s" && selectedId) {
         e.preventDefault();
         toggleStar(selectedId);
-      } else if (e.key === "e" && selectedId && folder !== "archived" && folder !== "sent") {
-        archive(selectedId);
-      } else if ((e.key === "#" || e.key === "Backspace") && selectedId && folder !== "trashed") {
-        trash(selectedId);
+      } else if (e.key === "e" && rowIds.length && folder !== "archived" && folder !== "sent") {
+        archive(rowIds);
+      } else if ((e.key === "#" || e.key === "Backspace") && rowIds.length && folder !== "trashed") {
+        trash(rowIds);
       } else if (e.key === "r" && selected) {
         e.preventDefault();
         openCompose("reply", "ai");
@@ -353,7 +388,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emails, selectedId, selected, folder, replying, view, openCompose]);
+  }, [rows, selectedId, selected, folder, replying, view, openCompose]);
 
   return (
     <div className="flex h-full">
@@ -395,11 +430,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       {view === "mail" && !replying && (
         <EmailList
           folder={folder}
-          emails={searchResults ?? emails}
+          rows={rows}
           loading={loading && searchResults === null}
           selectedId={selectedId}
           searchQuery={searchQuery}
           searching={searchResults !== null}
+          grouping={grouping}
           accountLabels={
             // Show the origin badge when rows can mix accounts:
             // unified inbox, or search results (always cross-account).
@@ -408,6 +444,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
               : null
           }
           onSearchChange={setSearchQuery}
+          onToggleGrouping={toggleGrouping}
           onSelect={selectEmail}
           onArchive={archive}
           onTrash={trash}
@@ -430,9 +467,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           thread={thread}
           folder={folder}
           classifying={classifying}
-          onArchive={() => selected && archive(selected.id)}
-          onTrash={() => selected && trash(selected.id)}
-          onRestore={() => selected && restore(selected.id)}
+          onArchive={() => selected && archive([selected.id])}
+          onTrash={() => selected && trash([selected.id])}
+          onRestore={() => selected && restore([selected.id])}
           onReply={openCompose}
           onToggleStar={() => selected && toggleStar(selected.id)}
           onImportanceFeedback={onImportanceFeedback}
