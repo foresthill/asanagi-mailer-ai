@@ -16,7 +16,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Email | null>(null);
-  const [replying, setReplying] = useState(false);
+  // null = not composing; otherwise which kind of reply ("ai" drafts first).
+  const [replyMode, setReplyMode] = useState<"ai" | "plain" | null>(null);
+  const replying = replyMode !== null;
   const [classifying, setClassifying] = useState(false);
   const [counts, setCounts] = useState<Partial<Record<MailboxState, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -46,7 +48,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setFolder(f);
     setSelectedId(null);
     setSelected(null);
-    setReplying(false);
+    setReplyMode(null);
   };
 
   // Poll the scheduler (also flushes any due sends server-side).
@@ -112,7 +114,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const selectEmail = useCallback(
     async (id: string) => {
       setSelectedId(id);
-      setReplying(false);
+      setReplyMode(null);
       setEmails((list) => list.map((e) => (e.id === id ? { ...e, read: true } : e)));
       const res = await fetch(`/api/emails/${encodeURIComponent(id)}`);
       const data = await res.json();
@@ -130,7 +132,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       if (selectedId === id) {
         setSelectedId(null);
         setSelected(null);
-        setReplying(false);
+        setReplyMode(null);
       }
       await fetch(`/api/emails/${encodeURIComponent(id)}`, {
         method: "PATCH",
@@ -163,7 +165,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   };
 
   const onSent = (kind: "sent" | "scheduled") => {
-    setReplying(false);
+    setReplyMode(null);
     if (selected && folder === "inbox") {
       // Send & archive — keep the inbox clean.
       mutateState(selected.id, "archived", kind === "sent" ? "送信してアーカイブしました" : "予約してアーカイブしました");
@@ -191,7 +193,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         trash(selectedId);
       } else if (e.key === "r" && selected) {
         e.preventDefault();
-        setReplying(true);
+        setReplyMode("ai");
+      } else if (e.key === "R" && selected) {
+        e.preventDefault();
+        setReplyMode("plain");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -220,12 +225,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onTrash={trash}
         />
       )}
-      {replying && selected ? (
+      {replyMode && selected ? (
         <ReplyComposer
+          key={replyMode} // restart the composer when the mode changes
           email={selected}
+          mode={replyMode}
           aiConfigured={aiOk}
           onSent={onSent}
-          onClose={() => setReplying(false)}
+          onClose={() => setReplyMode(null)}
         />
       ) : (
         <EmailReader
@@ -235,7 +242,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onArchive={() => selected && archive(selected.id)}
           onTrash={() => selected && trash(selected.id)}
           onRestore={() => selected && restore(selected.id)}
-          onReply={() => setReplying(true)}
+          onReply={setReplyMode}
           onImportanceFeedback={onImportanceFeedback}
         />
       )}
