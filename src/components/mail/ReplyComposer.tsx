@@ -29,11 +29,14 @@ interface HistoryItem {
 
 export function ReplyComposer({
   email,
+  mode,
   aiConfigured,
   onSent,
   onClose,
 }: {
   email: Email;
+  /** "ai" = AI drafts the reply first; "plain" = start from a blank reply. */
+  mode: "ai" | "plain";
   aiConfigured: boolean;
   onSent: (kind: "sent" | "scheduled") => void;
   onClose: () => void;
@@ -44,7 +47,7 @@ export function ReplyComposer({
   const [initialDraft, setInitialDraft] = useState<string | null>(null);
   const [body, setBody] = useState("");
   const [pending, setPending] = useState(0);
-  const [generating, setGenerating] = useState(true);
+  const [generating, setGenerating] = useState(mode === "ai");
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -56,8 +59,15 @@ export function ReplyComposer({
 
   const reviewing = pending > 0;
 
-  // Initial draft.
+  // Initial draft. Plain mode skips the AI entirely — just a bare greeting
+  // skeleton so the user writes the reply themselves.
   useEffect(() => {
+    if (mode === "plain") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot init, no fetch
+      setInitialDraft(`${displayName(email.from)} 様\n\n`);
+      setGenerating(false);
+      return;
+    }
     let active = true;
     (async () => {
       setGenerating(true);
@@ -164,7 +174,9 @@ export function ReplyComposer({
       {/* Draft editor */}
       <div className="flex flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-border bg-surface px-5 py-3">
-          <h2 className="text-sm font-semibold">返信を作成</h2>
+          <h2 className="text-sm font-semibold">
+            {mode === "ai" ? "AIで返信を作成" : "返信を作成"}
+          </h2>
           <span className="truncate text-xs text-fg-subtle">
             宛先: {displayName(email.from)} &lt;{email.from.email}&gt;
           </span>
