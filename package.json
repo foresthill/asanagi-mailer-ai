@@ -47,7 +47,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/diff": "^7.0.2",
-    "@types/node": "^20",
+    "@types/node": "^24.13.2",
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -29,6 +29,8 @@ export interface Email {
   importanceReason?: string;
   /** Provider-specific message id used for threading (In-Reply-To). */
   messageId?: string;
+  /** Which connected account this email belongs to (gmail | imap | mock). */
+  account?: string;
 }
 
 export interface DraftRequest {
@@ -51,6 +53,8 @@ export interface OutgoingMessage {
   body: string;
   /** messageId of the email being replied to, for threading. */
   inReplyTo?: string;
+  /** Account to send from (gmail | imap | mock). Default: auto-detected. */
+  account?: string;
 }
 
 export interface ScheduledSend extends OutgoingMessage {

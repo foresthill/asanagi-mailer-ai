@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/email";
+import { getProviderFor } from "@/lib/email/accounts";
 import { addScheduled, dueScheduled, listScheduled, updateScheduled } from "@/lib/store";
 import type { OutgoingMessage, ScheduledSend } from "@/lib/types";
 
@@ -7,9 +8,12 @@ import type { OutgoingMessage, ScheduledSend } from "@/lib/types";
 async function flushDue() {
   const due = await dueScheduled();
   if (!due.length) return 0;
-  const provider = await getProvider();
   for (const item of due) {
     try {
+      // Send from the account the item was scheduled for.
+      const provider = item.account
+        ? await getProviderFor(item.account)
+        : await getProvider();
       await provider.send(item);
       await updateScheduled(item.id, { status: "sent" });
     } catch (err) {
