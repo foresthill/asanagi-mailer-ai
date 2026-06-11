@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { statSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import type { Email, EmailAddress, MailboxState } from "@/lib/types";
+import type { Email, EmailAddress, Importance, MailboxState } from "@/lib/types";
 
 /**
  * Local SQLite cache of fetched emails (node:sqlite — no native deps).
@@ -44,6 +44,19 @@ function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_messages_acct_state_date
       ON messages (account, state, date DESC);
+    CREATE TABLE IF NOT EXISTS judgments (
+      account     TEXT NOT NULL,
+      email_id    TEXT NOT NULL,
+      subject     TEXT,
+      from_name   TEXT,
+      from_email  TEXT,
+      importance  TEXT NOT NULL,
+      reason      TEXT,
+      source      TEXT,
+      verdict     TEXT,
+      created_at  TEXT,
+      PRIMARY KEY (account, email_id)
+    );
   `);
   // Lightweight migration for pre-existing databases (node:sqlite has no
   // IF NOT EXISTS for columns — the duplicate-column error means "done").
@@ -266,9 +279,10 @@ export interface ContactInfo {
 
 /**
  * Address book derived from the cache: senders of received mail plus
- * recipients of our sent mail, ranked by recency. Own addresses excluded.
+ * recipients (To and Cc) of our sent mail, ranked by recency. Own addresses
+ * excluded.
  */
-export function contactsList(selfEmails: string[], limit = 200): ContactInfo[] {
+export function contactsList(selfEmails: string[], limit = 500): ContactInfo[] {
   const d = getDb();
   const map = new Map<string, ContactInfo>();
   const self = new Set(selfEmails.map((s) => s.toLowerCase()));
@@ -291,30 +305,34 @@ export function contactsList(selfEmails: string[], limit = 200): ContactInfo[] {
     });
   }
 
-  const sentRows = d
-    .prepare(
-      `SELECT LOWER(json_extract(j.value, '$.email')) AS email,
-              json_extract(j.value, '$.name') AS name,
-              COUNT(*) AS count, MAX(m.date) AS last
-       FROM messages m, json_each(m.to_json) j
-       WHERE m.state = 'sent' GROUP BY LOWER(json_extract(j.value, '$.email'))`,
-    )
-    .all() as { email: string | null; name: string | null; count: number; last: string }[];
-  for (const r of sentRows) {
-    if (!r.email || self.has(r.email)) continue;
-    const cur = map.get(r.email);
-    if (cur) {
-      cur.sent = Number(r.count);
-      cur.name = cur.name ?? r.name ?? undefined;
-      if (r.last > cur.lastDate) cur.lastDate = r.last;
-    } else {
-      map.set(r.email, {
-        email: r.email,
-        name: r.name ?? undefined,
-        received: 0,
-        sent: Number(r.count),
-        lastDate: r.last,
-      });
+  // To AND Cc of our sent mail — people we only ever Cc'd were previously
+  // invisible here (取りこぼし).
+  for (const column of ["to_json", "cc_json"]) {
+    const sentRows = d
+      .prepare(
+        `SELECT LOWER(json_extract(j.value, '$.email')) AS email,
+                json_extract(j.value, '$.name') AS name,
+                COUNT(*) AS count, MAX(m.date) AS last
+         FROM messages m, json_each(m.${column}) j
+         WHERE m.state = 'sent' GROUP BY LOWER(json_extract(j.value, '$.email'))`,
+      )
+      .all() as { email: string | null; name: string | null; count: number; last: string }[];
+    for (const r of sentRows) {
+      if (!r.email || self.has(r.email)) continue;
+      const cur = map.get(r.email);
+      if (cur) {
+        cur.sent += Number(r.count);
+        cur.name = cur.name ?? r.name ?? undefined;
+        if (r.last > cur.lastDate) cur.lastDate = r.last;
+      } else {
+        map.set(r.email, {
+          email: r.email,
+          name: r.name ?? undefined,
+          received: 0,
+          sent: Number(r.count),
+          lastDate: r.last,
+        });
+      }
     }
   }
 
@@ -341,6 +359,100 @@ export function contactTimeline(email: string, limit = 200): Email[] {
     )
     .all(email, email, email, limit) as Record<string, unknown>[];
   return rows.map(rowToEmail);
+}
+
+// ---------------------------------------------------------------------------
+// Judgment log — every AI/heuristic importance call, plus the user's verdict.
+// This is the supervised-learning seed (docs/02): corrections feed the live
+// signal store immediately and accumulate as a training set for the future
+// local classifier.
+// ---------------------------------------------------------------------------
+
+export interface Judgment {
+  account: string;
+  emailId: string;
+  subject: string;
+  fromName?: string;
+  fromEmail: string;
+  importance: Importance;
+  reason?: string;
+  /** What produced the judgment: ai | heuristic | learned. */
+  source: string;
+  /** The user's correction/confirmation; null = not reviewed yet. */
+  verdict: Importance | null;
+  createdAt: string;
+}
+
+
+/** Record (or refresh) the latest judgment for an email. */
+export function logJudgment(j: Omit<Judgment, "verdict" | "createdAt">): void {
+  getDb()
+    .prepare(
+      `INSERT INTO judgments
+         (account, email_id, subject, from_name, from_email, importance, reason, source, verdict, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+       ON CONFLICT(account, email_id) DO UPDATE SET
+         importance = excluded.importance,
+         reason = excluded.reason,
+         source = excluded.source,
+         created_at = excluded.created_at`,
+    )
+    .run(
+      j.account,
+      j.emailId,
+      j.subject,
+      j.fromName ?? null,
+      j.fromEmail,
+      j.importance,
+      j.reason ?? null,
+      j.source,
+      new Date().toISOString(),
+    );
+}
+
+export function listJudgments(limit = 100): Judgment[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM judgments ORDER BY created_at DESC LIMIT ?")
+    .all(limit) as Record<string, unknown>[];
+  return rows.map((r) => ({
+    account: String(r.account),
+    emailId: String(r.email_id),
+    subject: String(r.subject ?? ""),
+    fromName: (r.from_name as string) || undefined,
+    fromEmail: String(r.from_email ?? ""),
+    importance: String(r.importance) as Importance,
+    reason: (r.reason as string) || undefined,
+    source: String(r.source ?? ""),
+    verdict: (r.verdict as Importance | null) ?? null,
+    createdAt: String(r.created_at ?? ""),
+  }));
+}
+
+export function setJudgmentVerdict(
+  account: string,
+  emailId: string,
+  verdict: Importance,
+): void {
+  getDb()
+    .prepare("UPDATE judgments SET verdict = ? WHERE account = ? AND email_id = ?")
+    .run(verdict, account, emailId);
+}
+
+/** Accuracy snapshot: how often the user agreed with the judgment. */
+export function judgmentStats(): { total: number; reviewed: number; agreed: number } {
+  const row = getDb()
+    .prepare(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN verdict IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
+              SUM(CASE WHEN verdict = importance THEN 1 ELSE 0 END) AS agreed
+       FROM judgments`,
+    )
+    .get() as { total: number; reviewed: number | null; agreed: number | null };
+  return {
+    total: Number(row.total),
+    reviewed: Number(row.reviewed ?? 0),
+    agreed: Number(row.agreed ?? 0),
+  };
 }
 
 export interface StorageStats {

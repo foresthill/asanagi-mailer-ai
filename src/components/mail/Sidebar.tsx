@@ -13,6 +13,7 @@ import {
   AtSign,
   SquarePen,
   Users,
+  ListChecks,
 } from "lucide-react";
 import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -50,9 +51,9 @@ export function Sidebar({
   accounts: AccountInfo[];
   account: string; // "all" or an account key
   storage: StorageInfo | null;
-  view: "mail" | "contacts";
+  view: "mail" | "contacts" | "triage";
   onSelect: (f: FolderView) => void;
-  onSelectView: (v: "mail" | "contacts") => void;
+  onSelectView: (v: "mail" | "contacts" | "triage") => void;
   onSelectAccount: (key: string) => void;
   onOpenSettings: () => void;
   onOpenScheduled: () => void;
@@ -113,6 +114,19 @@ export function Sidebar({
         >
           <Users className={cn("size-4", view === "contacts" && "text-accent")} />
           <span className="flex-1 text-left">連絡先</span>
+        </button>
+        <button
+          onClick={() => onSelectView("triage")}
+          title="AI判定の確認と是正（教師データ作り）"
+          className={cn(
+            "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+            view === "triage"
+              ? "bg-accent-soft font-medium text-fg"
+              : "text-fg-muted hover:bg-surface hover:text-fg",
+          )}
+        >
+          <ListChecks className={cn("size-4", view === "triage" && "text-accent")} />
+          <span className="flex-1 text-left">仕分けレビュー</span>
         </button>
       </nav>
 

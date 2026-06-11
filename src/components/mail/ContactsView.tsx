@@ -22,12 +22,33 @@ export function ContactsView({
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<ContactInfo | null>(null);
 
+  const [warming, setWarming] = useState(true);
+
   useEffect(() => {
+    let active = true;
     (async () => {
-      const res = await fetch("/api/contacts");
-      const data = await res.json();
-      setContacts(data.contacts ?? []);
+      // Instant pass from the cache, then a warm pass that pulls the
+      // sent/archived folders so rarely-opened correspondents appear too.
+      try {
+        const res = await fetch("/api/contacts");
+        const data = await res.json();
+        if (active) setContacts(data.contacts ?? []);
+      } catch {
+        if (active) setContacts([]);
+      }
+      try {
+        const res = await fetch("/api/contacts?warm=1");
+        const data = await res.json();
+        if (active && data.contacts) setContacts(data.contacts);
+      } catch {
+        /* warm pass is best-effort */
+      } finally {
+        if (active) setWarming(false);
+      }
     })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const q = query.trim().toLowerCase();
@@ -55,8 +76,14 @@ export function ContactsView({
             />
           </div>
         </div>
-        <p className="px-5 pb-2 text-[11px] text-fg-subtle">
+        <p className="flex items-center gap-1.5 px-5 pb-2 text-[11px] text-fg-subtle">
           メールのやりとりから自動生成（手入力不要）
+          {warming && (
+            <span className="flex items-center gap-1 text-accent">
+              <Loader2 className="size-3 animate-spin" />
+              送信箱・アーカイブを取得中…
+            </span>
+          )}
         </p>
 
         <div className="flex-1 overflow-y-auto px-2 pb-4">

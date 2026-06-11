@@ -20,6 +20,8 @@ export interface ComposeInit {
   /** Initial body for plain modes ("ai" fetches a draft instead). */
   body: string;
   inReplyTo?: string;
+  /** Conversation the reply belongs to (threading — see OutgoingMessage). */
+  threadId?: string;
   /** Original email — AI context for replies, quote source for forward. */
   source?: Email;
 }
@@ -81,6 +83,7 @@ export function buildCompose(
         subject: rePrefix(source.subject),
         body: `${displayName(greetTarget)} 様\n\n`,
         inReplyTo: source.messageId,
+        threadId: source.threadId,
       };
     case "replyAll": {
       // From + the other To recipients; Cc carried over (minus ourselves).
@@ -94,13 +97,14 @@ export function buildCompose(
         subject: rePrefix(source.subject),
         body: `${displayName(to[0] ?? source.from)} 様\n\n`,
         inReplyTo: source.messageId,
+        threadId: source.threadId,
       };
     }
     case "forward":
       return {
         ...base,
         kind,
-        mode: "plain",
+        mode, // "ai" = AI drafts the forwarding note above the quote
         to: [],
         cc: [],
         subject: source.subject.startsWith("Fwd:") ? source.subject : `Fwd: ${source.subject}`,

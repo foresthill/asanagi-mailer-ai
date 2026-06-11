@@ -234,6 +234,17 @@ function AiReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: Compose
               <ReplyAll className="size-4" />
               AIで全員に返信
             </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onReply("forward", "ai");
+              }}
+              title="AIが要点まとめ付きの転送文を下書き"
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-accent-soft hover:text-accent"
+            >
+              <Forward className="size-4" />
+              AIで転送
+            </button>
           </div>
         </>
       )}

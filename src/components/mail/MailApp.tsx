@@ -9,6 +9,7 @@ import { ReplyComposer } from "./ReplyComposer";
 import { ConnectionsSettings } from "./ConnectionsSettings";
 import { ScheduledPanel } from "./ScheduledPanel";
 import { ContactsView } from "./ContactsView";
+import { TriageView } from "./TriageView";
 import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
 import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from "./compose";
@@ -16,7 +17,7 @@ import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<FolderView>("inbox");
   // "mail" = folders; "contacts" = auto-derived address book (mini-CRM).
-  const [view, setView] = useState<"mail" | "contacts">("mail");
+  const [view, setView] = useState<"mail" | "contacts" | "triage">("mail");
   // "all" = unified inbox across accounts; otherwise a single account key.
   const [account, setAccount] = useState("all");
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
@@ -390,6 +391,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           }
         />
       )}
+      {view === "triage" && !compose && <TriageView />}
       {view === "mail" && !replying && (
         <EmailList
           folder={folder}

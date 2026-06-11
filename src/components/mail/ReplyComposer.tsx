@@ -66,8 +66,9 @@ export function ReplyComposer({
 
   const reviewing = pending > 0;
 
-  // Initial draft. Plain modes (plain reply / forward / new) start from the
-  // prepared body; "ai" asks the model to draft a reply to the source email.
+  // Initial draft. Plain modes start from the prepared body; "ai" asks the
+  // model to draft a reply — or, for forwards, a short forwarding note that
+  // goes above the quoted original (subject stays "Fwd:").
   useEffect(() => {
     if (init.mode === "plain" || !init.source) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot init, no fetch
@@ -76,6 +77,7 @@ export function ReplyComposer({
       return;
     }
     const source = init.source;
+    const isForward = init.kind === "forward";
     let active = true;
     (async () => {
       setGenerating(true);
@@ -83,12 +85,22 @@ export function ReplyComposer({
         const res = await fetch("/api/ai/reply", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: source }),
+          body: JSON.stringify({
+            email: source,
+            guidance: isForward
+              ? "このメールを第三者へ転送するための短い前置き文だけを書いてください。要点の簡潔なまとめ（2〜3行）を含め、宛名・署名・元メールの再掲は不要です。"
+              : undefined,
+          }),
         });
         const data = await res.json();
         if (active && data.draft) {
-          setSubject(data.draft.subject);
-          setInitialDraft(data.draft.body);
+          if (isForward) {
+            // Keep the Fwd: subject; the AI note sits above the quote block.
+            setInitialDraft(`${data.draft.body.trim()}\n${init.body}`);
+          } else {
+            setSubject(data.draft.subject);
+            setInitialDraft(data.draft.body);
+          }
         }
       } catch {
         if (active) setInitialDraft(init.body);
@@ -117,16 +129,30 @@ export function ReplyComposer({
           draft: body,
           instruction,
           selection: sel ? { start: 0, end: 0, text: sel } : undefined,
+          subject, // blank → the AI proposes one alongside the revision
         }),
       });
       const data = await res.json();
       const revised: string = data.revised ?? body;
+      // Fill the subject only if the user still hasn't typed one meanwhile.
+      const proposedSubject =
+        typeof data.subject === "string" && data.subject && !subject.trim()
+          ? data.subject
+          : null;
+      if (proposedSubject) setSubject(proposedSubject);
       const segs = buildSegments(body, revised);
       const changes = pendingCount(segs);
       setHistory((h) => [...h, { id: `t${h.length}`, instruction, scope, count: changes }]);
       if (changes === 0) {
-        setNote(data.ai === false ? "AIキー未設定のため変更なし" : "変更はありませんでした");
+        setNote(
+          data.ai === false
+            ? "AIキー未設定のため変更なし"
+            : proposedSubject
+              ? "件名を提案しました（本文は変更なし）"
+              : "変更はありませんでした",
+        );
       } else {
+        if (proposedSubject) setNote("件名も提案しました（変更できます）");
         editorRef.current?.loadReview(segs);
       }
     } catch {
@@ -145,6 +171,7 @@ export function ReplyComposer({
       subject,
       body,
       inReplyTo: init.inReplyTo,
+      threadId: init.threadId,
       account: init.account, // send from the account the thread belongs to
     };
   }
