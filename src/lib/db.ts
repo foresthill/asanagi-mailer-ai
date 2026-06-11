@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { statSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import type { Email, EmailAddress, MailboxState } from "@/lib/types";
+import type { Email, EmailAddress, Importance, MailboxState } from "@/lib/types";
 
 /**
  * Local SQLite cache of fetched emails (node:sqlite — no native deps).
@@ -44,6 +44,19 @@ function getDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_messages_acct_state_date
       ON messages (account, state, date DESC);
+    CREATE TABLE IF NOT EXISTS judgments (
+      account     TEXT NOT NULL,
+      email_id    TEXT NOT NULL,
+      subject     TEXT,
+      from_name   TEXT,
+      from_email  TEXT,
+      importance  TEXT NOT NULL,
+      reason      TEXT,
+      source      TEXT,
+      verdict     TEXT,
+      created_at  TEXT,
+      PRIMARY KEY (account, email_id)
+    );
   `);
   return db;
 }
@@ -309,6 +322,100 @@ export function contactTimeline(email: string, limit = 200): Email[] {
     )
     .all(email, email, email, limit) as Record<string, unknown>[];
   return rows.map(rowToEmail);
+}
+
+// ---------------------------------------------------------------------------
+// Judgment log — every AI/heuristic importance call, plus the user's verdict.
+// This is the supervised-learning seed (docs/02): corrections feed the live
+// signal store immediately and accumulate as a training set for the future
+// local classifier.
+// ---------------------------------------------------------------------------
+
+export interface Judgment {
+  account: string;
+  emailId: string;
+  subject: string;
+  fromName?: string;
+  fromEmail: string;
+  importance: Importance;
+  reason?: string;
+  /** What produced the judgment: ai | heuristic | learned. */
+  source: string;
+  /** The user's correction/confirmation; null = not reviewed yet. */
+  verdict: Importance | null;
+  createdAt: string;
+}
+
+
+/** Record (or refresh) the latest judgment for an email. */
+export function logJudgment(j: Omit<Judgment, "verdict" | "createdAt">): void {
+  getDb()
+    .prepare(
+      `INSERT INTO judgments
+         (account, email_id, subject, from_name, from_email, importance, reason, source, verdict, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+       ON CONFLICT(account, email_id) DO UPDATE SET
+         importance = excluded.importance,
+         reason = excluded.reason,
+         source = excluded.source,
+         created_at = excluded.created_at`,
+    )
+    .run(
+      j.account,
+      j.emailId,
+      j.subject,
+      j.fromName ?? null,
+      j.fromEmail,
+      j.importance,
+      j.reason ?? null,
+      j.source,
+      new Date().toISOString(),
+    );
+}
+
+export function listJudgments(limit = 100): Judgment[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM judgments ORDER BY created_at DESC LIMIT ?")
+    .all(limit) as Record<string, unknown>[];
+  return rows.map((r) => ({
+    account: String(r.account),
+    emailId: String(r.email_id),
+    subject: String(r.subject ?? ""),
+    fromName: (r.from_name as string) || undefined,
+    fromEmail: String(r.from_email ?? ""),
+    importance: String(r.importance) as Importance,
+    reason: (r.reason as string) || undefined,
+    source: String(r.source ?? ""),
+    verdict: (r.verdict as Importance | null) ?? null,
+    createdAt: String(r.created_at ?? ""),
+  }));
+}
+
+export function setJudgmentVerdict(
+  account: string,
+  emailId: string,
+  verdict: Importance,
+): void {
+  getDb()
+    .prepare("UPDATE judgments SET verdict = ? WHERE account = ? AND email_id = ?")
+    .run(verdict, account, emailId);
+}
+
+/** Accuracy snapshot: how often the user agreed with the judgment. */
+export function judgmentStats(): { total: number; reviewed: number; agreed: number } {
+  const row = getDb()
+    .prepare(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN verdict IS NOT NULL THEN 1 ELSE 0 END) AS reviewed,
+              SUM(CASE WHEN verdict = importance THEN 1 ELSE 0 END) AS agreed
+       FROM judgments`,
+    )
+    .get() as { total: number; reviewed: number | null; agreed: number | null };
+  return {
+    total: Number(row.total),
+    reviewed: Number(row.reviewed ?? 0),
+    agreed: Number(row.agreed ?? 0),
+  };
 }
 
 export interface StorageStats {

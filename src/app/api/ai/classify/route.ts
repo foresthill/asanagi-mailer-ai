@@ -5,7 +5,8 @@ import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { CLASSIFY_SYSTEM, classifyContext } from "@/lib/ai/prompts";
 import { guessFromSignals, listSignals } from "@/lib/store";
 import { heuristicImportance } from "@/lib/importance";
-import type { Email } from "@/lib/types";
+import { logJudgment } from "@/lib/db";
+import type { Email, Importance } from "@/lib/types";
 
 export const maxDuration = 30;
 
@@ -13,6 +14,24 @@ const schema = z.object({
   importance: z.enum(["high", "normal", "low"]),
   reason: z.string(),
 });
+
+/** Persist every judgment — the supervised-learning log (仕分けレビュー). */
+function record(email: Email, importance: Importance, reason: string, source: string) {
+  try {
+    logJudgment({
+      account: email.account ?? "unknown",
+      emailId: email.id,
+      subject: email.subject,
+      fromName: email.from.name,
+      fromEmail: email.from.email,
+      importance,
+      reason,
+      source,
+    });
+  } catch {
+    /* logging must never break classification */
+  }
+}
 
 export async function POST(req: Request) {
   const { email } = (await req.json()) as { email: Email };
@@ -22,21 +41,18 @@ export async function POST(req: Request) {
   // sender/domain, trust that immediately (fast + free + personalized).
   const learned = guessFromSignals(email.from.email, signals);
   if (learned) {
-    return NextResponse.json({
-      importance: learned,
-      reason: "あなたの過去の判断（学習済み）に基づく判定です。",
-      source: "learned",
-    });
+    const reason = "あなたの過去の判断（学習済み）に基づく判定です。";
+    record(email, learned, reason, "learned");
+    return NextResponse.json({ importance: learned, reason, source: "learned" });
   }
 
   const cfg = await loadAIConfig();
   if (!cfg.configured) {
     // Keyword fallback (shared with the list annotator) so the UI still works.
-    return NextResponse.json({
-      importance: heuristicImportance(email),
-      reason: "キーワードに基づく簡易判定です（AIキー未設定）。",
-      source: "heuristic",
-    });
+    const importance = heuristicImportance(email);
+    const reason = "キーワードに基づく簡易判定です（AIキー未設定）。";
+    record(email, importance, reason, "heuristic");
+    return NextResponse.json({ importance, reason, source: "heuristic" });
   }
 
   try {
@@ -46,6 +62,7 @@ export async function POST(req: Request) {
       system: CLASSIFY_SYSTEM,
       prompt: classifyContext(email, signals),
     });
+    record(email, object.importance, object.reason, "ai");
     return NextResponse.json({ ...object, source: "ai" });
   } catch (err) {
     return NextResponse.json(
