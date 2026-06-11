@@ -1,12 +1,13 @@
 "use client";
 
-import { Archive, Trash2, Loader2, Inbox, RefreshCw, Reply, Search, X } from "lucide-react";
-import type { Email, MailboxState } from "@/lib/types";
+import { Archive, Trash2, Loader2, Inbox, RefreshCw, Reply, Search, Star, X } from "lucide-react";
+import type { Email, FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, initials, relativeTime } from "./helpers";
 
-const FOLDER_LABEL: Record<MailboxState, string> = {
+const FOLDER_LABEL: Record<FolderView, string> = {
   inbox: "受信箱",
+  starred: "スター付き",
   sent: "送信箱",
   archived: "アーカイブ",
   trashed: "ゴミ箱",
@@ -24,9 +25,10 @@ export function EmailList({
   onSelect,
   onArchive,
   onTrash,
+  onToggleStar,
   onRefresh,
 }: {
-  folder: MailboxState;
+  folder: FolderView;
   emails: Email[];
   loading: boolean;
   selectedId: string | null;
@@ -41,6 +43,7 @@ export function EmailList({
   onSelect: (id: string) => void;
   onArchive: (id: string) => void;
   onTrash: (id: string) => void;
+  onToggleStar: (id: string) => void;
   onRefresh: () => void;
 }) {
   return (
@@ -115,6 +118,7 @@ export function EmailList({
               onSelect={() => onSelect(email.id)}
               onArchive={() => onArchive(email.id)}
               onTrash={() => onTrash(email.id)}
+              onToggleStar={() => onToggleStar(email.id)}
             />
           ))
         )}
@@ -131,15 +135,17 @@ function EmailListItem({
   onSelect,
   onArchive,
   onTrash,
+  onToggleStar,
 }: {
   email: Email;
   active: boolean;
-  folder: MailboxState;
+  folder: FolderView;
   /** Origin account badge text (unified inbox only); null hides it. */
   accountLabel: string | null;
   onSelect: () => void;
   onArchive: () => void;
   onTrash: () => void;
+  onToggleStar: () => void;
 }) {
   const name = displayName(email.from);
   return (
@@ -170,6 +176,9 @@ function EmailListItem({
               {name}
             </span>
             <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle">
+              {email.starred && (
+                <Star className="size-3 fill-amber-400 text-amber-400" aria-label="スター付き" />
+              )}
               {email.replied && (
                 <Reply className="size-3 text-accent" aria-label="返信済み" />
               )}
@@ -222,6 +231,16 @@ function EmailListItem({
 
       {/* Hover quick-actions */}
       <div className="absolute right-2 top-2 hidden items-center gap-1 rounded-lg bg-surface/90 p-0.5 shadow-sm backdrop-blur group-hover:flex">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleStar();
+          }}
+          title={email.starred ? "スターを外す (S)" : "スターを付ける (S)"}
+          className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
+        >
+          <Star className={cn("size-4", email.starred && "fill-amber-400 text-amber-400")} />
+        </button>
         {folder !== "archived" && (
           <button
             onClick={(e) => {

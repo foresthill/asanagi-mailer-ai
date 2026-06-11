@@ -138,6 +138,7 @@ export class ImapProvider implements EmailProvider {
       html,
       date: (env.date ?? new Date()).toISOString?.() ?? new Date(env.date).toISOString(),
       read: flags.has("\\Seen"),
+      starred: flags.has("\\Flagged"),
       state,
       messageId: env.messageId,
     };
@@ -220,6 +221,23 @@ export class ImapProvider implements EmailProvider {
       try {
         if (read) await c.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
         else await c.messageFlagsRemove(uid, ["\\Seen"], { uid: true });
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await c.logout();
+    }
+  }
+
+  async setStarred(id: string, starred: boolean): Promise<void> {
+    const [folder, uid] = id.split(":");
+    const c = this.connection();
+    await c.connect();
+    try {
+      const lock = await c.getMailboxLock(folder);
+      try {
+        if (starred) await c.messageFlagsAdd(uid, ["\\Flagged"], { uid: true });
+        else await c.messageFlagsRemove(uid, ["\\Flagged"], { uid: true });
       } finally {
         lock.release();
       }

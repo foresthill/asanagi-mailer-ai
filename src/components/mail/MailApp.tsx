@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Email, EmailAddress, Importance, MailboxState } from "@/lib/types";
+import type { Email, EmailAddress, FolderView, Importance, MailboxState } from "@/lib/types";
 import { Sidebar } from "./Sidebar";
 import { EmailList } from "./EmailList";
 import { EmailReader } from "./EmailReader";
@@ -14,7 +14,7 @@ import type { AccountInfo } from "@/lib/email/accounts";
 import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from "./compose";
 
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
-  const [folder, setFolder] = useState<MailboxState>("inbox");
+  const [folder, setFolder] = useState<FolderView>("inbox");
   // "mail" = folders; "contacts" = auto-derived address book (mini-CRM).
   const [view, setView] = useState<"mail" | "contacts">("mail");
   // "all" = unified inbox across accounts; otherwise a single account key.
@@ -37,7 +37,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [compose, setCompose] = useState<ComposeInit | null>(null);
   const replying = compose !== null;
   const [classifying, setClassifying] = useState(false);
-  const [counts, setCounts] = useState<Partial<Record<MailboxState, number>>>({});
+  const [counts, setCounts] = useState<Partial<Record<FolderView, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
@@ -52,7 +52,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   }, []);
 
   const loadList = useCallback(
-    async (f: MailboxState, acct: string) => {
+    async (f: FolderView, acct: string) => {
       setLoading(true);
       try {
         const res = await fetch(`/api/emails?state=${f}&account=${encodeURIComponent(acct)}`);
@@ -98,7 +98,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     return () => clearTimeout(t);
   }, [searchQuery]);
 
-  const changeFolder = (f: MailboxState) => {
+  const changeFolder = (f: FolderView) => {
     setView("mail");
     setFolder(f);
     // Folder clicks must visibly switch even while showing search results.
@@ -235,6 +235,36 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const trash = (id: string) => mutateState(id, "trashed", "ゴミ箱に移動しました");
   const restore = (id: string) => mutateState(id, "inbox", "受信箱に戻しました");
 
+  /** Star toggle — optimistic UI, server-synced (Gmail STARRED / IMAP \Flagged). */
+  const toggleStar = useCallback(
+    async (id: string) => {
+      const target = emails.find((e) => e.id === id) ?? (selected?.id === id ? selected : null);
+      const next = !target?.starred;
+      setEmails((list) =>
+        // In the starred view, unstarring removes the row right away.
+        folder === "starred" && !next
+          ? list.filter((e) => e.id !== id)
+          : list.map((e) => (e.id === id ? { ...e, starred: next } : e)),
+      );
+      setSelected((s) => (s && s.id === id ? { ...s, starred: next } : s));
+      try {
+        const res = await fetch(`/api/emails/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ starred: next }),
+        });
+        if (!res.ok) throw new Error();
+        showToast(next ? "スターを付けました" : "スターを外しました");
+      } catch {
+        // Roll back the optimistic update on failure.
+        setEmails((list) => list.map((e) => (e.id === id ? { ...e, starred: !next } : e)));
+        setSelected((s) => (s && s.id === id ? { ...s, starred: !next } : s));
+        showToast("スターの更新に失敗しました");
+      }
+    },
+    [emails, selected, folder],
+  );
+
   const onImportanceFeedback = async (importance: Importance) => {
     if (!selected) return;
     setSelected({ ...selected, importance, importanceReason: "あなたが指定した重要度です。" });
@@ -298,6 +328,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       } else if (e.key === "k") {
         e.preventDefault();
         selectEmail(emails[Math.max(0, idx - 1)]?.id ?? emails[0].id);
+      } else if (e.key === "s" && selectedId) {
+        e.preventDefault();
+        toggleStar(selectedId);
       } else if (e.key === "e" && selectedId && folder !== "archived" && folder !== "sent") {
         archive(selectedId);
       } else if ((e.key === "#" || e.key === "Backspace") && selectedId && folder !== "trashed") {
@@ -376,6 +409,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onSelect={selectEmail}
           onArchive={archive}
           onTrash={trash}
+          onToggleStar={toggleStar}
           onRefresh={() => loadList(folder, account)}
         />
       )}
@@ -398,6 +432,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onTrash={() => selected && trash(selected.id)}
           onRestore={() => selected && restore(selected.id)}
           onReply={openCompose}
+          onToggleStar={() => selected && toggleStar(selected.id)}
           onImportanceFeedback={onImportanceFeedback}
         />
       ) : null}
