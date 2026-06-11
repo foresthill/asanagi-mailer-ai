@@ -102,9 +102,13 @@ export interface AISettings {
 
 /**
  * User-supplied email connection settings. Like AISettings these are
- * persisted locally only — OAuth tokens never leave the device.
+ * persisted locally only — OAuth tokens and passwords never leave the device.
+ * All field values are strings (numbers/bools encoded) so the store can
+ * uniformly treat blank as "clear this field".
  */
 export interface EmailSettings {
+  /** Which backend drives the mailbox; "auto" detects from credentials. */
+  active?: "auto" | "gmail" | "imap" | "mock";
   gmail?: {
     /** Your own Google Cloud OAuth client (BYO client). */
     clientId?: string;
@@ -113,5 +117,21 @@ export interface EmailSettings {
     refreshToken?: string;
     /** Connected account address, for display. */
     address?: string;
+  };
+  imap?: {
+    host?: string;
+    port?: string; // default "993"
+    secure?: string; // "false" to disable TLS
+    user?: string;
+    password?: string;
+    archiveFolder?: string; // default "Archive"
+    trashFolder?: string; // default "Trash"
+    // SMTP (send); blank fields fall back to the IMAP values.
+    smtpHost?: string;
+    smtpPort?: string; // default "465"
+    smtpSecure?: string;
+    smtpUser?: string;
+    smtpPassword?: string;
+    smtpFrom?: string;
   };
 }

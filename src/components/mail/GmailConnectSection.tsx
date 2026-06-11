@@ -1,31 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Mail, Unplug } from "lucide-react";
+import { Loader2, Unplug } from "lucide-react";
 
-interface EmailView {
-  active: string; // gmail | imap | mock
-  gmail: {
-    clientIdSet: boolean;
-    clientSecretSet: boolean;
-    connected: boolean;
-    address?: string;
-  };
+export interface GmailView {
+  clientIdSet: boolean;
+  clientSecretSet: boolean;
+  connected: boolean;
+  address?: string;
 }
 
-const PROVIDER_LABEL: Record<string, string> = {
-  gmail: "Gmail",
-  imap: "IMAP/SMTP",
-  mock: "モック（デモ受信箱）",
-};
-
 /**
- * Gmail account connect (BYO OAuth client). Lives inside the connections
- * dialog. Save your own Google Cloud OAuth client id/secret once, then run
- * the consent flow; the refresh token is stored locally (.data).
+ * Gmail account connect (BYO OAuth client). Save your own Google Cloud OAuth
+ * client id/secret once, then run the consent flow; the refresh token is
+ * stored locally (.data). View state lives in EmailConnectSection.
  */
-export function GmailConnectSection() {
-  const [view, setView] = useState<EmailView | null>(null);
+export function GmailConnectSection({
+  gmail: g,
+  onRefresh,
+}: {
+  gmail: GmailView;
+  onRefresh: () => Promise<void>;
+}) {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,10 +30,6 @@ export function GmailConnectSection() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- origin is browser-only
     setOrigin(window.location.origin);
-    (async () => {
-      const res = await fetch("/api/settings/email");
-      setView((await res.json()) as EmailView);
-    })();
   }, []);
 
   async function saveAndAuth() {
@@ -63,37 +55,22 @@ export function GmailConnectSection() {
   async function disconnect() {
     setBusy(true);
     try {
-      const res = await fetch("/api/settings/email", {
+      await fetch("/api/settings/email", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ disconnect: true }),
+        body: JSON.stringify({ disconnect: "gmail" }),
       });
-      setView((await res.json()) as EmailView);
+      await onRefresh();
     } finally {
       setBusy(false);
     }
   }
 
-  if (!view) {
-    return (
-      <div className="grid place-items-center py-6 text-fg-muted">
-        <Loader2 className="size-4 animate-spin" />
-      </div>
-    );
-  }
-
-  const g = view.gmail;
   const canAuth = (g.clientIdSet || clientId.trim()) && (g.clientSecretSet || clientSecret.trim());
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <Mail className="size-4 text-accent" />
-        <h3 className="text-xs font-semibold">メールアカウント（Gmail）</h3>
-        <span className="ml-auto rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-fg-subtle">
-          現在: {PROVIDER_LABEL[view.active] ?? view.active}
-        </span>
-      </div>
+      <h4 className="text-[11px] font-semibold text-fg-muted">Gmail（OAuth）</h4>
 
       {g.connected ? (
         <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600">

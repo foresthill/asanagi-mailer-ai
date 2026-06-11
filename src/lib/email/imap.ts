@@ -4,35 +4,54 @@ import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/t
 import type { EmailProvider } from "./provider";
 
 /**
- * Generic IMAP (read) + SMTP (send) adapter. Activates when these are set:
+ * Generic IMAP (read) + SMTP (send) adapter. Credentials come from the
+ * in-app connect settings (stored locally in .data) or env vars — resolved
+ * by the provider factory (lib/email/index.ts):
  *   IMAP_HOST, IMAP_PORT, IMAP_USER, IMAP_PASSWORD
  *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD  (defaults to IMAP creds)
  *
- * Folder mapping: inbox=INBOX, archived=Archive, trashed=Trash. Override with
- *   IMAP_ARCHIVE_FOLDER / IMAP_TRASH_FOLDER if your server uses other names.
+ * Folder mapping: inbox=INBOX, archived=Archive, trashed=Trash — override
+ * via archiveFolder/trashFolder when your server uses other names.
  */
-export function imapConfigured(): boolean {
-  return Boolean(
-    process.env.IMAP_HOST &&
-      process.env.IMAP_USER &&
-      process.env.IMAP_PASSWORD,
-  );
+export interface ImapCreds {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password: string;
+  archiveFolder: string;
+  trashFolder: string;
+  smtp: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    password: string;
+    from: string;
+  };
 }
 
-const FOLDERS: Record<MailboxState, string> = {
-  inbox: "INBOX",
-  archived: process.env.IMAP_ARCHIVE_FOLDER || "Archive",
-  trashed: process.env.IMAP_TRASH_FOLDER || "Trash",
-};
-
-function connection(): ImapFlow {
-  return new ImapFlow({
-    host: process.env.IMAP_HOST!,
+/** IMAP/SMTP credentials from env vars, if minimally present. */
+export function envImapCreds(): ImapCreds | null {
+  const { IMAP_HOST, IMAP_USER, IMAP_PASSWORD } = process.env;
+  if (!IMAP_HOST || !IMAP_USER || !IMAP_PASSWORD) return null;
+  return {
+    host: IMAP_HOST,
     port: Number(process.env.IMAP_PORT ?? 993),
     secure: (process.env.IMAP_SECURE ?? "true") !== "false",
-    auth: { user: process.env.IMAP_USER!, pass: process.env.IMAP_PASSWORD! },
-    logger: false,
-  });
+    user: IMAP_USER,
+    password: IMAP_PASSWORD,
+    archiveFolder: process.env.IMAP_ARCHIVE_FOLDER || "Archive",
+    trashFolder: process.env.IMAP_TRASH_FOLDER || "Trash",
+    smtp: {
+      host: process.env.SMTP_HOST || IMAP_HOST,
+      port: Number(process.env.SMTP_PORT ?? 465),
+      secure: (process.env.SMTP_SECURE ?? "true") !== "false",
+      user: process.env.SMTP_USER || IMAP_USER,
+      password: process.env.SMTP_PASSWORD || IMAP_PASSWORD,
+      from: process.env.SMTP_FROM || IMAP_USER,
+    },
+  };
 }
 
 function addr(a?: { name?: string; address?: string }): EmailAddress {
@@ -41,13 +60,32 @@ function addr(a?: { name?: string; address?: string }): EmailAddress {
 
 export class ImapProvider implements EmailProvider {
   readonly name = "imap";
+  private folders: Record<MailboxState, string>;
+
+  constructor(private creds: ImapCreds) {
+    this.folders = {
+      inbox: "INBOX",
+      archived: creds.archiveFolder,
+      trashed: creds.trashFolder,
+    };
+  }
+
+  private connection(): ImapFlow {
+    return new ImapFlow({
+      host: this.creds.host,
+      port: this.creds.port,
+      secure: this.creds.secure,
+      auth: { user: this.creds.user, pass: this.creds.password },
+      logger: false,
+    });
+  }
 
   async list(state: MailboxState): Promise<Email[]> {
-    const c = connection();
+    const c = this.connection();
     await c.connect();
     const out: Email[] = [];
     try {
-      const lock = await c.getMailboxLock(FOLDERS[state]);
+      const lock = await c.getMailboxLock(this.folders[state]);
       try {
         // Fetch the most recent 50 messages with envelope + source.
         const mailbox = c.mailbox;
@@ -80,7 +118,7 @@ export class ImapProvider implements EmailProvider {
     const body = await this.parseBody(msg.source);
     const flags: Set<string> = msg.flags ?? new Set();
     return {
-      id: `${FOLDERS[state]}:${msg.uid}`,
+      id: `${this.folders[state]}:${msg.uid}`,
       threadId: env.messageId ?? String(msg.uid),
       from: addr(env.from?.[0]),
       to: (env.to ?? []).map(addr),
@@ -105,8 +143,10 @@ export class ImapProvider implements EmailProvider {
 
   async get(id: string): Promise<Email | null> {
     const [folder, uid] = id.split(":");
-    const state = (Object.keys(FOLDERS) as MailboxState[]).find((s) => FOLDERS[s] === folder) ?? "inbox";
-    const c = connection();
+    const state =
+      (Object.keys(this.folders) as MailboxState[]).find((s) => this.folders[s] === folder) ??
+      "inbox";
+    const c = this.connection();
     await c.connect();
     try {
       const lock = await c.getMailboxLock(folder);
@@ -123,12 +163,12 @@ export class ImapProvider implements EmailProvider {
 
   async setState(id: string, state: MailboxState): Promise<void> {
     const [folder, uid] = id.split(":");
-    const c = connection();
+    const c = this.connection();
     await c.connect();
     try {
       const lock = await c.getMailboxLock(folder);
       try {
-        await c.messageMove(uid, FOLDERS[state], { uid: true });
+        await c.messageMove(uid, this.folders[state], { uid: true });
       } finally {
         lock.release();
       }
@@ -139,7 +179,7 @@ export class ImapProvider implements EmailProvider {
 
   async setRead(id: string, read: boolean): Promise<void> {
     const [folder, uid] = id.split(":");
-    const c = connection();
+    const c = this.connection();
     await c.connect();
     try {
       const lock = await c.getMailboxLock(folder);
@@ -156,7 +196,7 @@ export class ImapProvider implements EmailProvider {
 
   async remove(id: string): Promise<void> {
     const [folder, uid] = id.split(":");
-    const c = connection();
+    const c = this.connection();
     await c.connect();
     try {
       const lock = await c.getMailboxLock(folder);
@@ -172,16 +212,13 @@ export class ImapProvider implements EmailProvider {
 
   async send(message: OutgoingMessage): Promise<{ messageId?: string }> {
     const transport = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || process.env.IMAP_HOST,
-      port: Number(process.env.SMTP_PORT ?? 465),
-      secure: (process.env.SMTP_SECURE ?? "true") !== "false",
-      auth: {
-        user: process.env.SMTP_USER || process.env.IMAP_USER!,
-        pass: process.env.SMTP_PASSWORD || process.env.IMAP_PASSWORD!,
-      },
+      host: this.creds.smtp.host,
+      port: this.creds.smtp.port,
+      secure: this.creds.smtp.secure,
+      auth: { user: this.creds.smtp.user, pass: this.creds.smtp.password },
     });
     const info = await transport.sendMail({
-      from: process.env.SMTP_FROM || process.env.IMAP_USER,
+      from: this.creds.smtp.from,
       to: message.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)),
       cc: message.cc?.map((a) => a.email),
       subject: message.subject,
