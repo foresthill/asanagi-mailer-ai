@@ -9,6 +9,7 @@ import { ReplyComposer } from "./ReplyComposer";
 import { ConnectionsSettings } from "./ConnectionsSettings";
 import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
+import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from "./compose";
 
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<MailboxState>("inbox");
@@ -22,9 +23,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Email | null>(null);
-  // null = not composing; otherwise which kind of reply ("ai" drafts first).
-  const [replyMode, setReplyMode] = useState<"ai" | "plain" | null>(null);
-  const replying = replyMode !== null;
+  // null = not composing; otherwise the prepared compose state.
+  const [compose, setCompose] = useState<ComposeInit | null>(null);
+  const replying = compose !== null;
   const [classifying, setClassifying] = useState(false);
   const [counts, setCounts] = useState<Partial<Record<MailboxState, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -72,14 +73,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setFolder(f);
     setSelectedId(null);
     setSelected(null);
-    setReplyMode(null);
+    setCompose(null);
   };
 
   const changeAccount = (key: string) => {
     setAccount(key);
     setSelectedId(null);
     setSelected(null);
-    setReplyMode(null);
+    setCompose(null);
   };
 
   // Poll the scheduler (also flushes any due sends server-side).
@@ -145,7 +146,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const selectEmail = useCallback(
     async (id: string) => {
       setSelectedId(id);
-      setReplyMode(null);
+      setCompose(null);
       setEmails((list) => list.map((e) => (e.id === id ? { ...e, read: true } : e)));
       const res = await fetch(`/api/emails/${encodeURIComponent(id)}`);
       const data = await res.json();
@@ -163,7 +164,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       if (selectedId === id) {
         setSelectedId(null);
         setSelected(null);
-        setReplyMode(null);
+        setCompose(null);
       }
       await fetch(`/api/emails/${encodeURIComponent(id)}`, {
         method: "PATCH",
@@ -195,10 +196,24 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     showToast("学習しました（今後の判定に反映されます）");
   };
 
+  /** Open the composer with a prepared initial state. */
+  const openCompose = useCallback(
+    (kind: ComposeKind, mode: ComposeAI) => {
+      if (kind !== "new" && !selected) return;
+      const selfAddresses = accounts.map((a) => a.address).filter((s): s is string => !!s);
+      const init = buildCompose(kind, mode, selected ?? undefined, selfAddresses);
+      // New mail from a specific account view sends from that account.
+      if (kind === "new" && account !== "all") init.account = account;
+      setCompose(init);
+    },
+    [selected, accounts, account],
+  );
+
   const onSent = (kind: "sent" | "scheduled") => {
-    setReplyMode(null);
-    if (selected && folder === "inbox") {
-      // Send & archive — keep the inbox clean.
+    const wasReply = compose?.kind === "reply" || compose?.kind === "replyAll";
+    setCompose(null);
+    if (wasReply && selected && folder === "inbox") {
+      // Send & archive — keep the inbox clean (replies only; not forward/new).
       mutateState(selected.id, "archived", kind === "sent" ? "送信してアーカイブしました" : "予約してアーカイブしました");
     } else {
       showToast(kind === "sent" ? "送信しました" : "予約しました");
@@ -210,6 +225,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || replying) return;
+      if (e.key === "c") {
+        // Compose new — works even with an empty list.
+        e.preventDefault();
+        openCompose("new", "plain");
+        return;
+      }
       if (!emails.length) return;
       const idx = emails.findIndex((m) => m.id === selectedId);
       if (e.key === "j") {
@@ -224,16 +245,22 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         trash(selectedId);
       } else if (e.key === "r" && selected) {
         e.preventDefault();
-        setReplyMode("ai");
+        openCompose("reply", "ai");
       } else if (e.key === "R" && selected) {
         e.preventDefault();
-        setReplyMode("plain");
+        openCompose("reply", "plain");
+      } else if (e.key === "a" && selected) {
+        e.preventDefault();
+        openCompose("replyAll", "plain");
+      } else if (e.key === "f" && selected) {
+        e.preventDefault();
+        openCompose("forward", "plain");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emails, selectedId, selected, folder, replying]);
+  }, [emails, selectedId, selected, folder, replying, openCompose]);
 
   return (
     <div className="flex h-full">
@@ -248,6 +275,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         onSelect={changeFolder}
         onSelectAccount={changeAccount}
         onOpenSettings={() => setShowSettings(true)}
+        onCompose={() => openCompose("new", "plain")}
       />
       {!replying && (
         <EmailList
@@ -258,16 +286,17 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onSelect={selectEmail}
           onArchive={archive}
           onTrash={trash}
+          onRefresh={() => loadList(folder, account)}
         />
       )}
-      {replyMode && selected ? (
+      {compose ? (
         <ReplyComposer
-          key={replyMode} // restart the composer when the mode changes
-          email={selected}
-          mode={replyMode}
+          // Restart the composer whenever the kind/mode/source changes.
+          key={`${compose.kind}-${compose.mode}-${compose.source?.id ?? "new"}`}
+          init={compose}
           aiConfigured={aiOk}
           onSent={onSent}
-          onClose={() => setReplyMode(null)}
+          onClose={() => setCompose(null)}
         />
       ) : (
         <EmailReader
@@ -277,7 +306,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onArchive={() => selected && archive(selected.id)}
           onTrash={() => selected && trash(selected.id)}
           onRestore={() => selected && restore(selected.id)}
-          onReply={setReplyMode}
+          onReply={openCompose}
           onImportanceFeedback={onImportanceFeedback}
         />
       )}

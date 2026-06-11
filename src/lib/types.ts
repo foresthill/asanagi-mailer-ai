@@ -49,6 +49,8 @@ export type SendStatus = "scheduled" | "sent" | "failed" | "canceled";
 export interface OutgoingMessage {
   to: EmailAddress[];
   cc?: EmailAddress[];
+  /** Blind carbon copy — never shown to other recipients. */
+  bcc?: EmailAddress[];
   subject: string;
   body: string;
   /** messageId of the email being replied to, for threading. */

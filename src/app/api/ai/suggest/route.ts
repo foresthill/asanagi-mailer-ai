@@ -7,7 +7,8 @@ import type { Email } from "@/lib/types";
 export const maxDuration = 30;
 
 interface Body {
-  email: Email;
+  /** Original email for context — absent for new mail / forwards. */
+  email?: Email;
   draft: string;
   instruction: string;
   /** When present, only this span of the draft may change. */
@@ -42,9 +43,9 @@ export async function POST(req: Request) {
         scope,
         "",
         `指示: ${instruction}`,
-        "",
-        "--- 返信対象の元メール（文脈） ---",
-        emailContext(email),
+        ...(email
+          ? ["", "--- 返信対象の元メール（文脈） ---", emailContext(email)]
+          : []),
         "",
         "--- 現在の下書き（全文） ---",
         draft,

@@ -221,6 +221,7 @@ export class ImapProvider implements EmailProvider {
       from: this.creds.smtp.from,
       to: message.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)),
       cc: message.cc?.map((a) => a.email),
+      bcc: message.bcc?.map((a) => a.email),
       subject: message.subject,
       text: message.body,
       inReplyTo: message.inReplyTo,

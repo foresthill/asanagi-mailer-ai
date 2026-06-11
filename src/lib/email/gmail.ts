@@ -158,18 +158,27 @@ export class GmailProvider implements EmailProvider {
   }
 
   async send(message: OutgoingMessage): Promise<{ messageId?: string }> {
-    const to = message.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ");
-    const lines = [
-      `To: ${to}`,
-      message.cc?.length ? `Cc: ${message.cc.map((a) => a.email).join(", ")}` : "",
-      `Subject: ${message.subject}`,
+    // RFC 2047-encode non-ASCII header text (Japanese subjects/names).
+    const mimeWord = (s: string) =>
+      /^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
+    const fmt = (list?: EmailAddress[]) =>
+      (list ?? []).map((a) => (a.name ? `${mimeWord(a.name)} <${a.email}>` : a.email)).join(", ");
+
+    const headers = [
+      `To: ${fmt(message.to)}`,
+      message.cc?.length ? `Cc: ${fmt(message.cc)}` : "",
+      // Bcc header is honored by the Gmail API, then stripped for recipients.
+      message.bcc?.length ? `Bcc: ${fmt(message.bcc)}` : "",
+      `Subject: ${mimeWord(message.subject)}`,
       message.inReplyTo ? `In-Reply-To: ${message.inReplyTo}` : "",
       message.inReplyTo ? `References: ${message.inReplyTo}` : "",
-      "Content-Type: text/plain; charset=UTF-8",
-      "",
-      message.body,
+      "MIME-Version: 1.0",
+      'Content-Type: text/plain; charset="UTF-8"',
     ].filter(Boolean);
-    const raw = Buffer.from(lines.join("\r\n"))
+
+    // Headers and body MUST be separated by a blank line (RFC 5322).
+    const rfc822 = headers.join("\r\n") + "\r\n\r\n" + message.body;
+    const raw = Buffer.from(rfc822, "utf8")
       .toString("base64")
       .replace(/\+/g, "-")
       .replace(/\//g, "_");

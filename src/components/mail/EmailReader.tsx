@@ -1,9 +1,20 @@
 "use client";
 
-import { Archive, Trash2, Mail, Sparkles, RotateCcw, Loader2, Reply } from "lucide-react";
+import {
+  Archive,
+  Trash2,
+  Mail,
+  Sparkles,
+  RotateCcw,
+  Loader2,
+  Reply,
+  ReplyAll,
+  Forward,
+} from "lucide-react";
 import type { Email, Importance, MailboxState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
+import type { ComposeAI, ComposeKind } from "./compose";
 
 const IMPORTANCE_LABEL: Record<Importance, string> = {
   high: "重要",
@@ -27,7 +38,7 @@ export function EmailReader({
   onArchive: () => void;
   onTrash: () => void;
   onRestore: () => void;
-  onReply: (mode: "ai" | "plain") => void;
+  onReply: (kind: ComposeKind, mode: ComposeAI) => void;
   onImportanceFeedback: (importance: Importance) => void;
 }) {
   if (!email) {
@@ -55,19 +66,35 @@ export function EmailReader({
         ) : (
           <ActionButton icon={RotateCcw} label="受信箱に戻す" onClick={onRestore} />
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5">
           <button
-            onClick={() => onReply("plain")}
+            onClick={() => onReply("reply", "plain")}
             title="自分で書く返信 (Shift+R)"
-            className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
           >
             <Reply className="size-4" />
             返信
           </button>
           <button
-            onClick={() => onReply("ai")}
+            onClick={() => onReply("replyAll", "plain")}
+            title="全員に返信 — 差出人＋To＋CCを引継ぎ (A)"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+          >
+            <ReplyAll className="size-4" />
+            全員に返信
+          </button>
+          <button
+            onClick={() => onReply("forward", "plain")}
+            title="転送 (F)"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+          >
+            <Forward className="size-4" />
+            転送
+          </button>
+          <button
+            onClick={() => onReply("reply", "ai")}
             title="AIが下書きを作成 (R)"
-            className="flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95"
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95"
           >
             <Sparkles className="size-4" />
             AIで返信
