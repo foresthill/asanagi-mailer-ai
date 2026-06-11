@@ -48,24 +48,48 @@ function header(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, name: 
   return headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? undefined;
 }
 
-function decodeBody(payload?: gmail_v1.Schema$MessagePart): string {
-  if (!payload) return "";
-  const fromData = (data?: string | null) =>
-    data ? Buffer.from(data, "base64").toString("utf8") : "";
+const fromData = (data?: string | null) =>
+  data ? Buffer.from(data, "base64").toString("utf8") : "";
 
-  if (payload.mimeType === "text/plain" && payload.body?.data) {
+/** First part of the given MIME type, walking nested multiparts. */
+function findPart(
+  payload: gmail_v1.Schema$MessagePart | undefined,
+  mimeType: string,
+): string {
+  if (!payload) return "";
+  if (payload.mimeType === mimeType && payload.body?.data) {
     return fromData(payload.body.data);
   }
-  if (payload.parts) {
-    const plain = payload.parts.find((p) => p.mimeType === "text/plain");
-    if (plain?.body?.data) return fromData(plain.body.data);
-    for (const p of payload.parts) {
-      const nested = decodeBody(p);
-      if (nested) return nested;
-    }
+  for (const p of payload.parts ?? []) {
+    const found = findPart(p, mimeType);
+    if (found) return found;
   }
-  if (payload.body?.data) return fromData(payload.body.data);
   return "";
+}
+
+function decodeBody(payload?: gmail_v1.Schema$MessagePart): string {
+  const plain = findPart(payload, "text/plain");
+  if (plain) return plain;
+  if (payload?.body?.data) return fromData(payload.body.data);
+  return "";
+}
+
+/** HTML alternative when present (rich rendering in the reader). */
+function decodeHtml(payload?: gmail_v1.Schema$MessagePart): string | undefined {
+  return findPart(payload, "text/html") || undefined;
+}
+
+/** Plain-text fallback for HTML-only mail (list snippets, AI context). */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function labelFor(state: MailboxState): { add: string[]; remove: string[] } {
@@ -95,7 +119,8 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
   const headers = msg.payload?.headers;
   const labels = msg.labelIds ?? [];
   const state = stateFromLabels(labels);
-  const body = repairMojibake(decodeBody(msg.payload));
+  const html = decodeHtml(msg.payload);
+  const body = repairMojibake(decodeBody(msg.payload) || (html ? stripHtml(html) : ""));
   const fixAddr = (a: EmailAddress): EmailAddress =>
     a.name ? { ...a, name: repairMojibake(a.name) } : a;
   return {
@@ -107,6 +132,7 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
     subject: repairMojibake(header(headers, "Subject") ?? "(件名なし)"),
     snippet: repairMojibake(msg.snippet ?? body.slice(0, 140)),
     body,
+    html,
     date: header(headers, "Date")
       ? new Date(header(headers, "Date")!).toISOString()
       : new Date(Number(msg.internalDate ?? Date.now())).toISOString(),
@@ -141,7 +167,8 @@ export class GmailProvider implements EmailProvider {
       ),
     );
     return full
-      .map((r) => toEmail(r.data))
+      // List payloads stay lean: HTML arrives via get()/thread() only.
+      .map((r) => ({ ...toEmail(r.data), html: undefined }))
       .sort((a, b) => +new Date(b.date) - +new Date(a.date));
   }
 
