@@ -169,6 +169,99 @@ export function removeCached(account: string, id: string): void {
   getDb().prepare("DELETE FROM messages WHERE account = ? AND id = ?").run(account, id);
 }
 
+// ---------------------------------------------------------------------------
+// Contacts — auto-derived from cached mail, zero manual entry (mini-CRM seed)
+// ---------------------------------------------------------------------------
+
+export interface ContactInfo {
+  email: string;
+  name?: string;
+  /** Messages received from them. */
+  received: number;
+  /** Messages we sent to them. */
+  sent: number;
+  lastDate: string;
+}
+
+/**
+ * Address book derived from the cache: senders of received mail plus
+ * recipients of our sent mail, ranked by recency. Own addresses excluded.
+ */
+export function contactsList(selfEmails: string[], limit = 200): ContactInfo[] {
+  const d = getDb();
+  const map = new Map<string, ContactInfo>();
+  const self = new Set(selfEmails.map((s) => s.toLowerCase()));
+
+  const fromRows = d
+    .prepare(
+      `SELECT LOWER(from_email) AS email, MAX(from_name) AS name,
+              COUNT(*) AS count, MAX(date) AS last
+       FROM messages WHERE state != 'sent' GROUP BY LOWER(from_email)`,
+    )
+    .all() as { email: string; name: string | null; count: number; last: string }[];
+  for (const r of fromRows) {
+    if (!r.email || self.has(r.email)) continue;
+    map.set(r.email, {
+      email: r.email,
+      name: r.name ?? undefined,
+      received: Number(r.count),
+      sent: 0,
+      lastDate: r.last,
+    });
+  }
+
+  const sentRows = d
+    .prepare(
+      `SELECT LOWER(json_extract(j.value, '$.email')) AS email,
+              json_extract(j.value, '$.name') AS name,
+              COUNT(*) AS count, MAX(m.date) AS last
+       FROM messages m, json_each(m.to_json) j
+       WHERE m.state = 'sent' GROUP BY LOWER(json_extract(j.value, '$.email'))`,
+    )
+    .all() as { email: string | null; name: string | null; count: number; last: string }[];
+  for (const r of sentRows) {
+    if (!r.email || self.has(r.email)) continue;
+    const cur = map.get(r.email);
+    if (cur) {
+      cur.sent = Number(r.count);
+      cur.name = cur.name ?? r.name ?? undefined;
+      if (r.last > cur.lastDate) cur.lastDate = r.last;
+    } else {
+      map.set(r.email, {
+        email: r.email,
+        name: r.name ?? undefined,
+        received: 0,
+        sent: Number(r.count),
+        lastDate: r.last,
+      });
+    }
+  }
+
+  return [...map.values()]
+    .sort((a, b) => (a.lastDate < b.lastDate ? 1 : -1))
+    .slice(0, limit);
+}
+
+/** Every cached message exchanged with a person, oldest first. */
+export function contactTimeline(email: string, limit = 200): Email[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM messages
+       WHERE LOWER(from_email) = LOWER(?)
+          OR EXISTS (
+            SELECT 1 FROM json_each(messages.to_json) j
+            WHERE LOWER(json_extract(j.value, '$.email')) = LOWER(?)
+          )
+          OR EXISTS (
+            SELECT 1 FROM json_each(messages.cc_json) j
+            WHERE LOWER(json_extract(j.value, '$.email')) = LOWER(?)
+          )
+       ORDER BY date ASC LIMIT ?`,
+    )
+    .all(email, email, email, limit) as Record<string, unknown>[];
+  return rows.map(rowToEmail);
+}
+
 export interface StorageStats {
   /** Actual size of the SQLite database files on disk (db + wal). */
   fileBytes: number;

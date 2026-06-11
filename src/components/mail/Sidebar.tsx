@@ -11,6 +11,7 @@ import {
   Layers,
   AtSign,
   SquarePen,
+  Users,
 } from "lucide-react";
 import type { MailboxState } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -32,11 +33,13 @@ export function Sidebar({
   accounts,
   account,
   storage,
+  view,
   onSelect,
   onSelectAccount,
   onOpenSettings,
   onOpenScheduled,
   onCompose,
+  onSelectView,
 }: {
   folder: MailboxState;
   counts: Partial<Record<MailboxState, number>>;
@@ -45,7 +48,9 @@ export function Sidebar({
   accounts: AccountInfo[];
   account: string; // "all" or an account key
   storage: StorageInfo | null;
+  view: "mail" | "contacts";
   onSelect: (f: MailboxState) => void;
+  onSelectView: (v: "mail" | "contacts") => void;
   onSelectAccount: (key: string) => void;
   onOpenSettings: () => void;
   onOpenScheduled: () => void;
@@ -74,7 +79,7 @@ export function Sidebar({
 
       <nav className="flex flex-col gap-0.5">
         {FOLDERS.map(({ key, label, icon: Icon }) => {
-          const active = folder === key;
+          const active = view === "mail" && folder === key;
           const count = counts[key];
           return (
             <button
@@ -95,6 +100,18 @@ export function Sidebar({
             </button>
           );
         })}
+        <button
+          onClick={() => onSelectView("contacts")}
+          className={cn(
+            "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+            view === "contacts"
+              ? "bg-accent-soft font-medium text-fg"
+              : "text-fg-muted hover:bg-surface hover:text-fg",
+          )}
+        >
+          <Users className={cn("size-4", view === "contacts" && "text-accent")} />
+          <span className="flex-1 text-left">連絡先</span>
+        </button>
       </nav>
 
       {/* Accounts: unified vs per-account view. Hidden when only one account. */}
