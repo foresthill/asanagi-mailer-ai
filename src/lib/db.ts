@@ -137,6 +137,23 @@ export function cachedGet(account: string, id: string): Email | null {
   return row ? rowToEmail(row) : null;
 }
 
+/**
+ * Which of these conversations contain a message we sent (返信済み判定).
+ * Works retroactively: any cached own message in the thread counts.
+ */
+export function repliedThreadIds(account: string, threadIds: string[]): Set<string> {
+  const ids = [...new Set(threadIds)].filter(Boolean);
+  if (!ids.length) return new Set();
+  const marks = ids.map(() => "?").join(",");
+  const rows = getDb()
+    .prepare(
+      `SELECT DISTINCT thread_id FROM messages
+       WHERE account = ? AND state = 'sent' AND thread_id IN (${marks})`,
+    )
+    .all(account, ...ids) as { thread_id: string }[];
+  return new Set(rows.map((r) => String(r.thread_id)));
+}
+
 /** Conversation from the local cache (spans folders), oldest first. */
 export function cachedThread(account: string, threadId: string): Email[] {
   const rows = getDb()

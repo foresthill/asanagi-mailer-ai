@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Archive,
   Trash2,
@@ -10,6 +11,7 @@ import {
   Reply,
   ReplyAll,
   Forward,
+  ChevronDown,
 } from "lucide-react";
 import type { Email, Importance, MailboxState } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -95,14 +97,7 @@ export function EmailReader({
             <Forward className="size-4" />
             転送
           </button>
-          <button
-            onClick={() => onReply("reply", "ai")}
-            title="AIが下書きを作成 (R)"
-            className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95"
-          >
-            <Sparkles className="size-4" />
-            AIで返信
-          </button>
+          <AiReplyButton onReply={onReply} />
         </div>
       </div>
 
@@ -141,6 +136,49 @@ export function EmailReader({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Primary AI action with a small menu: AIで返信 (default) / AIで全員に返信. */
+function AiReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: ComposeAI) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <div className="flex items-center overflow-hidden rounded-lg bg-accent shadow-sm">
+        <button
+          onClick={() => onReply("reply", "ai")}
+          title="AIが返信の下書きを作成 (R)"
+          className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-accent-fg transition-opacity hover:opacity-90"
+        >
+          <Sparkles className="size-4" />
+          AIで返信
+        </button>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          title="その他のAI返信"
+          className="grid h-full place-items-center border-l border-white/25 px-1.5 text-accent-fg transition-opacity hover:opacity-90"
+        >
+          <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+        </button>
+      </div>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-20 mt-1 w-48 overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow)]">
+            <button
+              onClick={() => {
+                setOpen(false);
+                onReply("replyAll", "ai");
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-accent-soft hover:text-accent"
+            >
+              <ReplyAll className="size-4" />
+              AIで全員に返信
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

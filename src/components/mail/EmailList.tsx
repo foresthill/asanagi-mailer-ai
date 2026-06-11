@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Trash2, Loader2, Inbox, RefreshCw } from "lucide-react";
+import { Archive, Trash2, Loader2, Inbox, RefreshCw, Reply } from "lucide-react";
 import type { Email, MailboxState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, initials, relativeTime } from "./helpers";
@@ -124,7 +124,10 @@ function EmailListItem({
             >
               {name}
             </span>
-            <span className="ml-auto shrink-0 text-[11px] text-fg-subtle">
+            <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle">
+              {email.replied && (
+                <Reply className="size-3 text-accent" aria-label="返信済み" />
+              )}
               {relativeTime(email.date)}
             </span>
           </div>
