@@ -186,6 +186,38 @@ export function removeCached(account: string, id: string): void {
   getDb().prepare("DELETE FROM messages WHERE account = ? AND id = ?").run(account, id);
 }
 
+/**
+ * Full-text-ish search over the cache: subject, body, sender name/address —
+ * across accounts and folders. Case-insensitive substring match per keyword
+ * (space-separated = AND). LIKE scan is millisecond-class at our retention
+ * cap (≤5k rows/account); swap to FTS5+trigram when volume grows.
+ */
+export function searchCached(query: string, limit = 50): Email[] {
+  const terms = query
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  if (!terms.length) return [];
+
+  const clause = terms
+    .map(
+      () =>
+        `(subject LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\'
+          OR from_name LIKE ? ESCAPE '\\' OR from_email LIKE ? ESCAPE '\\')`,
+    )
+    .join(" AND ");
+  const params = terms.flatMap((t) => {
+    const like = `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    return [like, like, like, like];
+  });
+
+  const rows = getDb()
+    .prepare(`SELECT * FROM messages WHERE ${clause} ORDER BY date DESC LIMIT ?`)
+    .all(...params, limit) as Record<string, unknown>[];
+  return rows.map(rowToEmail);
+}
+
 // ---------------------------------------------------------------------------
 // Contacts — auto-derived from cached mail, zero manual entry (mini-CRM seed)
 // ---------------------------------------------------------------------------
