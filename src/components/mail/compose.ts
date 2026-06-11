@@ -119,13 +119,23 @@ export function buildCompose(
   }
 }
 
-/** Parse a comma/space separated address line into EmailAddress[]. */
+/**
+ * Parse a comma/semicolon separated address line. Supports both bare
+ * addresses and the display form `名前 <a@b.c>`.
+ */
 export function parseAddressList(input: string): EmailAddress[] {
   return input
-    .split(/[,;\s]+/)
+    .split(/[,;]+/)
     .map((s) => s.trim())
     .filter(Boolean)
-    .map((email) => ({ email }));
+    .map((part) => {
+      const m = part.match(/^(.*?)<([^>]+)>$/);
+      if (m) {
+        const name = m[1].trim().replace(/^"|"$/g, "");
+        return { name: name || undefined, email: m[2].trim() };
+      }
+      return { email: part };
+    });
 }
 
 /** Loose validity check used to enable the send button. */
@@ -134,6 +144,7 @@ export function looksLikeAddressList(input: string): boolean {
   return list.length > 0 && list.every((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email));
 }
 
+/** Display form: `名前 <a@b.c>` when the name is known, bare address otherwise. */
 export function formatAddressList(list: EmailAddress[]): string {
-  return list.map((a) => a.email).join(", ");
+  return list.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ");
 }
