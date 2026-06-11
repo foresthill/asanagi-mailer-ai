@@ -115,7 +115,17 @@ export function ContactsView({
                     {label.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{label}</p>
+                    <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+                      <span className="truncate">{label}</span>
+                      {c.self && (
+                        <span
+                          className="shrink-0 rounded bg-accent-soft px-1 text-[10px] font-semibold text-accent"
+                          title="自分のアドレス（セルフメール＝メモのタイムラインが見られます）"
+                        >
+                          自分
+                        </span>
+                      )}
+                    </p>
                     <p className="truncate text-xs text-fg-subtle">
                       受 {c.received}・送 {c.sent}
                       {c.name ? `・${c.email}` : ""}

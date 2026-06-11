@@ -275,12 +275,15 @@ export interface ContactInfo {
   /** Messages we sent to them. */
   sent: number;
   lastDate: string;
+  /** One of the user's own addresses (セルフメール＝メモ運用も多いため表示する). */
+  self?: boolean;
 }
 
 /**
  * Address book derived from the cache: senders of received mail plus
  * recipients (To and Cc) of our sent mail, ranked by recency. Own addresses
- * excluded.
+ * are included (flagged `self`) — self-mail is a common memo workflow, so
+ * the timeline must be reachable. Counts for self = self-addressed mail only.
  */
 export function contactsList(selfEmails: string[], limit = 500): ContactInfo[] {
   const d = getDb();
@@ -295,13 +298,14 @@ export function contactsList(selfEmails: string[], limit = 500): ContactInfo[] {
     )
     .all() as { email: string; name: string | null; count: number; last: string }[];
   for (const r of fromRows) {
-    if (!r.email || self.has(r.email)) continue;
+    if (!r.email) continue;
     map.set(r.email, {
       email: r.email,
       name: r.name ?? undefined,
       received: Number(r.count),
       sent: 0,
       lastDate: r.last,
+      self: self.has(r.email) || undefined,
     });
   }
 
@@ -318,7 +322,7 @@ export function contactsList(selfEmails: string[], limit = 500): ContactInfo[] {
       )
       .all() as { email: string | null; name: string | null; count: number; last: string }[];
     for (const r of sentRows) {
-      if (!r.email || self.has(r.email)) continue;
+      if (!r.email) continue;
       const cur = map.get(r.email);
       if (cur) {
         cur.sent += Number(r.count);
@@ -331,6 +335,7 @@ export function contactsList(selfEmails: string[], limit = 500): ContactInfo[] {
           received: 0,
           sent: Number(r.count),
           lastDate: r.last,
+          self: self.has(r.email) || undefined,
         });
       }
     }
