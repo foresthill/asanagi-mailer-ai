@@ -73,17 +73,30 @@ export async function getEmailSettings(): Promise<EmailSettings> {
 }
 
 /**
- * Merge a patch into stored email settings. Within `gmail`, blank strings
- * clear that field (e.g. disconnect = save { gmail: { refreshToken: "" } }).
+ * Merge a patch into stored email settings. Within `gmail` / `imap`, blank
+ * strings clear that field (e.g. disconnect = { gmail: { refreshToken: "" } }).
  */
 export async function saveEmailSettings(patch: EmailSettings): Promise<EmailSettings> {
   const cur = await getEmailSettings();
-  const gmail = { ...(cur.gmail ?? {}), ...(patch.gmail ?? {}) };
-  for (const k of Object.keys(gmail) as (keyof typeof gmail)[]) {
-    if (!gmail[k]?.trim()) delete gmail[k];
+  const next: EmailSettings = { ...cur };
+  if (patch.active) next.active = patch.active;
+
+  for (const section of ["gmail", "imap"] as const) {
+    if (!patch[section]) continue;
+    const merged: Record<string, string | undefined> = {
+      ...(cur[section] ?? {}),
+      ...(patch[section] ?? {}),
+    };
+    for (const k of Object.keys(merged)) {
+      if (!merged[k]?.trim()) delete merged[k];
+    }
+    if (Object.keys(merged).length > 0) {
+      next[section] = merged;
+    } else {
+      delete next[section];
+    }
   }
-  const next: EmailSettings = { ...cur, ...patch, gmail };
-  if (Object.keys(gmail).length === 0) delete next.gmail;
+
   await writeJson(EMAIL_SETTINGS, next);
   return next;
 }

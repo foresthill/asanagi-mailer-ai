@@ -1,21 +1,57 @@
 import { NextResponse } from "next/server";
 import { getEmailSettings, saveEmailSettings } from "@/lib/store";
 import { getProvider } from "@/lib/email";
+import type { EmailSettings } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-/** Settings view for the UI. Secrets are never echoed back. */
+const CHOICES = ["auto", "gmail", "imap", "mock"] as const;
+type Choice = (typeof CHOICES)[number];
+
+// Non-secret IMAP fields we echo back so the form can be edited in place.
+const IMAP_PLAIN_FIELDS = [
+  "host",
+  "port",
+  "secure",
+  "user",
+  "archiveFolder",
+  "trashFolder",
+  "smtpHost",
+  "smtpPort",
+  "smtpSecure",
+  "smtpUser",
+  "smtpFrom",
+] as const;
+
+const IMAP_SECRET_FIELDS = ["password", "smtpPassword"] as const;
+
+/** Settings view for the UI. Secrets are flagged as set, never echoed. */
 async function safeView() {
   const s = await getEmailSettings();
-  const provider = await getProvider();
+  let active = "error";
+  try {
+    active = (await getProvider()).name;
+  } catch {
+    // e.g. explicit choice without credentials — surface as not-running
+  }
   const g = s.gmail ?? {};
+  const i = s.imap ?? {};
   return {
-    active: provider.name, // gmail | imap | mock
+    active, // what actually runs right now
+    choice: (s.active ?? "auto") as Choice, // the stored preference
     gmail: {
       clientIdSet: Boolean(g.clientId || process.env.GOOGLE_CLIENT_ID),
       clientSecretSet: Boolean(g.clientSecret || process.env.GOOGLE_CLIENT_SECRET),
       connected: Boolean(g.refreshToken || process.env.GOOGLE_REFRESH_TOKEN),
       address: g.address,
+    },
+    imap: {
+      ...Object.fromEntries(IMAP_PLAIN_FIELDS.map((k) => [k, i[k] ?? ""])),
+      passwordSet: Boolean(i.password),
+      smtpPasswordSet: Boolean(i.smtpPassword),
+      envConfigured: Boolean(
+        process.env.IMAP_HOST && process.env.IMAP_USER && process.env.IMAP_PASSWORD,
+      ),
     },
   };
 }
@@ -26,8 +62,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   let body: {
+    choice?: string;
     gmail?: { clientId?: string; clientSecret?: string };
-    disconnect?: boolean;
+    imap?: Record<string, string>;
+    disconnect?: "gmail" | "imap" | boolean;
   };
   try {
     body = await req.json();
@@ -35,18 +73,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
 
-  if (body.disconnect) {
-    // Drop the token + address; keep the OAuth client for easy re-connect.
-    await saveEmailSettings({ gmail: { refreshToken: "", address: "" } });
-  } else if (body.gmail) {
-    const { clientId, clientSecret } = body.gmail;
-    await saveEmailSettings({
-      gmail: {
-        ...(typeof clientId === "string" ? { clientId } : {}),
-        ...(typeof clientSecret === "string" ? { clientSecret } : {}),
-      },
-    });
+  const patch: EmailSettings = {};
+
+  if (body.choice && (CHOICES as readonly string[]).includes(body.choice)) {
+    patch.active = body.choice as Choice;
   }
 
+  // disconnect: true (legacy) or "gmail" → drop Gmail token; "imap" → drop creds.
+  if (body.disconnect === true || body.disconnect === "gmail") {
+    patch.gmail = { refreshToken: "", address: "" };
+  } else if (body.disconnect === "imap") {
+    patch.imap = Object.fromEntries(
+      [...IMAP_PLAIN_FIELDS, ...IMAP_SECRET_FIELDS].map((k) => [k, ""]),
+    );
+  }
+
+  if (body.gmail) {
+    const { clientId, clientSecret } = body.gmail;
+    patch.gmail = {
+      ...patch.gmail,
+      ...(typeof clientId === "string" ? { clientId } : {}),
+      ...(typeof clientSecret === "string" ? { clientSecret } : {}),
+    };
+  }
+
+  if (body.imap && !patch.imap) {
+    const imap: Record<string, string> = {};
+    for (const k of [...IMAP_PLAIN_FIELDS, ...IMAP_SECRET_FIELDS]) {
+      const v = body.imap[k];
+      if (typeof v === "string") imap[k] = v; // blank clears (store handles it)
+    }
+    patch.imap = imap;
+  }
+
+  await saveEmailSettings(patch);
   return NextResponse.json({ ok: true, ...(await safeView()) });
 }
