@@ -1,6 +1,6 @@
 # 設計書 04 — スレッド表示とインボックスの整理（Phase 2）
 
-最終更新: 2026-06-04
+最終更新: 2026-06-12（§1.5 実装メモ・§2.5 スター付きビューを追記）
 
 ## 0. 背景（課題）
 
@@ -53,6 +53,23 @@ interface Thread {
 - [JWZ message threading algorithm](https://www.jwz.org/doc/threading.html)
 - Gmail: `threadId`（[users.threads](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.threads)）
 
+### 1.5 実装メモ（2026-06-12 時点の現実装）
+
+設計との差分・実装で確定した事項。コードの正は `lib/email/gmail.ts` / `lib/email/imap.ts` / `app/api/threads/[id]/route.ts`。
+
+**スレッドの組み立て（読み取り側）**
+- 一覧は従来どおり1通=1行（`listThreads` での一覧集約は未実装）。メールを開くと `/api/threads/{account}/{threadId}` で会話を取得し、本文エリアに **ThreadView**（カード形式⇄LINE風バブル形式のトグル、選択は localStorage 永続）で表示する。
+- **Gmail**: ネイティブ `threadId` ＋ `users.threads.get` のサーバサイドスレッド（設計どおり）。
+- **IMAP**: `threadId` = **References チェーンの先頭（会話のルート Message-ID）** ?? In-Reply-To ?? 自身の Message-ID。mailparser で References を解析し、山括弧の有無を正規化して比較する。フルJWZ（件名フォールバック・孤児結合）は未実装の簡易版だが、準拠クライアント同士なら任意の深さで同一ルートに解決される。会話の取得はローカルキャッシュ横断（受信箱＋送信箱＋アーカイブ）。
+
+**スレッドへの参加（送信側）— ここが落とし穴だった**
+- **Gmail はヘッダだけではスレッド化されない**。`messages.send` のリクエストに `threadId` を明示し、かつ In-Reply-To/References ヘッダと件名一致（Re: 維持）の3点が揃って初めて既存スレッドに入る（[公式](https://developers.google.com/workspace/gmail/api/guides/threads)）。`OutgoingMessage.threadId` で返信元の threadId を送信リクエストまで貫通させている。
+- **IMAP** 送信時は References の**先頭に会話ルートの Message-ID** を置く（`<root> <parent>` の順）。これでどの深さの返信も同じルートに解決される。threadId が uid フォールバック（`@` を含まない）の場合は References に入れない。
+- **転送（Fwd:）は新しい会話**として扱う（In-Reply-To/threadId を付けない）仕様。
+
+**関連機能**
+- 返信済みマーカー（↩）はヘッダではなく、ローカルキャッシュ上「同一 thread_id に自分の sent がある」判定（`repliedThreadIds`）。送信直後に `after()` で送信箱キャッシュを更新するため、返信した瞬間からスレッド・マーカー両方に反映される。
+
 ---
 
 ## 2. インボックスの整理（バンドル／ビュー）
@@ -92,6 +109,13 @@ interface Thread {
 - バンドル右の **一括操作**（全アーカイブ/全既読/全ゴミ箱）。
 - 「ニュースレターは常に束ねて自動既読」のような**ルール化**（カテゴリ学習と連動）。
 - 目標: 朝、`person`/`重要` だけ数件残し、残りは束ねて一掃 → **受信箱が澄む**。
+
+### 2.5 スター付きビュー（2026-06-12 実装）
+カテゴリバンドルに先行して、**フォルダ横断のスター（お気に入り）**を実装した。
+- サーバ正本: Gmail = `STARRED` ラベル、IMAP = `\Flagged` フラグ（他のメーラーと相互に見える）。provider seam の `setStarred()` で読み書き。
+- `FolderView = MailboxState | "starred"` — スターはフォルダではなく**フラグ**なので、メールの `state` とは別軸（型でも区別）。
+- スター付きビューはローカルキャッシュから提供（各フォルダの live fetch で星状態も write-through される）。キャッシュ外の古いメールは出ない制約あり。
+- 暗黙学習との接続: [02](02-importance-triage-learning.md) §5.3 の「スターを付けた＝重要」シグナルの入力源になる（接続は未実装）。
 
 ---
 
