@@ -1,6 +1,7 @@
 import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer";
+import { simpleParser } from "mailparser";
 import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
 import { repairMojibake } from "./encoding";
@@ -140,12 +141,34 @@ export class ImapProvider implements EmailProvider {
     };
   }
 
+  /**
+   * Proper MIME parsing (multipart, base64/quoted-printable, legacy charsets
+   * like ISO-2022-JP) via mailparser. Falls back to the HTML part stripped to
+   * text when no text/plain part exists.
+   */
   private async parseBody(source?: Buffer): Promise<string> {
     if (!source) return "";
-    // Minimal text extraction: take the text/plain section if present.
-    const raw = source.toString("utf8");
-    const idx = raw.search(/\r?\n\r?\n/);
-    return idx >= 0 ? raw.slice(idx).trim() : raw;
+    try {
+      const parsed = await simpleParser(source, { skipImageLinks: true });
+      if (parsed.text?.trim()) return parsed.text.trim();
+      if (parsed.html) {
+        return parsed.html
+          .replace(/<(br|\/p|\/div)\s*\/?>/gi, "\n")
+          .replace(/<[^>]+>/g, "")
+          .replace(/&nbsp;/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+      }
+      return "";
+    } catch {
+      // Unparseable message — show the raw tail rather than nothing.
+      const raw = source.toString("utf8");
+      const idx = raw.search(/\r?\n\r?\n/);
+      return idx >= 0 ? raw.slice(idx).trim() : raw;
+    }
   }
 
   async get(id: string): Promise<Email | null> {
