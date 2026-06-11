@@ -20,6 +20,8 @@ export interface Email {
   snippet: string;
   /** Full plain-text body. */
   body: string;
+  /** Original HTML body when present (not cached — live fetches only). */
+  html?: string;
   date: string; // ISO 8601
   read: boolean;
   state: MailboxState;

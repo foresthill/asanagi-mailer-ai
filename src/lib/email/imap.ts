@@ -104,7 +104,8 @@ export class ImapProvider implements EmailProvider {
           bodyStructure: true,
           source: true,
         })) {
-          out.push(await this.materialize(msg, state));
+          // List payloads stay lean: HTML arrives via get() only.
+          out.push({ ...(await this.materialize(msg, state)), html: undefined });
         }
       } finally {
         lock.release();
@@ -121,7 +122,7 @@ export class ImapProvider implements EmailProvider {
     state: MailboxState,
   ): Promise<Email> {
     const env = msg.envelope ?? {};
-    const body = await this.parseBody(msg.source);
+    const { text: body, html } = await this.parseMime(msg.source);
     const flags: Set<string> = msg.flags ?? new Set();
     return {
       id: `${this.folders[state]}:${msg.uid}`,
@@ -134,6 +135,7 @@ export class ImapProvider implements EmailProvider {
       subject: repairMojibake(env.subject ?? "(件名なし)"),
       snippet: body.slice(0, 140),
       body,
+      html,
       date: (env.date ?? new Date()).toISOString?.() ?? new Date(env.date).toISOString(),
       read: flags.has("\\Seen"),
       state,
@@ -143,17 +145,18 @@ export class ImapProvider implements EmailProvider {
 
   /**
    * Proper MIME parsing (multipart, base64/quoted-printable, legacy charsets
-   * like ISO-2022-JP) via mailparser. Falls back to the HTML part stripped to
-   * text when no text/plain part exists.
+   * like ISO-2022-JP) via mailparser. Returns both the plain text (HTML
+   * stripped as fallback) and the original HTML when present.
    */
-  private async parseBody(source?: Buffer): Promise<string> {
-    if (!source) return "";
+  private async parseMime(source?: Buffer): Promise<{ text: string; html?: string }> {
+    if (!source) return { text: "" };
     try {
       const parsed = await simpleParser(source, { skipImageLinks: true });
-      if (parsed.text?.trim()) return parsed.text.trim();
-      if (parsed.html) {
-        return parsed.html
-          .replace(/<(br|\/p|\/div)\s*\/?>/gi, "\n")
+      const html = parsed.html || undefined;
+      if (parsed.text?.trim()) return { text: parsed.text.trim(), html };
+      if (html) {
+        const stripped = html
+          .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
           .replace(/<[^>]+>/g, "")
           .replace(/&nbsp;/g, " ")
           .replace(/&amp;/g, "&")
@@ -161,13 +164,14 @@ export class ImapProvider implements EmailProvider {
           .replace(/&gt;/g, ">")
           .replace(/\n{3,}/g, "\n\n")
           .trim();
+        return { text: stripped, html };
       }
-      return "";
+      return { text: "" };
     } catch {
       // Unparseable message — show the raw tail rather than nothing.
       const raw = source.toString("utf8");
       const idx = raw.search(/\r?\n\r?\n/);
-      return idx >= 0 ? raw.slice(idx).trim() : raw;
+      return { text: idx >= 0 ? raw.slice(idx).trim() : raw };
     }
   }
 

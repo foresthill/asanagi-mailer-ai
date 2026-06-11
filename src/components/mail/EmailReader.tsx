@@ -17,6 +17,7 @@ import type { Email, Importance, MailboxState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ThreadView } from "./ThreadView";
+import { HtmlMailView } from "./HtmlMailView";
 import type { ComposeAI, ComposeKind } from "./compose";
 
 const IMPORTANCE_LABEL: Record<Importance, string> = {
@@ -47,6 +48,8 @@ export function EmailReader({
   onReply: (kind: ComposeKind, mode: ComposeAI) => void;
   onImportanceFeedback: (importance: Importance) => void;
 }) {
+  // Session-sticky preference: rich HTML (default) vs plain text.
+  const [textMode, setTextMode] = useState(false);
   if (!email) {
     return (
       <div className="grid flex-1 place-items-center bg-bg">
@@ -130,13 +133,57 @@ export function EmailReader({
           {thread && thread.length > 1 ? (
             <ThreadView messages={thread} selectedId={email.id} />
           ) : (
-            <article className="mt-6 whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
-              {email.body}
-            </article>
+            <>
+              {email.html && (
+                <div className="mt-3 flex justify-end gap-1">
+                  <BodyModeButton
+                    label="HTML"
+                    active={!textMode}
+                    onClick={() => setTextMode(false)}
+                  />
+                  <BodyModeButton
+                    label="テキスト"
+                    active={textMode}
+                    onClick={() => setTextMode(true)}
+                  />
+                </div>
+              )}
+              {email.html && !textMode ? (
+                <HtmlMailView html={email.html} />
+              ) : (
+                <article className="mt-6 whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
+                  {email.body}
+                </article>
+              )}
+            </>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function BodyModeButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "rounded-md border px-2 py-1 text-[11px] transition-colors",
+        active
+          ? "border-accent bg-accent-soft text-accent"
+          : "border-border text-fg-muted hover:text-fg",
+      )}
+    >
+      {label}
+    </button>
   );
 }
 
