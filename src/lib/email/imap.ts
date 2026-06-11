@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer";
 import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
+import { repairMojibake } from "./encoding";
 
 /**
  * Generic IMAP (read) + SMTP (send) adapter. Credentials come from the
@@ -58,7 +59,7 @@ export function envImapCreds(): ImapCreds | null {
 }
 
 function addr(a?: { name?: string; address?: string }): EmailAddress {
-  return { name: a?.name || undefined, email: a?.address ?? "" };
+  return { name: a?.name ? repairMojibake(a.name) : undefined, email: a?.address ?? "" };
 }
 
 export class ImapProvider implements EmailProvider {
@@ -127,7 +128,7 @@ export class ImapProvider implements EmailProvider {
       from: addr(env.from?.[0]),
       to: (env.to ?? []).map(addr),
       cc: (env.cc ?? []).map(addr),
-      subject: env.subject ?? "(件名なし)",
+      subject: repairMojibake(env.subject ?? "(件名なし)"),
       snippet: body.slice(0, 140),
       body,
       date: (env.date ?? new Date()).toISOString?.() ?? new Date(env.date).toISOString(),
