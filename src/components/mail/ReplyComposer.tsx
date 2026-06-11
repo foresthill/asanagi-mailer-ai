@@ -129,16 +129,30 @@ export function ReplyComposer({
           draft: body,
           instruction,
           selection: sel ? { start: 0, end: 0, text: sel } : undefined,
+          subject, // blank → the AI proposes one alongside the revision
         }),
       });
       const data = await res.json();
       const revised: string = data.revised ?? body;
+      // Fill the subject only if the user still hasn't typed one meanwhile.
+      const proposedSubject =
+        typeof data.subject === "string" && data.subject && !subject.trim()
+          ? data.subject
+          : null;
+      if (proposedSubject) setSubject(proposedSubject);
       const segs = buildSegments(body, revised);
       const changes = pendingCount(segs);
       setHistory((h) => [...h, { id: `t${h.length}`, instruction, scope, count: changes }]);
       if (changes === 0) {
-        setNote(data.ai === false ? "AIキー未設定のため変更なし" : "変更はありませんでした");
+        setNote(
+          data.ai === false
+            ? "AIキー未設定のため変更なし"
+            : proposedSubject
+              ? "件名を提案しました（本文は変更なし）"
+              : "変更はありませんでした",
+        );
       } else {
+        if (proposedSubject) setNote("件名も提案しました（変更できます）");
         editorRef.current?.loadReview(segs);
       }
     } catch {
