@@ -150,6 +150,15 @@ export class MockProvider implements EmailProvider {
     }
   }
 
+  async setStarred(id: string, starred: boolean): Promise<void> {
+    const all = await load();
+    const e = all.find((x) => x.id === id);
+    if (e) {
+      e.starred = starred;
+      await save(all);
+    }
+  }
+
   async remove(id: string): Promise<void> {
     const all = await load();
     await save(all.filter((e) => e.id !== id));

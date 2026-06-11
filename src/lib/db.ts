@@ -58,6 +58,13 @@ function getDb(): DatabaseSync {
       PRIMARY KEY (account, email_id)
     );
   `);
+  // Lightweight migration for pre-existing databases (node:sqlite has no
+  // IF NOT EXISTS for columns — the duplicate-column error means "done").
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN starred INTEGER DEFAULT 0");
+  } catch {
+    /* column already exists */
+  }
   return db;
 }
 
@@ -73,6 +80,7 @@ function rowToEmail(r: Record<string, unknown>): Email {
     body: String(r.body ?? ""),
     date: String(r.date ?? ""),
     read: Boolean(r.read),
+    starred: Boolean(r.starred),
     state: String(r.state) as MailboxState,
     messageId: (r.message_id as string) || undefined,
     account: String(r.account),
@@ -86,8 +94,8 @@ export function upsertEmails(account: string, emails: Email[]): void {
   const stmt = d.prepare(`
     INSERT OR REPLACE INTO messages
       (account, id, thread_id, from_name, from_email, to_json, cc_json,
-       subject, snippet, body, date, read, state, message_id, fetched_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       subject, snippet, body, date, read, starred, state, message_id, fetched_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const now = new Date().toISOString();
   d.exec("BEGIN");
@@ -106,6 +114,7 @@ export function upsertEmails(account: string, emails: Email[]): void {
         e.body,
         e.date,
         e.read ? 1 : 0,
+        e.starred ? 1 : 0,
         e.state,
         e.messageId ?? null,
         now,
@@ -181,7 +190,7 @@ export function cachedThread(account: string, threadId: string): Email[] {
 export function updateCached(
   account: string,
   id: string,
-  patch: { state?: MailboxState; read?: boolean },
+  patch: { state?: MailboxState; read?: boolean; starred?: boolean },
 ): void {
   if (patch.state !== undefined) {
     getDb()
@@ -193,6 +202,29 @@ export function updateCached(
       .prepare("UPDATE messages SET read = ? WHERE account = ? AND id = ?")
       .run(patch.read ? 1 : 0, account, id);
   }
+  if (patch.starred !== undefined) {
+    getDb()
+      .prepare("UPDATE messages SET starred = ? WHERE account = ? AND id = ?")
+      .run(patch.starred ? 1 : 0, account, id);
+  }
+}
+
+/**
+ * Starred mail across folders (trash excluded), newest first. Served from
+ * the cache: star state refreshes with every live list fetch, so coverage is
+ * the cached window (recent mail), not the provider's full history.
+ */
+export function cachedStarred(accounts: string[], limit = 100): Email[] {
+  if (!accounts.length) return [];
+  const marks = accounts.map(() => "?").join(",");
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM messages
+       WHERE account IN (${marks}) AND starred = 1 AND state != 'trashed'
+       ORDER BY date DESC LIMIT ?`,
+    )
+    .all(...accounts, limit) as Record<string, unknown>[];
+  return rows.map(rowToEmail);
 }
 
 export function removeCached(account: string, id: string): void {

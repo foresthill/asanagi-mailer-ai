@@ -2,6 +2,10 @@
 
 export type MailboxState = "inbox" | "archived" | "trashed" | "sent";
 
+/** What the folder pane can show: a real mailbox or the starred view
+ *  (スター付き is a flag spanning folders, not a folder itself). */
+export type FolderView = MailboxState | "starred";
+
 export type Importance = "high" | "normal" | "low";
 
 export interface EmailAddress {
@@ -24,6 +28,8 @@ export interface Email {
   html?: string;
   date: string; // ISO 8601
   read: boolean;
+  /** Starred / favorite — synced to the server (Gmail STARRED, IMAP \Flagged). */
+  starred?: boolean;
   state: MailboxState;
   /** AI-assigned importance, populated lazily by the classifier. */
   importance?: Importance;

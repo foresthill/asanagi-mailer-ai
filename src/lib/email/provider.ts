@@ -20,6 +20,9 @@ export interface EmailProvider {
   /** Mark read / unread. */
   setRead(id: string, read: boolean): Promise<void>;
 
+  /** Star / unstar — server-side (Gmail STARRED label, IMAP \Flagged flag). */
+  setStarred(id: string, starred: boolean): Promise<void>;
+
   /** Permanently delete (empty-trash semantics). */
   remove(id: string): Promise<void>;
 

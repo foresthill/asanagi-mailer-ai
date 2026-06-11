@@ -137,6 +137,7 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
       ? new Date(header(headers, "Date")!).toISOString()
       : new Date(Number(msg.internalDate ?? Date.now())).toISOString(),
     read: !labels.includes("UNREAD"),
+    starred: labels.includes("STARRED"),
     state,
     messageId: header(headers, "Message-ID"),
   };
@@ -207,6 +208,14 @@ export class GmailProvider implements EmailProvider {
       userId: "me",
       id,
       requestBody: read ? { removeLabelIds: ["UNREAD"] } : { addLabelIds: ["UNREAD"] },
+    });
+  }
+
+  async setStarred(id: string, starred: boolean): Promise<void> {
+    await this.gmail.users.messages.modify({
+      userId: "me",
+      id,
+      requestBody: starred ? { addLabelIds: ["STARRED"] } : { removeLabelIds: ["STARRED"] },
     });
   }
 

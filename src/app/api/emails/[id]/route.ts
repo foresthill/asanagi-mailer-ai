@@ -48,6 +48,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const body = (await req.json()) as {
     state?: MailboxState;
     read?: boolean;
+    starred?: boolean;
     importanceFeedback?: { importance: Importance; fromEmail: string };
   };
   const { provider, account, id } = await resolve(rawId);
@@ -60,6 +61,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (typeof body.read === "boolean") {
       await provider.setRead(id, body.read);
       if (account) updateCached(account, id, { read: body.read });
+    }
+    if (typeof body.starred === "boolean") {
+      // Server-side star (Gmail STARRED / IMAP \Flagged) + cache sync.
+      await provider.setStarred(id, body.starred);
+      if (account) updateCached(account, id, { starred: body.starred });
     }
     if (body.importanceFeedback) {
       // Teach the per-user knowledge base from explicit feedback.

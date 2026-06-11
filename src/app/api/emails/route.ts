@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { listAccounts, getProviderFor } from "@/lib/email/accounts";
-import { cachedList, repliedThreadIds, upsertEmails } from "@/lib/db";
+import { cachedList, cachedStarred, repliedThreadIds, upsertEmails } from "@/lib/db";
 import { listSignals } from "@/lib/store";
 import { annotateImportance } from "@/lib/importance";
-import type { Email, MailboxState } from "@/lib/types";
+import type { Email, FolderView, MailboxState } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +31,7 @@ function markReplied(account: string, emails: Email[]): Email[] {
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const state = (url.searchParams.get("state") as MailboxState) || "inbox";
+  const state = (url.searchParams.get("state") as FolderView) || "inbox";
   const account = url.searchParams.get("account") || "all";
 
   try {
@@ -39,6 +39,19 @@ export async function GET(req: Request) {
     const targets = account === "all" ? accounts : accounts.filter((a) => a.key === account);
     if (!targets.length) {
       return NextResponse.json({ emails: [], accounts, stale: [] });
+    }
+
+    // スター付き is a cross-folder flag, not a mailbox — served from the
+    // local cache (star state refreshes with every live folder fetch).
+    if (state === "starred") {
+      const signals = await listSignals();
+      const emails = annotateImportance(
+        targets
+          .flatMap((a) => markReplied(a.key, cachedStarred([a.key])).map((e) => tag(a.key, e)))
+          .sort((a, b) => +new Date(b.date) - +new Date(a.date)),
+        signals,
+      );
+      return NextResponse.json({ emails, accounts, stale: [] });
     }
 
     const stale: string[] = [];

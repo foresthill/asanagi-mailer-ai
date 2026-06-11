@@ -4,6 +4,7 @@ import {
   Archive,
   Inbox,
   Send,
+  Star,
   Trash2,
   Sparkles,
   Clock,
@@ -14,13 +15,14 @@ import {
   Users,
   ListChecks,
 } from "lucide-react";
-import type { MailboxState } from "@/lib/types";
+import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StorageMeter, type StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
 
-const FOLDERS: { key: MailboxState; label: string; icon: typeof Inbox }[] = [
+const FOLDERS: { key: FolderView; label: string; icon: typeof Inbox }[] = [
   { key: "inbox", label: "受信箱", icon: Inbox },
+  { key: "starred", label: "スター付き", icon: Star },
   { key: "sent", label: "送信箱", icon: Send },
   { key: "archived", label: "アーカイブ", icon: Archive },
   { key: "trashed", label: "ゴミ箱", icon: Trash2 },
@@ -42,15 +44,15 @@ export function Sidebar({
   onCompose,
   onSelectView,
 }: {
-  folder: MailboxState;
-  counts: Partial<Record<MailboxState, number>>;
+  folder: FolderView;
+  counts: Partial<Record<FolderView, number>>;
   scheduledCount: number;
   aiConfigured: boolean;
   accounts: AccountInfo[];
   account: string; // "all" or an account key
   storage: StorageInfo | null;
   view: "mail" | "contacts" | "triage";
-  onSelect: (f: MailboxState) => void;
+  onSelect: (f: FolderView) => void;
   onSelectView: (v: "mail" | "contacts" | "triage") => void;
   onSelectAccount: (key: string) => void;
   onOpenSettings: () => void;

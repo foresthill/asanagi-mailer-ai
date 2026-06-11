@@ -12,8 +12,9 @@ import {
   ReplyAll,
   Forward,
   ChevronDown,
+  Star,
 } from "lucide-react";
-import type { Email, Importance, MailboxState } from "@/lib/types";
+import type { Email, FolderView, Importance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ThreadView } from "./ThreadView";
@@ -35,17 +36,19 @@ export function EmailReader({
   onTrash,
   onRestore,
   onReply,
+  onToggleStar,
   onImportanceFeedback,
 }: {
   email: Email | null;
   /** Conversation containing the email (oldest first); null while loading. */
   thread: Email[] | null;
-  folder: MailboxState;
+  folder: FolderView;
   classifying: boolean;
   onArchive: () => void;
   onTrash: () => void;
   onRestore: () => void;
   onReply: (kind: ComposeKind, mode: ComposeAI) => void;
+  onToggleStar: () => void;
   onImportanceFeedback: (importance: Importance) => void;
 }) {
   // Session-sticky preference: rich HTML (default) vs plain text.
@@ -67,6 +70,14 @@ export function EmailReader({
     <div className="flex flex-1 flex-col overflow-hidden bg-bg">
       {/* Action bar */}
       <div className="flex items-center gap-1 border-b border-border bg-surface px-5 py-2.5">
+        <button
+          onClick={onToggleStar}
+          title={email.starred ? "スターを外す (S)" : "スターを付ける (S)"}
+          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-fg-muted transition-colors hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
+        >
+          <Star className={cn("size-4", email.starred && "fill-amber-400 text-amber-400")} />
+          <span className="hidden lg:inline">{email.starred ? "スター解除" : "スター"}</span>
+        </button>
         {folder !== "archived" && folder !== "sent" && (
           <ActionButton icon={Archive} label="アーカイブ" onClick={onArchive} />
         )}
