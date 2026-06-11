@@ -360,6 +360,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           selectedId={selectedId}
           searchQuery={searchQuery}
           searching={searchResults !== null}
+          accountLabels={
+            // Show the origin badge when rows can mix accounts:
+            // unified inbox, or search results (always cross-account).
+            accounts.length > 1 && (account === "all" || searchResults !== null)
+              ? Object.fromEntries(accounts.map((a) => [a.key, a.address ?? a.label]))
+              : null
+          }
           onSearchChange={setSearchQuery}
           onSelect={selectEmail}
           onArchive={archive}
