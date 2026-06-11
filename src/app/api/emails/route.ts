@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { listAccounts, getProviderFor } from "@/lib/email/accounts";
 import { cachedList, repliedThreadIds, upsertEmails } from "@/lib/db";
+import { listSignals } from "@/lib/store";
+import { annotateImportance } from "@/lib/importance";
 import type { Email, MailboxState } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -58,10 +60,16 @@ export async function GET(req: Request) {
       }),
     );
 
-    const emails = lists
-      .flat()
-      .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-      .slice(0, 100);
+    // Free importance layers (learned signals > keyword) for the whole list —
+    // no AI cost; the LLM refines individual emails when opened.
+    const signals = await listSignals();
+    const emails = annotateImportance(
+      lists
+        .flat()
+        .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+        .slice(0, 100),
+      signals,
+    );
 
     return NextResponse.json({ emails, accounts, stale });
   } catch (err) {

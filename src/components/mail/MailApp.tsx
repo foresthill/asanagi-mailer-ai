@@ -25,6 +25,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showScheduled, setShowScheduled] = useState(false);
   const [emails, setEmails] = useState<Email[]>([]);
+  // Cache-wide search (all accounts & folders); null = not searching.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Email[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Email | null>(null);
@@ -75,6 +78,25 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadList(folder, account);
   }, [folder, account, loadList]);
+
+  // Debounced cache search; clearing the box returns to the folder view.
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSearchResults(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+        const data = await res.json();
+        setSearchResults(data.emails ?? []);
+      } catch {
+        setSearchResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   const changeFolder = (f: MailboxState) => {
     setView("mail");
@@ -333,9 +355,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       {view === "mail" && !replying && (
         <EmailList
           folder={folder}
-          emails={emails}
-          loading={loading}
+          emails={searchResults ?? emails}
+          loading={loading && searchResults === null}
           selectedId={selectedId}
+          searchQuery={searchQuery}
+          searching={searchResults !== null}
+          onSearchChange={setSearchQuery}
           onSelect={selectEmail}
           onArchive={archive}
           onTrash={trash}
