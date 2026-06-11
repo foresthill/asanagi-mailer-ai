@@ -7,6 +7,7 @@ import { avatarColor, displayName, initials, relativeTime } from "./helpers";
 
 const FOLDER_LABEL: Record<MailboxState, string> = {
   inbox: "受信箱",
+  sent: "送信箱",
   archived: "アーカイブ",
   trashed: "ゴミ箱",
 };

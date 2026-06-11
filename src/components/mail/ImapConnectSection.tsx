@@ -10,6 +10,7 @@ export interface ImapView {
   user: string;
   archiveFolder: string;
   trashFolder: string;
+  sentFolder: string;
   smtpHost: string;
   smtpPort: string;
   smtpSecure: string;
@@ -63,6 +64,7 @@ export function ImapConnectSection({
       user: form.user,
       archiveFolder: form.archiveFolder,
       trashFolder: form.trashFolder,
+      sentFolder: form.sentFolder,
       smtpHost: form.smtpHost,
       smtpPort: form.smtpPort,
       smtpUser: form.smtpUser,
@@ -218,6 +220,10 @@ export function ImapConnectSection({
             <label className="flex flex-col gap-1">
               <span className="text-[11px] text-fg-muted">ゴミ箱フォルダ</span>
               <input value={form.trashFolder} onChange={set("trashFolder")} placeholder="Trash" className={inputCls} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-fg-muted">送信済みフォルダ</span>
+              <input value={form.sentFolder} onChange={set("sentFolder")} placeholder="Sent" className={inputCls} />
             </label>
           </div>
         </div>

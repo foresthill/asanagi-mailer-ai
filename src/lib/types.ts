@@ -1,6 +1,6 @@
 // Core domain types shared across the app.
 
-export type MailboxState = "inbox" | "archived" | "trashed";
+export type MailboxState = "inbox" | "archived" | "trashed" | "sent";
 
 export type Importance = "high" | "normal" | "low";
 
@@ -132,6 +132,7 @@ export interface EmailSettings {
     password?: string;
     archiveFolder?: string; // default "Archive"
     trashFolder?: string; // default "Trash"
+    sentFolder?: string; // default "Sent"
     // SMTP (send); blank fields fall back to the IMAP values.
     smtpHost?: string;
     smtpPort?: string; // default "465"

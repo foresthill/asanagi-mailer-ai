@@ -3,6 +3,7 @@
 import {
   Archive,
   Inbox,
+  Send,
   Trash2,
   Sparkles,
   Clock,
@@ -18,6 +19,7 @@ import type { AccountInfo } from "@/lib/email/accounts";
 
 const FOLDERS: { key: MailboxState; label: string; icon: typeof Inbox }[] = [
   { key: "inbox", label: "受信箱", icon: Inbox },
+  { key: "sent", label: "送信箱", icon: Send },
   { key: "archived", label: "アーカイブ", icon: Archive },
   { key: "trashed", label: "ゴミ箱", icon: Trash2 },
 ];

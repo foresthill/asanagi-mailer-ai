@@ -1,5 +1,6 @@
 import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
+import MailComposer from "nodemailer/lib/mail-composer";
 import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
 
@@ -21,6 +22,7 @@ export interface ImapCreds {
   password: string;
   archiveFolder: string;
   trashFolder: string;
+  sentFolder: string;
   smtp: {
     host: string;
     port: number;
@@ -43,6 +45,7 @@ export function envImapCreds(): ImapCreds | null {
     password: IMAP_PASSWORD,
     archiveFolder: process.env.IMAP_ARCHIVE_FOLDER || "Archive",
     trashFolder: process.env.IMAP_TRASH_FOLDER || "Trash",
+    sentFolder: process.env.IMAP_SENT_FOLDER || "Sent",
     smtp: {
       host: process.env.SMTP_HOST || IMAP_HOST,
       port: Number(process.env.SMTP_PORT ?? 465),
@@ -67,6 +70,7 @@ export class ImapProvider implements EmailProvider {
       inbox: "INBOX",
       archived: creds.archiveFolder,
       trashed: creds.trashFolder,
+      sent: creds.sentFolder,
     };
   }
 
@@ -211,13 +215,10 @@ export class ImapProvider implements EmailProvider {
   }
 
   async send(message: OutgoingMessage): Promise<{ messageId?: string }> {
-    const transport = nodemailer.createTransport({
-      host: this.creds.smtp.host,
-      port: this.creds.smtp.port,
-      secure: this.creds.smtp.secure,
-      auth: { user: this.creds.smtp.user, pass: this.creds.smtp.password },
-    });
-    const info = await transport.sendMail({
+    // Build the RFC822 message once so the copy saved to the Sent folder is
+    // byte-identical to what went out. SMTP itself never stores sent mail —
+    // without the IMAP APPEND below, sent messages would simply vanish.
+    const mail = {
       from: this.creds.smtp.from,
       to: message.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)),
       cc: message.cc?.map((a) => a.email),
@@ -226,7 +227,36 @@ export class ImapProvider implements EmailProvider {
       text: message.body,
       inReplyTo: message.inReplyTo,
       references: message.inReplyTo,
+    };
+    const raw = await new MailComposer(mail).compile().build();
+
+    const transport = nodemailer.createTransport({
+      host: this.creds.smtp.host,
+      port: this.creds.smtp.port,
+      secure: this.creds.smtp.secure,
+      auth: { user: this.creds.smtp.user, pass: this.creds.smtp.password },
     });
+    const info = await transport.sendMail({
+      envelope: {
+        from: this.creds.smtp.from,
+        to: [...message.to, ...(message.cc ?? []), ...(message.bcc ?? [])].map((a) => a.email),
+      },
+      raw,
+    });
+
+    // Save a copy to the Sent folder. Non-fatal: the mail already went out.
+    try {
+      const c = this.connection();
+      await c.connect();
+      try {
+        await c.append(this.folders.sent, raw, ["\\Seen"]);
+      } finally {
+        await c.logout();
+      }
+    } catch {
+      /* Sent folder missing or append unsupported — sending still succeeded */
+    }
+
     return { messageId: info.messageId };
   }
 }
