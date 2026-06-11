@@ -66,8 +66,9 @@ export function ReplyComposer({
 
   const reviewing = pending > 0;
 
-  // Initial draft. Plain modes (plain reply / forward / new) start from the
-  // prepared body; "ai" asks the model to draft a reply to the source email.
+  // Initial draft. Plain modes start from the prepared body; "ai" asks the
+  // model to draft a reply — or, for forwards, a short forwarding note that
+  // goes above the quoted original (subject stays "Fwd:").
   useEffect(() => {
     if (init.mode === "plain" || !init.source) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot init, no fetch
@@ -76,6 +77,7 @@ export function ReplyComposer({
       return;
     }
     const source = init.source;
+    const isForward = init.kind === "forward";
     let active = true;
     (async () => {
       setGenerating(true);
@@ -83,12 +85,22 @@ export function ReplyComposer({
         const res = await fetch("/api/ai/reply", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: source }),
+          body: JSON.stringify({
+            email: source,
+            guidance: isForward
+              ? "このメールを第三者へ転送するための短い前置き文だけを書いてください。要点の簡潔なまとめ（2〜3行）を含め、宛名・署名・元メールの再掲は不要です。"
+              : undefined,
+          }),
         });
         const data = await res.json();
         if (active && data.draft) {
-          setSubject(data.draft.subject);
-          setInitialDraft(data.draft.body);
+          if (isForward) {
+            // Keep the Fwd: subject; the AI note sits above the quote block.
+            setInitialDraft(`${data.draft.body.trim()}\n${init.body}`);
+          } else {
+            setSubject(data.draft.subject);
+            setInitialDraft(data.draft.body);
+          }
         }
       } catch {
         if (active) setInitialDraft(init.body);

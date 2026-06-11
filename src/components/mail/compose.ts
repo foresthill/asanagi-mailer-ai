@@ -100,7 +100,7 @@ export function buildCompose(
       return {
         ...base,
         kind,
-        mode: "plain",
+        mode, // "ai" = AI drafts the forwarding note above the quote
         to: [],
         cc: [],
         subject: source.subject.startsWith("Fwd:") ? source.subject : `Fwd: ${source.subject}`,
