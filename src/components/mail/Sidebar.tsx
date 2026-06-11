@@ -33,6 +33,7 @@ export function Sidebar({
   onSelect,
   onSelectAccount,
   onOpenSettings,
+  onOpenScheduled,
   onCompose,
 }: {
   folder: MailboxState;
@@ -45,6 +46,7 @@ export function Sidebar({
   onSelect: (f: MailboxState) => void;
   onSelectAccount: (key: string) => void;
   onOpenSettings: () => void;
+  onOpenScheduled: () => void;
   onCompose: () => void;
 }) {
   return (
@@ -118,13 +120,19 @@ export function Sidebar({
       )}
 
       <div className="mt-2 border-t border-border pt-2">
-        <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-fg-muted">
+        <button
+          onClick={onOpenScheduled}
+          title="メール送信予定を表示"
+          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg"
+        >
           <Clock className="size-4" />
-          <span className="flex-1">予約送信</span>
+          <span className="flex-1 text-left">予約送信</span>
           {scheduledCount ? (
-            <span className="text-xs tabular-nums text-fg-subtle">{scheduledCount}</span>
+            <span className="rounded-full bg-accent-soft px-1.5 text-xs tabular-nums text-accent">
+              {scheduledCount}
+            </span>
           ) : null}
-        </div>
+        </button>
       </div>
 
       <div className="mt-auto flex flex-col gap-1">

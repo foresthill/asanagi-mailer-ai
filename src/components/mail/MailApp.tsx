@@ -7,6 +7,7 @@ import { EmailList } from "./EmailList";
 import { EmailReader } from "./EmailReader";
 import { ReplyComposer } from "./ReplyComposer";
 import { ConnectionsSettings } from "./ConnectionsSettings";
+import { ScheduledPanel } from "./ScheduledPanel";
 import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
 import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from "./compose";
@@ -19,6 +20,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [aiOk, setAiOk] = useState(aiConfigured);
   const [showSettings, setShowSettings] = useState(false);
+  const [showScheduled, setShowScheduled] = useState(false);
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -275,6 +277,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         onSelect={changeFolder}
         onSelectAccount={changeAccount}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenScheduled={() => setShowScheduled(true)}
         onCompose={() => openCompose("new", "plain")}
       />
       {!replying && (
@@ -322,6 +325,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         onClose={() => setShowSettings(false)}
         onSaved={setAiOk}
       />
+      <ScheduledPanel open={showScheduled} onClose={() => setShowScheduled(false)} />
     </div>
   );
 }
