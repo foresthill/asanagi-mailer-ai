@@ -63,6 +63,13 @@ function addr(a?: { name?: string; address?: string }): EmailAddress {
   return { name: a?.name ? repairMojibake(a.name) : undefined, email: a?.address ?? "" };
 }
 
+/** Message-IDs come with or without angle brackets depending on the source
+ *  (envelope vs parsed References) — normalize so thread ids compare equal. */
+function normId(s?: string | null): string | undefined {
+  const t = s?.trim().replace(/^<|>$/g, "");
+  return t || undefined;
+}
+
 export class ImapProvider implements EmailProvider {
   readonly name = "imap";
   private folders: Record<MailboxState, string>;
@@ -122,13 +129,14 @@ export class ImapProvider implements EmailProvider {
     state: MailboxState,
   ): Promise<Email> {
     const env = msg.envelope ?? {};
-    const { text: body, html } = await this.parseMime(msg.source);
+    const { text: body, html, refRoot } = await this.parseMime(msg.source);
     const flags: Set<string> = msg.flags ?? new Set();
     return {
       id: `${this.folders[state]}:${msg.uid}`,
-      // Pairwise chaining: a reply joins its parent's cluster. Full
-      // References-walking is a later refinement.
-      threadId: env.inReplyTo ?? env.messageId ?? String(msg.uid),
+      // Thread = first id of the References chain (the conversation root).
+      // Compliant clients keep it stable across the whole conversation;
+      // In-Reply-To covers clients that only set that header.
+      threadId: refRoot ?? normId(env.inReplyTo) ?? normId(env.messageId) ?? String(msg.uid),
       from: addr(env.from?.[0]),
       to: (env.to ?? []).map(addr),
       cc: (env.cc ?? []).map(addr),
@@ -148,12 +156,17 @@ export class ImapProvider implements EmailProvider {
    * like ISO-2022-JP) via mailparser. Returns both the plain text (HTML
    * stripped as fallback) and the original HTML when present.
    */
-  private async parseMime(source?: Buffer): Promise<{ text: string; html?: string }> {
+  private async parseMime(
+    source?: Buffer,
+  ): Promise<{ text: string; html?: string; refRoot?: string }> {
     if (!source) return { text: "" };
     try {
       const parsed = await simpleParser(source, { skipImageLinks: true });
       const html = parsed.html || undefined;
-      if (parsed.text?.trim()) return { text: parsed.text.trim(), html };
+      // Conversation root: References lists ancestors oldest-first.
+      const refs = parsed.references;
+      const refRoot = normId(Array.isArray(refs) ? refs[0] : refs);
+      if (parsed.text?.trim()) return { text: parsed.text.trim(), html, refRoot };
       if (html) {
         const stripped = html
           .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
@@ -164,9 +177,9 @@ export class ImapProvider implements EmailProvider {
           .replace(/&gt;/g, ">")
           .replace(/\n{3,}/g, "\n\n")
           .trim();
-        return { text: stripped, html };
+        return { text: stripped, html, refRoot };
       }
-      return { text: "" };
+      return { text: "", refRoot };
     } catch {
       // Unparseable message — show the raw tail rather than nothing.
       const raw = source.toString("utf8");
@@ -256,7 +269,13 @@ export class ImapProvider implements EmailProvider {
       subject: message.subject,
       text: message.body,
       inReplyTo: message.inReplyTo,
-      references: message.inReplyTo,
+      // Keep the conversation root first in References so every depth of the
+      // thread resolves to the same root (threadId is that root Message-ID —
+      // include it only when it actually looks like one, not a uid fallback).
+      references: [
+        message.threadId?.includes("@") ? `<${message.threadId.replace(/^<|>$/g, "")}>` : "",
+        message.inReplyTo ?? "",
+      ].filter((v, i, arr) => v && arr.indexOf(v) === i),
     };
     const raw = await new MailComposer(mail).compile().build();
 

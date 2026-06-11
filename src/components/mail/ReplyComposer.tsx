@@ -157,6 +157,7 @@ export function ReplyComposer({
       subject,
       body,
       inReplyTo: init.inReplyTo,
+      threadId: init.threadId,
       account: init.account, // send from the account the thread belongs to
     };
   }
