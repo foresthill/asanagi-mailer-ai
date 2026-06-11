@@ -19,6 +19,7 @@ export function EmailList({
   selectedId,
   searchQuery,
   searching,
+  accountLabels,
   onSearchChange,
   onSelect,
   onArchive,
@@ -33,6 +34,9 @@ export function EmailList({
   searchQuery: string;
   /** True while the list shows search results instead of the folder. */
   searching: boolean;
+  /** account key → short label; non-null shows the origin badge per row
+   *  (unified inbox / search across multiple accounts). */
+  accountLabels: Record<string, string> | null;
   onSearchChange: (q: string) => void;
   onSelect: (id: string) => void;
   onArchive: (id: string) => void;
@@ -105,6 +109,9 @@ export function EmailList({
               email={email}
               active={email.id === selectedId}
               folder={folder}
+              accountLabel={
+                accountLabels && email.account ? (accountLabels[email.account] ?? email.account) : null
+              }
               onSelect={() => onSelect(email.id)}
               onArchive={() => onArchive(email.id)}
               onTrash={() => onTrash(email.id)}
@@ -120,6 +127,7 @@ function EmailListItem({
   email,
   active,
   folder,
+  accountLabel,
   onSelect,
   onArchive,
   onTrash,
@@ -127,6 +135,8 @@ function EmailListItem({
   email: Email;
   active: boolean;
   folder: MailboxState;
+  /** Origin account badge text (unified inbox only); null hides it. */
+  accountLabel: string | null;
   onSelect: () => void;
   onArchive: () => void;
   onTrash: () => void;
@@ -186,7 +196,21 @@ function EmailListItem({
               {email.subject}
             </p>
           </div>
-          <p className="mt-0.5 truncate text-xs text-fg-subtle">{email.snippet}</p>
+          <div className="mt-0.5 flex items-center gap-2">
+            <p className="min-w-0 flex-1 truncate text-xs text-fg-subtle">{email.snippet}</p>
+            {accountLabel && (
+              <span
+                className="flex max-w-[40%] shrink-0 items-center gap-1 rounded-full border border-border bg-surface-2 px-1.5 py-px text-[10px] text-fg-muted"
+                title={`アカウント: ${accountLabel}`}
+              >
+                <span
+                  className="size-1.5 rounded-full"
+                  style={{ background: avatarColor(email.account ?? "") }}
+                />
+                <span className="truncate">{accountLabel}</span>
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
