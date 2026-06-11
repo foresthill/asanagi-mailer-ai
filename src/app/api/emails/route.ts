@@ -1,14 +1,58 @@
 import { NextResponse } from "next/server";
-import { getProvider } from "@/lib/email";
-import type { MailboxState } from "@/lib/types";
+import { listAccounts, getProviderFor } from "@/lib/email/accounts";
+import { cachedList, upsertEmails } from "@/lib/db";
+import type { Email, MailboxState } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
+/** API ids are account-qualified: `${account}/${providerId}`. */
+function tag(account: string, e: Email): Email {
+  return { ...e, account, id: `${account}/${e.id}` };
+}
+
+/**
+ * List emails for one account or all accounts (unified inbox).
+ *   GET /api/emails?state=inbox&account=all|gmail|imap|mock
+ * Live-fetches each account, writes through to the local SQLite cache, and
+ * falls back to the cache for any account whose provider is unreachable.
+ */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const state = (url.searchParams.get("state") as MailboxState) || "inbox";
+  const account = url.searchParams.get("account") || "all";
+
   try {
-    const provider = await getProvider();
-    const emails = await provider.list(state);
-    return NextResponse.json({ emails });
+    const accounts = await listAccounts();
+    const targets = account === "all" ? accounts : accounts.filter((a) => a.key === account);
+    if (!targets.length) {
+      return NextResponse.json({ emails: [], accounts, stale: [] });
+    }
+
+    const stale: string[] = [];
+    const lists = await Promise.all(
+      targets.map(async (a) => {
+        try {
+          const provider = await getProviderFor(a.key);
+          const emails = await provider.list(state);
+          upsertEmails(a.key, emails); // write-through (raw provider ids)
+          return emails.map((e) => tag(a.key, e));
+        } catch {
+          // Provider unreachable → serve the local cache for this account.
+          stale.push(a.key);
+          return cachedList([a.key], state).map((e) => ({
+            ...e,
+            id: `${a.key}/${e.id}`,
+          }));
+        }
+      }),
+    );
+
+    const emails = lists
+      .flat()
+      .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+      .slice(0, 100);
+
+    return NextResponse.json({ emails, accounts, stale });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "failed to list" },

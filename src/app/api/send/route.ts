@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/email";
+import { getProviderFor } from "@/lib/email/accounts";
 import type { OutgoingMessage } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -12,7 +13,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    const provider = await getProvider();
+    // Send from the account the conversation belongs to (reply parity).
+    const provider = message.account
+      ? await getProviderFor(message.account)
+      : await getProvider();
     const result = await provider.send(message);
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {

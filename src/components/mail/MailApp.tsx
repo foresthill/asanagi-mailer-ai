@@ -7,9 +7,15 @@ import { EmailList } from "./EmailList";
 import { EmailReader } from "./EmailReader";
 import { ReplyComposer } from "./ReplyComposer";
 import { ConnectionsSettings } from "./ConnectionsSettings";
+import type { StorageInfo } from "./StorageMeter";
+import type { AccountInfo } from "@/lib/email/accounts";
 
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<MailboxState>("inbox");
+  // "all" = unified inbox across accounts; otherwise a single account key.
+  const [account, setAccount] = useState("all");
+  const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [aiOk, setAiOk] = useState(aiConfigured);
   const [showSettings, setShowSettings] = useState(false);
   const [emails, setEmails] = useState<Email[]>([]);
@@ -25,27 +31,52 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
 
-  const loadList = useCallback(async (f: MailboxState) => {
-    setLoading(true);
+  const loadStorage = useCallback(async () => {
     try {
-      const res = await fetch(`/api/emails?state=${f}`);
-      const data = await res.json();
-      const list: Email[] = data.emails ?? [];
-      setEmails(list);
-      setCounts((c) => ({ ...c, [f]: list.filter((e) => !e.read || f !== "inbox").length }));
-    } finally {
-      setLoading(false);
+      const res = await fetch("/api/storage");
+      setStorage(await res.json());
+    } catch {
+      /* meter is non-critical */
     }
   }, []);
 
+  const loadList = useCallback(
+    async (f: MailboxState, acct: string) => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/emails?state=${f}&account=${encodeURIComponent(acct)}`);
+        const data = await res.json();
+        const list: Email[] = data.emails ?? [];
+        setEmails(list);
+        if (data.accounts) setAccounts(data.accounts);
+        if (data.stale?.length) {
+          setToast(`オフライン表示: ${data.stale.join(", ")} はキャッシュから表示中`);
+          setTimeout(() => setToast(null), 4000);
+        }
+        setCounts((c) => ({ ...c, [f]: list.filter((e) => !e.read || f !== "inbox").length }));
+      } finally {
+        setLoading(false);
+        loadStorage(); // cache just changed → refresh the meter
+      }
+    },
+    [loadStorage],
+  );
+
   useEffect(() => {
-    // Fetch the mailbox from the server when the folder changes (data sync).
+    // Fetch the mailbox when the folder or account view changes (data sync).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadList(folder);
-  }, [folder, loadList]);
+    loadList(folder, account);
+  }, [folder, account, loadList]);
 
   const changeFolder = (f: MailboxState) => {
     setFolder(f);
+    setSelectedId(null);
+    setSelected(null);
+    setReplyMode(null);
+  };
+
+  const changeAccount = (key: string) => {
+    setAccount(key);
     setSelectedId(null);
     setSelected(null);
     setReplyMode(null);
@@ -60,7 +91,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         setScheduledCount(
           (data.items ?? []).filter((s: { status: string }) => s.status === "scheduled").length,
         );
-        if (data.flushed > 0 && folder !== "inbox") loadList(folder);
+        if (data.flushed > 0 && folder !== "inbox") loadList(folder, account);
       } catch {
         /* ignore */
       }
@@ -68,7 +99,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     tick();
     const id = setInterval(tick, 20_000);
     return () => clearInterval(id);
-  }, [folder, loadList]);
+  }, [folder, account, loadList]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -211,7 +242,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         counts={counts}
         scheduledCount={scheduledCount}
         aiConfigured={aiOk}
+        accounts={accounts}
+        account={account}
+        storage={storage}
         onSelect={changeFolder}
+        onSelectAccount={changeAccount}
         onOpenSettings={() => setShowSettings(true)}
       />
       {!replying && (

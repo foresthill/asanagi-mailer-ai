@@ -137,7 +137,13 @@ export function ReplyComposer({
       const res = await fetch("/api/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ to: [email.from], subject, body, inReplyTo: email.messageId }),
+        body: JSON.stringify({
+          to: [email.from],
+          subject,
+          body,
+          inReplyTo: email.messageId,
+          account: email.account, // reply from the account the email belongs to
+        }),
       });
       if (!res.ok) throw new Error("送信に失敗しました");
       onSent("sent");
@@ -155,7 +161,13 @@ export function ReplyComposer({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          message: { to: [email.from], subject, body, inReplyTo: email.messageId },
+          message: {
+            to: [email.from],
+            subject,
+            body,
+            inReplyTo: email.messageId,
+            account: email.account,
+          },
           sendAt: iso,
         }),
       });
