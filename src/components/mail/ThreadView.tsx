@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MessageCircle, Rows3 } from "lucide-react";
 import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
+import { ConversationBubbles } from "./ConversationBubbles";
 
 /**
- * Conversation rendering of a thread, oldest first. The latest message and
- * the one the user opened start expanded; the rest collapse to one line.
- * Own messages (state "sent") get a chip so the back-and-forth is scannable.
+ * Thread rendering, oldest first, with two display modes:
+ *  - cards: collapsible message cards (latest + opened start expanded)
+ *  - chat:  LINE-style bubbles (own messages right) via ConversationBubbles
  */
 export function ThreadView({ messages, selectedId }: { messages: Email[]; selectedId: string }) {
   const lastId = messages[messages.length - 1]?.id;
+  const [view, setView] = useState<"cards" | "chat">("cards");
   const [open, setOpen] = useState<Set<string>>(
     () => new Set([selectedId, lastId].filter(Boolean) as string[]),
   );
@@ -25,8 +27,36 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
       return next;
     });
 
+  const switcher = (
+    <div className="flex items-center gap-1">
+      <span className="mr-1 text-xs text-fg-subtle">{messages.length}通の会話</span>
+      <ModeButton
+        icon={Rows3}
+        label="カード"
+        active={view === "cards"}
+        onClick={() => setView("cards")}
+      />
+      <ModeButton
+        icon={MessageCircle}
+        label="会話"
+        active={view === "chat"}
+        onClick={() => setView("chat")}
+      />
+    </div>
+  );
+
+  if (view === "chat") {
+    return (
+      <div className="mt-6 flex flex-col gap-3">
+        <div className="flex justify-end">{switcher}</div>
+        <ConversationBubbles messages={messages} />
+      </div>
+    );
+  }
+
   return (
     <div className="mt-6 flex flex-col gap-3">
+      <div className="flex justify-end">{switcher}</div>
       {messages.map((m) => {
         const name = displayName(m.from);
         const expanded = open.has(m.id);
@@ -78,5 +108,32 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
         );
       })}
     </div>
+  );
+}
+
+function ModeButton({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: typeof Rows3;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] transition-colors",
+        active
+          ? "border-accent bg-accent-soft text-accent"
+          : "border-border text-fg-muted hover:text-fg",
+      )}
+    >
+      <Icon className="size-3" />
+      {label}
+    </button>
   );
 }

@@ -1,19 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Email, Importance, MailboxState } from "@/lib/types";
+import type { Email, EmailAddress, Importance, MailboxState } from "@/lib/types";
 import { Sidebar } from "./Sidebar";
 import { EmailList } from "./EmailList";
 import { EmailReader } from "./EmailReader";
 import { ReplyComposer } from "./ReplyComposer";
 import { ConnectionsSettings } from "./ConnectionsSettings";
 import { ScheduledPanel } from "./ScheduledPanel";
+import { ContactsView } from "./ContactsView";
 import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
 import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from "./compose";
 
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<MailboxState>("inbox");
+  // "mail" = folders; "contacts" = auto-derived address book (mini-CRM).
+  const [view, setView] = useState<"mail" | "contacts">("mail");
   // "all" = unified inbox across accounts; otherwise a single account key.
   const [account, setAccount] = useState("all");
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
@@ -74,6 +77,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   }, [folder, account, loadList]);
 
   const changeFolder = (f: MailboxState) => {
+    setView("mail");
     setFolder(f);
     setSelectedId(null);
     setSelected(null);
@@ -255,7 +259,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         openCompose("new", "plain");
         return;
       }
-      if (!emails.length) return;
+      if (view !== "mail" || !emails.length) return;
       const idx = emails.findIndex((m) => m.id === selectedId);
       if (e.key === "j") {
         e.preventDefault();
@@ -284,12 +288,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emails, selectedId, selected, folder, replying, openCompose]);
+  }, [emails, selectedId, selected, folder, replying, view, openCompose]);
 
   return (
     <div className="flex h-full">
       <Sidebar
         folder={folder}
+        view={view}
         counts={counts}
         scheduledCount={scheduledCount}
         aiConfigured={aiOk}
@@ -297,12 +302,31 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         account={account}
         storage={storage}
         onSelect={changeFolder}
+        onSelectView={(v) => {
+          setView(v);
+          setCompose(null);
+        }}
         onSelectAccount={changeAccount}
         onOpenSettings={() => setShowSettings(true)}
         onOpenScheduled={() => setShowScheduled(true)}
         onCompose={() => openCompose("new", "plain")}
       />
-      {!replying && (
+      {view === "contacts" && !compose && (
+        <ContactsView
+          onComposeTo={(to: EmailAddress) =>
+            setCompose({
+              kind: "new",
+              mode: "plain",
+              to: [to],
+              cc: [],
+              subject: "",
+              body: "",
+              account: account !== "all" ? account : undefined,
+            })
+          }
+        />
+      )}
+      {view === "mail" && !replying && (
         <EmailList
           folder={folder}
           emails={emails}
@@ -317,13 +341,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       {compose ? (
         <ReplyComposer
           // Restart the composer whenever the kind/mode/source changes.
-          key={`${compose.kind}-${compose.mode}-${compose.source?.id ?? "new"}`}
+          key={`${compose.kind}-${compose.mode}-${compose.source?.id ?? "new"}-${compose.to[0]?.email ?? ""}`}
           init={compose}
           aiConfigured={aiOk}
           onSent={onSent}
           onClose={() => setCompose(null)}
         />
-      ) : (
+      ) : view === "mail" ? (
         <EmailReader
           email={selected}
           thread={thread}
@@ -335,7 +359,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onReply={openCompose}
           onImportanceFeedback={onImportanceFeedback}
         />
-      )}
+      ) : null}
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 animate-slide-up rounded-full bg-fg px-4 py-2 text-sm text-bg shadow-[var(--shadow)]">
