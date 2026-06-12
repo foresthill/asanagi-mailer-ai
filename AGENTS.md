@@ -6,7 +6,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Asanagi 開発コンテキスト
 
-AIネイティブなメールクライアント（local-first）。設計の正は [`docs/`](docs/)（00=全体, 01=添削UX, 02=重要度学習, 03=プロバイダ/同期/ネイティブ, 04=スレッド/整理）。機能の現状は [README](README.md)。
+AIネイティブなメールクライアント（local-first）。設計の正は [`docs/`](docs/)（00=全体, 01=添削UX, 02=重要度学習, 03=プロバイダ/同期/ネイティブ, 04=スレッド/整理, 05=カレンダー連携）。機能の現状は [README](README.md)。
 
 ## 原則（壊してはいけないもの）
 
