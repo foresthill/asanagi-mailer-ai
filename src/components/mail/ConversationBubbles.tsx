@@ -48,7 +48,14 @@ function timeOf(iso: string): string {
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-export function ConversationBubbles({ messages }: { messages: Email[] }) {
+export function ConversationBubbles({
+  messages,
+  selectedId,
+}: {
+  messages: Email[];
+  /** The message opened from the list — gets a subtle amber ring. */
+  selectedId?: string;
+}) {
   return (
     <div className="flex flex-col gap-2.5">
       {messages.map((m, i) => {
@@ -71,7 +78,7 @@ export function ConversationBubbles({ messages }: { messages: Email[] }) {
                 </span>
               )}
               <div className={cn("flex max-w-[78%] items-end gap-1.5", own && "flex-row-reverse")}>
-                <Bubble own={own} body={m.body || m.snippet} />
+                <Bubble own={own} body={m.body || m.snippet} current={m.id === selectedId} />
                 <span className="shrink-0 pb-0.5 text-[10px] text-fg-subtle">{timeOf(m.date)}</span>
               </div>
             </div>
@@ -82,7 +89,7 @@ export function ConversationBubbles({ messages }: { messages: Email[] }) {
   );
 }
 
-function Bubble({ own, body }: { own: boolean; body: string }) {
+function Bubble({ own, body, current }: { own: boolean; body: string; current?: boolean }) {
   const segments = splitQuotes(body);
   const [open, setOpen] = useState<Set<number>>(new Set());
   const toggle = (i: number) =>
@@ -100,6 +107,8 @@ function Bubble({ own, body }: { own: boolean; body: string }) {
         own
           ? "rounded-br-md bg-accent text-accent-fg"
           : "rounded-bl-md border border-border bg-surface text-fg/90",
+        // The message opened from the list — findable in a long conversation.
+        current && "ring-2 ring-amber-300/80 dark:ring-amber-300/40",
       )}
     >
       {segments.map((seg, i) => {

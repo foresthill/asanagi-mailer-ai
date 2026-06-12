@@ -24,6 +24,8 @@ export interface ComposeInit {
   threadId?: string;
   /** Original email — AI context for replies, quote source for forward. */
   source?: Email;
+  /** Conversation so far (oldest first) — extra AI context for drafting. */
+  history?: Email[];
 }
 
 const KIND_LABEL: Record<ComposeKind, string> = {

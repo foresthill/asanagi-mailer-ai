@@ -68,7 +68,7 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
     return (
       <div className="mt-6 flex flex-col gap-3">
         <div className="flex justify-end">{switcher}</div>
-        <ConversationBubbles messages={messages} />
+        <ConversationBubbles messages={messages} selectedId={selectedId} />
       </div>
     );
   }
@@ -79,12 +79,18 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
       {messages.map((m) => {
         const name = displayName(m.from);
         const expanded = open.has(m.id);
+        // The message the user opened from the list — subtle amber tint so
+        // it's findable inside a long conversation.
+        const current = m.id === selectedId;
         return (
           <div
             key={m.id}
             className={cn(
-              "rounded-xl border border-border bg-surface transition-colors",
-              expanded ? "" : "hover:border-accent/40",
+              "rounded-xl border transition-colors",
+              current
+                ? "border-amber-300/70 bg-amber-50/60 dark:border-amber-300/30 dark:bg-amber-400/10"
+                : "border-border bg-surface",
+              expanded || current ? "" : "hover:border-accent/40",
             )}
           >
             <button

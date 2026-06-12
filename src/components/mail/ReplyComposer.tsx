@@ -87,6 +87,8 @@ export function ReplyComposer({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             email: source,
+            // Conversation so far (oldest first) — drafting context.
+            history: init.history,
             guidance: isForward
               ? "このメールを第三者へ転送するための短い前置き文だけを書いてください。要点の簡潔なまとめ（2〜3行）を含め、宛名・署名・元メールの再掲は不要です。"
               : undefined,

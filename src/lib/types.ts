@@ -47,6 +47,8 @@ export interface DraftRequest {
   email: Email;
   /** Optional free-form guidance the user gives up front. */
   guidance?: string;
+  /** Conversation so far (oldest first) — context for the draft. */
+  history?: Email[];
 }
 
 export interface Draft {

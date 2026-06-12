@@ -16,12 +16,30 @@ export function emailContext(email: Email): string {
   ].join("\n");
 }
 
+/**
+ * Conversation history block for reply drafting: recent messages oldest
+ * first, bodies truncated so a long thread can't blow up the prompt.
+ */
+export function historyContext(history: Email[], excludeId?: string, max = 6): string {
+  const items = history.filter((m) => m.id !== excludeId).slice(-max);
+  if (!items.length) return "";
+  return items
+    .map((m) => {
+      const who = m.state === "sent" ? "自分" : formatAddr(m.from);
+      const body = m.body.trim().replace(/\n{3,}/g, "\n\n");
+      const clipped = body.length > 500 ? `${body.slice(0, 500)}…（以下略）` : body;
+      return [`▼ ${who}（${m.date}）`, clipped].join("\n");
+    })
+    .join("\n\n");
+}
+
 export const REPLY_SYSTEM = `あなたはプロのメールアシスタントです。受信したメールに対する返信の下書きを作成します。
 
 ルール:
 - 受信メールと同じ言語で書く（日本語のメールには日本語で返信）。
 - 件名（subject）と本文（body）を返す。件名は通常 "Re: 元の件名"。
 - 本文は自然で簡潔、礼儀正しく、要点を押さえる。冗長な定型文は避ける。
+- 「これまでのやりとり」がある場合は文脈を踏まえる（決まった日程・合意事項・未解決の論点を尊重し、既に答えた質問を蒸し返さない）。
 - 不明な事実は創作しない。日付・金額・固有名詞を勝手に作らない。
 - 署名やプレースホルダ（[あなたの名前] 等）は最小限にする。`;
 
