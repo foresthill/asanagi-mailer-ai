@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ThreadView } from "./ThreadView";
 import { LinkedText } from "./LinkedText";
+import { MeetingCard } from "./MeetingCard";
 import { HtmlMailView } from "./HtmlMailView";
 import type { ComposeAI, ComposeKind } from "./compose";
 
@@ -157,6 +158,9 @@ export function EmailReader({
             </div>
             <span className="ml-auto text-xs text-fg-subtle">{fullTime(email.date)}</span>
           </div>
+
+          {/* Meeting invite → calendar bridge (docs/05) */}
+          {email.invite && <MeetingCard emailId={email.id} invite={email.invite} />}
 
           {/* AI importance */}
           <ImportanceBar

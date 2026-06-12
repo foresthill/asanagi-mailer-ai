@@ -54,8 +54,11 @@ export function SweepDialog({
             })),
           }),
         });
-        if (!res.ok) throw new Error("判定に失敗しました");
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          // サーバの実エラー（クレジット上限等）をそのまま見せる — 対処可能な情報。
+          throw new Error(data.error ? `判定に失敗しました: ${data.error}` : "判定に失敗しました");
+        }
         if (!active) return;
         const list = (data.items ?? []) as SweepItem[];
         setItems(list);

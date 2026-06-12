@@ -2,6 +2,7 @@ import { google, type gmail_v1 } from "googleapis";
 import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
 import { decodeEntities, repairMojibake } from "./encoding";
+import { detectJoinUrl, parseIcs } from "./ics";
 
 /**
  * Gmail adapter (OAuth2). Credentials come from the in-app connect flow
@@ -119,6 +120,10 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
   const state = stateFromLabels(labels);
   const html = decodeHtml(msg.payload);
   const body = repairMojibake(decodeBody(msg.payload) || (html ? stripHtml(html) : ""));
+  // Meeting invite: text/calendar part first (full info), join URL fallback.
+  const ics = findPart(msg.payload, "text/calendar") || findPart(msg.payload, "application/ics");
+  const invite = ics ? (parseIcs(ics) ?? undefined) : undefined;
+  const joinUrl = invite?.joinUrl ?? detectJoinUrl(body);
   const fixAddr = (a: EmailAddress): EmailAddress =>
     a.name ? { ...a, name: repairMojibake(a.name) } : a;
   return {
@@ -141,6 +146,7 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
     starred: labels.includes("STARRED"),
     state,
     messageId: header(headers, "Message-ID"),
+    invite: invite ?? (joinUrl ? { joinUrl } : undefined),
   };
 }
 
