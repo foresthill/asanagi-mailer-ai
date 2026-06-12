@@ -112,6 +112,7 @@ npm run lint     # ESLint
 - [02 — 重要度の仕分け画面とユーザーごとの学習機構](docs/02-importance-triage-learning.md)
 - [03 — プロバイダ・同期戦略（新着のみ）・Macネイティブ](docs/03-providers-sync-native.md)
 - [04 — スレッド表示とインボックス整理（バンドル/ビュー）](docs/04-threads-and-organization.md)
+- [05 — カレンダー連携（招待メール→会議カード→Googleカレンダー登録）](docs/05-calendar-bridge.md)
 
 ## ロードマップ
 
