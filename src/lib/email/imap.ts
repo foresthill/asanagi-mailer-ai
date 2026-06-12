@@ -4,7 +4,7 @@ import MailComposer from "nodemailer/lib/mail-composer";
 import { simpleParser } from "mailparser";
 import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
-import { repairMojibake } from "./encoding";
+import { decodeEntities, repairMojibake } from "./encoding";
 
 /**
  * Generic IMAP (read) + SMTP (send) adapter. Credentials come from the
@@ -169,13 +169,11 @@ export class ImapProvider implements EmailProvider {
       const refRoot = normId(Array.isArray(refs) ? refs[0] : refs);
       if (parsed.text?.trim()) return { text: parsed.text.trim(), html, refRoot };
       if (html) {
-        const stripped = html
-          .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
-          .replace(/<[^>]+>/g, "")
-          .replace(/&nbsp;/g, " ")
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
+        const stripped = decodeEntities(
+          html
+            .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
+            .replace(/<[^>]+>/g, ""),
+        )
           .replace(/\n{3,}/g, "\n\n")
           .trim();
         return { text: stripped, html, refRoot };
