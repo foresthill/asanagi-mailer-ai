@@ -57,6 +57,14 @@ function getDb(): DatabaseSync {
       created_at  TEXT,
       PRIMARY KEY (account, email_id)
     );
+    CREATE TABLE IF NOT EXISTS ai_usage (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind          TEXT NOT NULL,
+      model         TEXT,
+      input_tokens  INTEGER,
+      output_tokens INTEGER,
+      created_at    TEXT
+    );
   `);
   // Lightweight migration for pre-existing databases (node:sqlite has no
   // IF NOT EXISTS for columns — the duplicate-column error means "done").
@@ -500,5 +508,80 @@ export function storageStats(): StorageStats {
       count: Number(r.count),
       bytes: Number(r.bytes ?? 0),
     })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// AI usage log — input/output tokens per call, all local (cost transparency)
+// ---------------------------------------------------------------------------
+
+export interface AiUsageStats {
+  /** All-time totals. */
+  total: { calls: number; inputTokens: number; outputTokens: number };
+  /** Last 30 days. */
+  recent: { calls: number; inputTokens: number; outputTokens: number };
+  /** Breakdown by model (all-time), heaviest first. */
+  byModel: { model: string; calls: number; inputTokens: number; outputTokens: number }[];
+  /** Breakdown by feature (all-time): reply / suggest / classify. */
+  byKind: { kind: string; calls: number; inputTokens: number; outputTokens: number }[];
+}
+
+/** Record one AI call. Never throws — logging must not break the feature. */
+export function logAiUsage(
+  kind: string,
+  model: string,
+  inputTokens?: number,
+  outputTokens?: number,
+): void {
+  try {
+    getDb()
+      .prepare(
+        `INSERT INTO ai_usage (kind, model, input_tokens, output_tokens, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(kind, model, inputTokens ?? null, outputTokens ?? null, new Date().toISOString());
+  } catch {
+    /* best-effort */
+  }
+}
+
+export function aiUsageStats(): AiUsageStats {
+  const d = getDb();
+  const sums = (where: string, params: string[] = []) =>
+    d
+      .prepare(
+        `SELECT COUNT(*) AS calls,
+                COALESCE(SUM(input_tokens), 0) AS input,
+                COALESCE(SUM(output_tokens), 0) AS output
+         FROM ai_usage ${where}`,
+      )
+      .get(...params) as { calls: number; input: number; output: number };
+
+  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+  const total = sums("");
+  const recent = sums("WHERE created_at >= ?", [since]);
+
+  const group = (col: "model" | "kind") =>
+    (
+      d
+        .prepare(
+          `SELECT ${col} AS k, COUNT(*) AS calls,
+                  COALESCE(SUM(input_tokens), 0) AS input,
+                  COALESCE(SUM(output_tokens), 0) AS output
+           FROM ai_usage GROUP BY ${col} ORDER BY input + output DESC`,
+        )
+        .all() as { k: string | null; calls: number; input: number; output: number }[]
+    ).map((r) => ({
+      calls: Number(r.calls),
+      inputTokens: Number(r.input),
+      outputTokens: Number(r.output),
+      ...(col === "model" ? { model: r.k ?? "(不明)" } : { kind: r.k ?? "(不明)" }),
+    }));
+
+  return {
+    total: { calls: Number(total.calls), inputTokens: Number(total.input), outputTokens: Number(total.output) },
+    recent: { calls: Number(recent.calls), inputTokens: Number(recent.input), outputTokens: Number(recent.output) },
+    byModel: group("model") as AiUsageStats["byModel"],
+    byKind: group("kind") as AiUsageStats["byKind"],
   };
 }

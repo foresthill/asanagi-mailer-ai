@@ -3,6 +3,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { REPLY_SYSTEM, emailContext, historyContext } from "@/lib/ai/prompts";
+import { logAiUsage } from "@/lib/db";
 import type { DraftRequest } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       schema: draftSchema,
       system: REPLY_SYSTEM,
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
         .filter(Boolean)
         .join("\n"),
     });
+    logAiUsage("reply", cfg.model, usage?.inputTokens, usage?.outputTokens);
     return NextResponse.json({ draft: object, ai: true });
   } catch (err) {
     return NextResponse.json(

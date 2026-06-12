@@ -260,6 +260,8 @@ export function ConnectionsSettings({
               </div>
             )}
 
+            <AiUsageSection />
+
             <div className="border-t border-border pt-4">
               <EmailConnectSection />
             </div>
@@ -285,6 +287,71 @@ export function ConnectionsSettings({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Local AI usage log — input/output tokens per call so the cost is visible.
+ * Token counts come from the providers' own usage reports; currency cost is
+ * the provider dashboard's job (prices vary by model/plan, we don't guess).
+ */
+function AiUsageSection() {
+  const [stats, setStats] = useState<{
+    total: { calls: number; inputTokens: number; outputTokens: number };
+    recent: { calls: number; inputTokens: number; outputTokens: number };
+    byModel: { model: string; calls: number; inputTokens: number; outputTokens: number }[];
+    byKind: { kind: string; calls: number; inputTokens: number; outputTokens: number }[];
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/ai/usage");
+        setStats(await res.json());
+      } catch {
+        /* stats are informational */
+      }
+    })();
+  }, []);
+
+  if (!stats || stats.total.calls === 0) return null;
+  const fmt = (n: number) => n.toLocaleString("ja-JP");
+  const KIND_LABEL: Record<string, string> = {
+    reply: "返信生成",
+    suggest: "添削",
+    classify: "重要度判定",
+  };
+
+  return (
+    <div className="border-t border-border pt-4">
+      <p className="text-xs font-semibold">AI 使用量（この端末のログ）</p>
+      <p className="mt-1 text-[11px] text-fg-subtle">
+        直近30日: {fmt(stats.recent.calls)}回・入力 {fmt(stats.recent.inputTokens)} / 出力{" "}
+        {fmt(stats.recent.outputTokens)} トークン（累計 {fmt(stats.total.calls)}回・入力{" "}
+        {fmt(stats.total.inputTokens)} / 出力 {fmt(stats.total.outputTokens)}）
+      </p>
+      <div className="mt-2 space-y-0.5">
+        {stats.byKind.map((k) => (
+          <p key={k.kind} className="flex justify-between text-[11px] text-fg-muted">
+            <span>{KIND_LABEL[k.kind] ?? k.kind}</span>
+            <span className="tabular-nums">
+              {fmt(k.calls)}回 / in {fmt(k.inputTokens)} / out {fmt(k.outputTokens)}
+            </span>
+          </p>
+        ))}
+        {stats.byModel.map((m) => (
+          <p key={m.model} className="flex justify-between text-[11px] text-fg-subtle">
+            <span className="truncate">{m.model}</span>
+            <span className="shrink-0 tabular-nums">
+              in {fmt(m.inputTokens)} / out {fmt(m.outputTokens)}
+            </span>
+          </p>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[10px] text-fg-subtle">
+        金額はプロバイダのダッシュボード（OpenRouter等）で確認してください（単価はモデル・プランで変動するため）。
+      </p>
     </div>
   );
 }

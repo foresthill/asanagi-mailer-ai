@@ -63,8 +63,12 @@ export function ReplyComposer({
   const [note, setNote] = useState<string | null>(null);
   const [selectionText, setSelectionText] = useState("");
   const editorRef = useRef<DraftEditorHandle>(null);
+  // In-flight AI request — 中止 button aborts it (initial draft / suggest).
+  const abortRef = useRef<AbortController | null>(null);
 
   const reviewing = pending > 0;
+
+  const cancelAi = () => abortRef.current?.abort();
 
   // Initial draft. Plain modes start from the prepared body; "ai" asks the
   // model to draft a reply — or, for forwards, a short forwarding note that
@@ -84,12 +88,15 @@ export function ReplyComposer({
     const source = init.source;
     const isForward = init.kind === "forward";
     let active = true;
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     (async () => {
       setGenerating(true);
       try {
         const res = await fetch("/api/ai/reply", {
           method: "POST",
           headers: { "content-type": "application/json" },
+          signal: ctrl.signal,
           body: JSON.stringify({
             email: source,
             // Conversation so far (oldest first) — drafting context.
@@ -109,14 +116,19 @@ export function ReplyComposer({
             setInitialDraft(withQuote(data.draft.body));
           }
         }
-      } catch {
-        if (active) setInitialDraft(isForward ? init.body : withQuote(init.body));
+      } catch (e) {
+        // Cancelled or failed → fall back to the plain template (editable).
+        if (active) {
+          setInitialDraft(isForward ? init.body : withQuote(init.body));
+          if ((e as Error).name === "AbortError") setNote("生成を中止しました（手書きでどうぞ）");
+        }
       } finally {
         if (active) setGenerating(false);
       }
     })();
     return () => {
       active = false;
+      ctrl.abort(); // leaving the composer cancels the request too
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -124,6 +136,8 @@ export function ReplyComposer({
   async function runSuggest(instruction: string, scope: "selection" | "whole") {
     if (!instruction.trim() || busy || reviewing) return;
     const sel = scope === "selection" && selectionText ? selectionText : null;
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setBusy(true);
     setNote(null);
     setInput("");
@@ -131,6 +145,7 @@ export function ReplyComposer({
       const res = await fetch("/api/ai/suggest", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        signal: ctrl.signal,
         body: JSON.stringify({
           email: init.source, // optional context (absent for new/forward)
           draft: body,
@@ -162,8 +177,8 @@ export function ReplyComposer({
         if (proposedSubject) setNote("件名も提案しました（変更できます）");
         editorRef.current?.loadReview(segs);
       }
-    } catch {
-      setNote("提案の生成に失敗しました");
+    } catch (e) {
+      setNote((e as Error).name === "AbortError" ? "提案を中止しました" : "提案の生成に失敗しました");
     } finally {
       setBusy(false);
     }
@@ -283,11 +298,24 @@ export function ReplyComposer({
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg text-fg-subtle">
                 <Loader2 className="size-5 animate-spin text-accent" />
                 <p className="text-sm">AIが返信を下書きしています…</p>
+                <button
+                  onClick={cancelAi}
+                  className="mt-1 rounded-lg border border-border px-3 py-1.5 text-xs text-fg-muted transition-colors hover:border-high hover:text-high"
+                >
+                  中止して自分で書く
+                </button>
               </div>
             )}
             {busy && (
-              <div className="pointer-events-none absolute right-2 top-0 flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs text-accent">
+              <div className="absolute right-2 top-0 flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs text-accent">
                 <Loader2 className="size-3 animate-spin" /> 提案を作成中…
+                <button
+                  onClick={cancelAi}
+                  title="提案の生成を中止"
+                  className="rounded-full px-1.5 font-medium underline-offset-2 hover:underline"
+                >
+                  中止
+                </button>
               </div>
             )}
           </div>

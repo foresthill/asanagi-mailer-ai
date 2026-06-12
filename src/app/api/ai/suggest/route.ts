@@ -3,6 +3,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { REFINE_SYSTEM, emailContext } from "@/lib/ai/prompts";
+import { logAiUsage } from "@/lib/db";
 import type { Email } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
     : z.object({ revised: z.string() });
 
   try {
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       schema,
       system: REFINE_SYSTEM,
@@ -72,6 +73,7 @@ export async function POST(req: Request) {
         "revised には修正後の下書き全文のみを入れてください（前置き・説明・引用符なし）。",
       ].join("\n"),
     });
+    logAiUsage("suggest", cfg.model, usage?.inputTokens, usage?.outputTokens);
     const out = object as { revised: string; subject?: string };
     return NextResponse.json({
       revised: out.revised.trim(),
