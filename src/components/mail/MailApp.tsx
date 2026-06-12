@@ -40,6 +40,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [searchResults, setSearchResults] = useState<Email[] | null>(null);
   // Gmail-style flat conversation rows (docs/04 §1.6); off = 1 mail = 1 row.
   const [grouping, setGrouping] = useState(loadGroupingPref);
+  // Bulk selection — keyed by row representative id; actions apply to every
+  // mail of each checked conversation row.
+  const [checked, setChecked] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Email | null>(null);
@@ -127,6 +130,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setSelected(null);
     setThread(null);
     setCompose(null);
+    setChecked(new Set());
   };
 
   const changeAccount = (key: string) => {
@@ -137,6 +141,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setSelected(null);
     setThread(null);
     setCompose(null);
+    setChecked(new Set());
   };
 
   // Poll the scheduler (also flushes any due sends server-side).
@@ -298,6 +303,24 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // locating a specific mail, not triaging conversations.
   const rows = buildRows(searchResults ?? emails, grouping && searchResults === null);
 
+  // Bulk selection: rows are checked by representative id; an action expands
+  // each checked row to its full conversation (ThreadRow.ids).
+  const toggleChecked = useCallback((repId: string) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(repId)) next.delete(repId);
+      else next.add(repId);
+      return next;
+    });
+  }, []);
+
+  const bulkAct = async (state: MailboxState, label: string) => {
+    const ids = rows.filter((r) => checked.has(r.email.id)).flatMap((r) => r.ids);
+    if (!ids.length) return;
+    setChecked(new Set());
+    await mutateState(ids, state, label);
+  };
+
   /** Star toggle — optimistic UI, server-synced (Gmail STARRED / IMAP \Flagged). */
   const toggleStar = useCallback(
     async (id: string) => {
@@ -398,6 +421,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       } else if (e.key === "s" && selectedId) {
         e.preventDefault();
         toggleStar(selectedId);
+      } else if (e.key === "x" && selectedId) {
+        // Gmail-style: toggle the focused row in/out of the bulk selection.
+        e.preventDefault();
+        const row = rows.find((r) => r.email.id === selectedId);
+        if (row) toggleChecked(row.email.id);
       } else if (e.key === "e" && rowIds.length && folder !== "archived" && folder !== "sent") {
         archive(rowIds);
       } else if ((e.key === "#" || e.key === "Backspace") && rowIds.length && folder !== "trashed") {
@@ -476,6 +504,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           }
           serverSearched={serverSearched}
           serverSearching={serverSearching}
+          checkedIds={checked}
+          onToggleCheck={toggleChecked}
+          onCheckAll={() => setChecked(new Set(rows.map((r) => r.email.id)))}
+          onClearChecked={() => setChecked(new Set())}
+          onBulkArchive={() => bulkAct("archived", "一括アーカイブしました")}
+          onBulkTrash={() => bulkAct("trashed", "一括でゴミ箱に移動しました")}
           onServerSearch={searchServer}
           onSearchChange={setSearchQuery}
           onToggleGrouping={toggleGrouping}
