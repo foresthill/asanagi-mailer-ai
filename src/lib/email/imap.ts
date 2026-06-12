@@ -32,6 +32,8 @@ export interface ImapCreds {
     user: string;
     password: string;
     from: string;
+    /** 差出人の表示名（From: 表示名 <from>）。 */
+    name?: string;
   };
 }
 
@@ -55,6 +57,7 @@ export function envImapCreds(): ImapCreds | null {
       user: process.env.SMTP_USER || IMAP_USER,
       password: process.env.SMTP_PASSWORD || IMAP_PASSWORD,
       from: process.env.SMTP_FROM || IMAP_USER,
+      name: process.env.SMTP_FROM_NAME || undefined,
     },
   };
 }
@@ -395,7 +398,9 @@ export class ImapProvider implements EmailProvider {
     // byte-identical to what went out. SMTP itself never stores sent mail —
     // without the IMAP APPEND below, sent messages would simply vanish.
     const mail = {
-      from: this.creds.smtp.from,
+      // Address object so MailComposer RFC2047-encodes Japanese names and
+      // recipients see 「表示名 <addr>」 instead of the bare address.
+      from: { name: this.creds.smtp.name ?? "", address: this.creds.smtp.from },
       to: message.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)),
       cc: message.cc?.map((a) => a.email),
       bcc: message.bcc?.map((a) => a.email),

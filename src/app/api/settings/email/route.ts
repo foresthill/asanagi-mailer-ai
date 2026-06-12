@@ -10,6 +10,7 @@ type Choice = (typeof CHOICES)[number];
 
 // Non-secret IMAP fields we echo back so the form can be edited in place.
 const IMAP_PLAIN_FIELDS = [
+  "fromName",
   "host",
   "port",
   "secure",

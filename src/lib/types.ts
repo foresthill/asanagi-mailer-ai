@@ -160,6 +160,8 @@ export interface EmailSettings {
   imap?: {
     /** このアカウントの受信箱の表示開始日 (YYYY-MM-DD)。 */
     inboxCutoff?: string;
+    /** 送信時の差出人表示名（例: 森岡尚哉）。空なら省略（アドレスのみ）。 */
+    fromName?: string;
     host?: string;
     port?: string; // default "993"
     secure?: string; // "false" to disable TLS
