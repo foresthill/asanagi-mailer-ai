@@ -38,6 +38,12 @@ export function buildRows(emails: Email[], grouping: boolean): ThreadRow[] {
   return [...groups.values()].map(toRow);
 }
 
+function summarize(names: string[]): string {
+  return names.length <= 3
+    ? names.join("、")
+    : `${names.slice(0, 2).join("、")}、他${names.length - 2}人`;
+}
+
 function toRow(members: Email[]): ThreadRow {
   const rep = members[0]; // list arrives newest-first
   const names: string[] = [];
@@ -47,10 +53,18 @@ function toRow(members: Email[]): ThreadRow {
     const n = m.state === "sent" ? "自分" : displayName(m.from);
     if (!names.includes(n)) names.push(n);
   }
-  const participants =
-    names.length <= 3
-      ? names.join("、")
-      : `${names.slice(0, 2).join("、")}、他${names.length - 2}人`;
+  let participants = summarize(names);
+  // 送信箱: every member is our own mail, so "自分" tells nothing — show
+  // who it was sent TO instead (Gmail does the same).
+  if (members.every((m) => m.state === "sent")) {
+    const recipients: string[] = [];
+    for (const m of members)
+      for (const a of m.to) {
+        const n = a.name || a.email;
+        if (n && !recipients.includes(n)) recipients.push(n);
+      }
+    if (recipients.length) participants = `To: ${summarize(recipients)}`;
+  }
   return {
     email: rep,
     count: members.length,

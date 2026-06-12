@@ -186,6 +186,8 @@ function EmailListItem({
 }) {
   const { email, count, participants, unread, starred } = row;
   const threadActionHint = count > 1 ? `（会話${count}通すべて）` : "";
+  // Sent mail: the avatar represents the recipient (the row shows "To: …").
+  const face = email.state === "sent" && email.to[0] ? email.to[0] : email.from;
   return (
     <div
       onClick={onSelect}
@@ -199,7 +201,7 @@ function EmailListItem({
           className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold text-white"
           style={{ background: avatarColor(participants) }}
         >
-          {initials(email.from)}
+          {initials(face)}
         </div>
 
         <div className="min-w-0 flex-1">
