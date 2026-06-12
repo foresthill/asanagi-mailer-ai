@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { listAccounts, getProviderFor } from "@/lib/email/accounts";
 import { cachedList, cachedStarred, repliedThreadIds, upsertEmails } from "@/lib/db";
-import { listSignals } from "@/lib/store";
+import { getEmailSettings, listSignals } from "@/lib/store";
 import { annotateImportance } from "@/lib/importance";
 import type { Email, FolderView, MailboxState } from "@/lib/types";
 
@@ -73,12 +73,18 @@ export async function GET(req: Request) {
       }),
     );
 
+    // 受信箱の表示開始日: providers already query/filter with it, but the
+    // cache fallback path serves raw rows — enforce the horizon centrally.
+    const cutoff = state === "inbox" ? (await getEmailSettings()).inboxCutoff : undefined;
+    const cutoffMs = cutoff ? +new Date(cutoff) : NaN;
+
     // Free importance layers (learned signals > keyword) for the whole list —
     // no AI cost; the LLM refines individual emails when opened.
     const signals = await listSignals();
     const emails = annotateImportance(
       lists
         .flat()
+        .filter((e) => Number.isNaN(cutoffMs) || +new Date(e.date) >= cutoffMs)
         .sort((a, b) => +new Date(b.date) - +new Date(a.date))
         .slice(0, 100),
       signals,

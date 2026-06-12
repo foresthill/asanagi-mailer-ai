@@ -40,6 +40,7 @@ async function safeView() {
   return {
     active, // what actually runs right now
     choice: (s.active ?? "auto") as Choice, // the stored preference
+    inboxCutoff: s.inboxCutoff ?? "",
     gmail: {
       clientIdSet: Boolean(g.clientId || process.env.GOOGLE_CLIENT_ID),
       clientSecretSet: Boolean(g.clientSecret || process.env.GOOGLE_CLIENT_SECRET),
@@ -64,6 +65,7 @@ export async function GET() {
 export async function POST(req: Request) {
   let body: {
     choice?: string;
+    inboxCutoff?: string;
     gmail?: { clientId?: string; clientSecret?: string };
     imap?: Record<string, string>;
     disconnect?: "gmail" | "imap" | boolean;
@@ -78,6 +80,13 @@ export async function POST(req: Request) {
 
   if (body.choice && (CHOICES as readonly string[]).includes(body.choice)) {
     patch.active = body.choice as Choice;
+  }
+
+  // 受信箱の表示開始日: YYYY-MM-DD のみ受理。空文字 = 制限解除。
+  if (typeof body.inboxCutoff === "string") {
+    const v = body.inboxCutoff.trim();
+    if (v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v)) patch.inboxCutoff = v;
+    else return NextResponse.json({ error: "日付は YYYY-MM-DD 形式で指定してください" }, { status: 400 });
   }
 
   // disconnect: true (legacy) or "gmail" → drop Gmail token; "imap" → drop creds.

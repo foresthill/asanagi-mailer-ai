@@ -73,14 +73,20 @@ function normId(s?: string | null): string | undefined {
 export class ImapProvider implements EmailProvider {
   readonly name = "imap";
   private folders: Record<MailboxState, string>;
+  /** 受信箱の表示開始日 (YYYY-MM-DD)。これより古い受信メールは返さない。 */
+  private inboxCutoff?: string;
 
-  constructor(private creds: ImapCreds) {
+  constructor(
+    private creds: ImapCreds,
+    inboxCutoff?: string,
+  ) {
     this.folders = {
       inbox: "INBOX",
       archived: creds.archiveFolder,
       trashed: creds.trashFolder,
       sent: creds.sentFolder,
     };
+    this.inboxCutoff = inboxCutoff;
   }
 
   private connection(): ImapFlow {
@@ -120,7 +126,14 @@ export class ImapProvider implements EmailProvider {
     } finally {
       await c.logout();
     }
-    return out.sort((a, b) => +new Date(b.date) - +new Date(a.date));
+    // Horizon: pre-cutoff inbox mail stays on the server but out of view,
+    // so archiving the visible mail can actually reach inbox zero.
+    const cutoffMs =
+      state === "inbox" && this.inboxCutoff ? +new Date(this.inboxCutoff) : NaN;
+    const visible = Number.isNaN(cutoffMs)
+      ? out
+      : out.filter((e) => +new Date(e.date) >= cutoffMs);
+    return visible.sort((a, b) => +new Date(b.date) - +new Date(a.date));
   }
 
   private async materialize(

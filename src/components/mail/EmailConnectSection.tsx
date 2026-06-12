@@ -8,6 +8,8 @@ import { ImapConnectSection, type ImapView } from "./ImapConnectSection";
 export interface EmailView {
   active: string; // what actually runs: gmail | imap | mock | error
   choice: "auto" | "gmail" | "imap" | "mock";
+  /** 受信箱の表示開始日 (YYYY-MM-DD)。空 = 制限なし。 */
+  inboxCutoff: string;
   gmail: GmailView;
   imap: ImapView;
 }
@@ -33,6 +35,21 @@ const CHOICES: { value: EmailView["choice"]; label: string }[] = [
 export function EmailConnectSection() {
   const [view, setView] = useState<EmailView | null>(null);
   const [switching, setSwitching] = useState(false);
+  const [savingCutoff, setSavingCutoff] = useState(false);
+
+  async function saveCutoff(value: string) {
+    setSavingCutoff(true);
+    try {
+      const res = await fetch("/api/settings/email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ inboxCutoff: value }),
+      });
+      if (res.ok) setView((await res.json()) as EmailView);
+    } finally {
+      setSavingCutoff(false);
+    }
+  }
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/settings/email");
@@ -91,6 +108,32 @@ export function EmailConnectSection() {
             </option>
           ))}
         </select>
+      </label>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-fg-muted">受信箱の表示開始日（任意）</span>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={view.inboxCutoff}
+            disabled={savingCutoff}
+            onChange={(e) => saveCutoff(e.target.value)}
+            className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
+          />
+          {view.inboxCutoff && (
+            <button
+              onClick={() => saveCutoff("")}
+              disabled={savingCutoff}
+              className="rounded-lg border border-border px-2.5 py-2 text-xs text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
+            >
+              解除
+            </button>
+          )}
+        </div>
+        <span className="text-[11px] leading-relaxed text-fg-subtle">
+          この日付より前のメールは受信箱に表示しません（サーバからは消えません）。
+          数万通の過去メールを遡らずに「受信箱ゼロ」に到達できます。
+        </span>
       </label>
 
       <GmailConnectSection gmail={view.gmail} onRefresh={refresh} />

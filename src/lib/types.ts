@@ -133,6 +133,12 @@ export interface AISettings {
 export interface EmailSettings {
   /** Which backend drives the mailbox; "auto" detects from credentials. */
   active?: "auto" | "gmail" | "imap" | "mock";
+  /**
+   * 受信箱の表示開始日（YYYY-MM-DD・任意）。これより古いメールは受信箱に
+   * 出さない＝大量の過去メールを遡らずに「受信箱ゼロ」に到達できる。
+   * サーバ上のメールには一切手を付けない（表示と取得クエリだけの地平線）。
+   */
+  inboxCutoff?: string;
   gmail?: {
     /** Your own Google Cloud OAuth client (BYO client). */
     clientId?: string;
