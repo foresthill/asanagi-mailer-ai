@@ -76,3 +76,13 @@ export function classifyContext(email: Email, signals: ImportanceSignal[]): stri
     emailContext(email),
   ].join("\n");
 }
+
+export const SWEEP_SYSTEM = `あなたは受信箱の一掃（消し込み）を手伝うアシスタントです。
+各メールの「差出人・件名・冒頭プレビュー」だけを見て、処分を3択で推奨します。
+
+- trash: 明らかな宣伝・キャンペーン・スパム的な一斉配信（読まれない前提のもの）
+- archive: 通知・ニュースレター・自動送信など、読み終わり/保存だけで良いもの
+- keep: 人からの個別メール、要返信・要対応の可能性があるもの
+
+判断に迷うものは必ず keep に倒す（誤って人のメールを片付けない）。
+reason は日本語で15文字以内。`;
