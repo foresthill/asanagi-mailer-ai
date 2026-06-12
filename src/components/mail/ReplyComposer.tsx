@@ -325,7 +325,9 @@ export function ReplyComposer({
         {reviewing ? (
           <div className="flex items-center gap-2 border-t border-border bg-surface px-6 py-3">
             <span className="text-sm font-medium text-accent">{pending}件の提案を確認してください</span>
-            <span className="text-xs text-fg-subtle">緑=追加 / 取り消し線=削除</span>
+            <span className="text-xs text-fg-subtle">
+              緑=追加 / 取り消し線=削除。<strong>すべて採用/却下するまで送信できません</strong>
+            </span>
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => editorRef.current?.resolveAll("before")}
