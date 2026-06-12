@@ -59,6 +59,9 @@ export async function POST(req: Request) {
       : "下書き全体を対象に、指示に関係する箇所のみ最小限で修正してください。";
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
+      // Explicit output budget: without it some providers reserve the model max
+      // (64k) and fail the affordability check when credits run low.
+      maxOutputTokens: 4000,
       schema,
       system: REFINE_SYSTEM,
       prompt: [

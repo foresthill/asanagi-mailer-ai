@@ -154,7 +154,8 @@ export function ReplyComposer({
           subject, // blank → the AI proposes one alongside the revision
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "提案の生成に失敗しました");
       const revised: string = data.revised ?? body;
       // Fill the subject only if the user still hasn't typed one meanwhile.
       const proposedSubject =
@@ -178,7 +179,11 @@ export function ReplyComposer({
         editorRef.current?.loadReview(segs);
       }
     } catch (e) {
-      setNote((e as Error).name === "AbortError" ? "提案を中止しました" : "提案の生成に失敗しました");
+      setNote(
+        (e as Error).name === "AbortError"
+          ? "提案を中止しました"
+          : `提案の生成に失敗しました${(e as Error).message && (e as Error).message !== "提案の生成に失敗しました" ? `: ${(e as Error).message}` : ""}`,
+      );
     } finally {
       setBusy(false);
     }
