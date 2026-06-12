@@ -13,6 +13,25 @@ export interface EmailAddress {
   email: string;
 }
 
+/** Parsed meeting invite (text/calendar part or body join URL). docs/05 */
+export interface MeetingInvite {
+  /** iCalUID — duplicate-proof key for Google Calendar import. */
+  uid?: string;
+  summary?: string;
+  /** ISO 8601 datetime, or YYYY-MM-DD when allDay. */
+  start?: string;
+  end?: string;
+  allDay?: boolean;
+  location?: string;
+  organizer?: EmailAddress;
+  /** Teams / Meet / Zoom join URL. */
+  joinUrl?: string;
+  /** iTIP method — REQUEST (invite) / CANCEL (中止). */
+  method?: string;
+  /** Has RRULE — shown as 定期; registration adds the first occurrence. */
+  recurring?: boolean;
+}
+
 export interface Email {
   id: string;
   threadId: string;
@@ -44,6 +63,8 @@ export interface Email {
   account?: string;
   /** True when we have sent a message in this conversation (返信済み). */
   replied?: boolean;
+  /** Meeting invite found in this mail (live fetches only — not cached). */
+  invite?: MeetingInvite;
 }
 
 export interface DraftRequest {
