@@ -131,6 +131,15 @@ export function EmailReader({
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-fg">{name}</p>
               <p className="truncate text-xs text-fg-subtle">{email.from.email}</p>
+              {email.to.length > 0 && (
+                <p
+                  className="truncate text-xs text-fg-subtle"
+                  title={email.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}
+                >
+                  宛先: {email.to.map((a) => a.name || a.email).join("、")}
+                  {email.cc?.length ? `（CC: ${email.cc.map((a) => a.name || a.email).join("、")}）` : ""}
+                </p>
+              )}
             </div>
             <span className="ml-auto text-xs text-fg-subtle">{fullTime(email.date)}</span>
           </div>
