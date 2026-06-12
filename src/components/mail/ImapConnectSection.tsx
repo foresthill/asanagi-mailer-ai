@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Check, AlertCircle, Unplug } from "lucide-react";
 
 export interface ImapView {
+  fromName: string;
   host: string;
   port: string;
   secure: string;
@@ -59,6 +60,7 @@ export function ImapConnectSection({
 
   async function save(): Promise<void> {
     const body: Record<string, string> = {
+      fromName: form.fromName,
       host: form.host,
       port: form.port,
       user: form.user,
@@ -145,6 +147,19 @@ export function ImapConnectSection({
           </button>
         )}
       </div>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-fg-muted">差出人の表示名（送信時）</span>
+        <input
+          value={form.fromName}
+          onChange={set("fromName")}
+          placeholder="例: 山田太郎 / Taro Yamada（空ならアドレスのみ）"
+          className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+        <span className="text-[11px] text-fg-subtle">
+          受信者には「表示名 &lt;アドレス&gt;」として届きます。Gmailアカウントの表示名はGoogle側の設定が使われます。
+        </span>
+      </label>
 
       <div className="grid grid-cols-3 gap-2">
         <label className="col-span-2 flex flex-col gap-1.5">

@@ -40,6 +40,7 @@ export async function resolveImapCreds(): Promise<ImapCreds | null> {
         user: i.smtpUser || i.user,
         password: i.smtpPassword || i.password,
         from: i.smtpFrom || i.user,
+        name: i.fromName || undefined,
       },
     };
   }
