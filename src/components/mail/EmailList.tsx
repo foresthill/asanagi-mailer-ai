@@ -1,9 +1,21 @@
 "use client";
 
-import { Archive, Trash2, Loader2, Inbox, RefreshCw, Reply, Search, Star, X } from "lucide-react";
-import type { Email, FolderView } from "@/lib/types";
+import {
+  Archive,
+  Trash2,
+  Loader2,
+  Inbox,
+  Layers,
+  RefreshCw,
+  Reply,
+  Search,
+  Star,
+  X,
+} from "lucide-react";
+import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { avatarColor, displayName, initials, relativeTime } from "./helpers";
+import { avatarColor, initials, relativeTime } from "./helpers";
+import type { ThreadRow } from "./threadList";
 
 const FOLDER_LABEL: Record<FolderView, string> = {
   inbox: "受信箱",
@@ -15,13 +27,15 @@ const FOLDER_LABEL: Record<FolderView, string> = {
 
 export function EmailList({
   folder,
-  emails,
+  rows,
   loading,
   selectedId,
   searchQuery,
   searching,
+  grouping,
   accountLabels,
   onSearchChange,
+  onToggleGrouping,
   onSelect,
   onArchive,
   onTrash,
@@ -29,20 +43,25 @@ export function EmailList({
   onRefresh,
 }: {
   folder: FolderView;
-  emails: Email[];
+  /** Conversation rows (1 row = 1 conversation when grouping is on). */
+  rows: ThreadRow[];
   loading: boolean;
   selectedId: string | null;
   /** Current search box value; non-empty switches the list to results. */
   searchQuery: string;
   /** True while the list shows search results instead of the folder. */
   searching: boolean;
+  /** スレッド表示（1会話=1行）が有効か。検索結果では常に個別表示。 */
+  grouping: boolean;
   /** account key → short label; non-null shows the origin badge per row
    *  (unified inbox / search across multiple accounts). */
   accountLabels: Record<string, string> | null;
   onSearchChange: (q: string) => void;
+  onToggleGrouping: () => void;
   onSelect: (id: string) => void;
-  onArchive: (id: string) => void;
-  onTrash: (id: string) => void;
+  /** Thread-unit: every id of the row (1 element when not grouped). */
+  onArchive: (ids: string[]) => void;
+  onTrash: (ids: string[]) => void;
   onToggleStar: (id: string) => void;
   onRefresh: () => void;
 }) {
@@ -53,16 +72,32 @@ export function EmailList({
           {searching ? "検索結果" : FOLDER_LABEL[folder]}
         </h1>
         {!searching && (
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            title="更新"
-            className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-50"
-          >
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-          </button>
+          <>
+            <button
+              onClick={onRefresh}
+              disabled={loading}
+              title="更新"
+              className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-50"
+            >
+              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+            </button>
+            <button
+              onClick={onToggleGrouping}
+              title={
+                grouping
+                  ? "スレッド表示中（1会話=1行）— クリックで個別表示"
+                  : "個別表示中 — クリックでスレッド表示（1会話=1行）"
+              }
+              className={cn(
+                "grid size-6 place-items-center rounded-md transition-colors hover:bg-surface-2",
+                grouping ? "text-accent" : "text-fg-subtle hover:text-fg",
+              )}
+            >
+              <Layers className="size-3.5" />
+            </button>
+          </>
         )}
-        <span className="ml-auto text-xs text-fg-subtle">{emails.length}件</span>
+        <span className="ml-auto text-xs text-fg-subtle">{rows.length}件</span>
       </header>
 
       {/* Search across the local cache (all accounts & folders). */}
@@ -92,7 +127,7 @@ export function EmailList({
           <div className="grid h-40 place-items-center text-fg-subtle">
             <Loader2 className="size-5 animate-spin" />
           </div>
-        ) : emails.length === 0 ? (
+        ) : rows.length === 0 ? (
           <div className="grid h-60 place-items-center px-6 text-center">
             <div className="flex flex-col items-center gap-2 text-fg-subtle">
               <Inbox className="size-8 opacity-50" />
@@ -106,19 +141,21 @@ export function EmailList({
             </div>
           </div>
         ) : (
-          emails.map((email) => (
+          rows.map((row) => (
             <EmailListItem
-              key={email.id}
-              email={email}
-              active={email.id === selectedId}
+              key={row.email.id}
+              row={row}
+              active={row.email.id === selectedId}
               folder={folder}
               accountLabel={
-                accountLabels && email.account ? (accountLabels[email.account] ?? email.account) : null
+                accountLabels && row.email.account
+                  ? (accountLabels[row.email.account] ?? row.email.account)
+                  : null
               }
-              onSelect={() => onSelect(email.id)}
-              onArchive={() => onArchive(email.id)}
-              onTrash={() => onTrash(email.id)}
-              onToggleStar={() => onToggleStar(email.id)}
+              onSelect={() => onSelect(row.email.id)}
+              onArchive={() => onArchive(row.ids)}
+              onTrash={() => onTrash(row.ids)}
+              onToggleStar={() => onToggleStar(row.email.id)}
             />
           ))
         )}
@@ -128,7 +165,7 @@ export function EmailList({
 }
 
 function EmailListItem({
-  email,
+  row,
   active,
   folder,
   accountLabel,
@@ -137,7 +174,7 @@ function EmailListItem({
   onTrash,
   onToggleStar,
 }: {
-  email: Email;
+  row: ThreadRow;
   active: boolean;
   folder: FolderView;
   /** Origin account badge text (unified inbox only); null hides it. */
@@ -147,7 +184,8 @@ function EmailListItem({
   onTrash: () => void;
   onToggleStar: () => void;
 }) {
-  const name = displayName(email.from);
+  const { email, count, participants, unread, starred } = row;
+  const threadActionHint = count > 1 ? `（会話${count}通すべて）` : "";
   return (
     <div
       onClick={onSelect}
@@ -159,24 +197,32 @@ function EmailListItem({
       <div className="flex items-start gap-3">
         <div
           className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold text-white"
-          style={{ background: avatarColor(name) }}
+          style={{ background: avatarColor(participants) }}
         >
           {initials(email.from)}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {!email.read && <span className="size-2 shrink-0 rounded-full bg-accent" />}
+            {unread && <span className="size-2 shrink-0 rounded-full bg-accent" />}
             <span
               className={cn(
                 "truncate text-sm",
-                email.read ? "font-normal text-fg-muted" : "font-semibold text-fg",
+                unread ? "font-semibold text-fg" : "font-normal text-fg-muted",
               )}
             >
-              {name}
+              {participants}
             </span>
+            {count > 1 && (
+              <span
+                title={`この会話のメール ${count}通を1行に集約しています`}
+                className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold tabular-nums text-fg-muted"
+              >
+                {count}
+              </span>
+            )}
             <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle">
-              {email.starred && (
+              {starred && (
                 <Star className="size-3 fill-amber-400 text-amber-400" aria-label="スター付き" />
               )}
               {email.replied && (
@@ -205,7 +251,7 @@ function EmailListItem({
             <p
               className={cn(
                 "truncate text-sm",
-                email.read ? "text-fg-muted" : "font-medium text-fg",
+                unread ? "font-medium text-fg" : "text-fg-muted",
               )}
             >
               {email.subject}
@@ -247,7 +293,7 @@ function EmailListItem({
               e.stopPropagation();
               onArchive();
             }}
-            title="アーカイブ (E)"
+            title={`アーカイブ${threadActionHint} (E)`}
             className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-accent-soft hover:text-accent"
           >
             <Archive className="size-4" />
@@ -259,7 +305,7 @@ function EmailListItem({
               e.stopPropagation();
               onTrash();
             }}
-            title="ゴミ箱へ"
+            title={`ゴミ箱へ${threadActionHint}`}
             className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-high-soft hover:text-high"
           >
             <Trash2 className="size-4" />
