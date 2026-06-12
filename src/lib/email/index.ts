@@ -63,20 +63,22 @@ export async function getProvider(): Promise<EmailProvider> {
 
   const gmail = await resolveGmailCreds();
   const imap = await resolveImapCreds();
-  const cutoff = s.inboxCutoff;
+  // Per-account horizon wins; the legacy app-wide value is the fallback.
+  const gmailCutoff = s.gmail?.inboxCutoff ?? s.inboxCutoff;
+  const imapCutoff = s.imap?.inboxCutoff ?? s.inboxCutoff;
 
   if (choice === "gmail") {
     if (!gmail) throw new Error("Gmail が選択されていますが資格情報がありません（接続設定を確認）");
-    return new GmailProvider(gmail, cutoff);
+    return new GmailProvider(gmail, gmailCutoff);
   }
   if (choice === "imap") {
     if (!imap) throw new Error("IMAP が選択されていますが資格情報がありません（接続設定を確認）");
-    return new ImapProvider(imap, cutoff);
+    return new ImapProvider(imap, imapCutoff);
   }
   if (choice === "mock") return new MockProvider();
 
-  if (gmail) return new GmailProvider(gmail, cutoff);
-  if (imap) return new ImapProvider(imap, cutoff);
+  if (gmail) return new GmailProvider(gmail, gmailCutoff);
+  if (imap) return new ImapProvider(imap, imapCutoff);
   return new MockProvider();
 }
 
