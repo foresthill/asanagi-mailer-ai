@@ -33,8 +33,11 @@ export function EmailList({
   searchQuery,
   searching,
   grouping,
+  serverSearched,
+  serverSearching,
   accountLabels,
   onSearchChange,
+  onServerSearch,
   onToggleGrouping,
   onSelect,
   onArchive,
@@ -53,10 +56,14 @@ export function EmailList({
   searching: boolean;
   /** スレッド表示（1会話=1行）が有効か。検索結果では常に個別表示。 */
   grouping: boolean;
+  /** 今回の検索語でサーバ全履歴検索を実行済みか（#40）。 */
+  serverSearched: boolean;
+  serverSearching: boolean;
   /** account key → short label; non-null shows the origin badge per row
    *  (unified inbox / search across multiple accounts). */
   accountLabels: Record<string, string> | null;
   onSearchChange: (q: string) => void;
+  onServerSearch: () => void;
   onToggleGrouping: () => void;
   onSelect: (id: string) => void;
   /** Thread-unit: every id of the row (1 element when not grouped). */
@@ -133,11 +140,16 @@ export function EmailList({
               <Inbox className="size-8 opacity-50" />
               <p className="text-sm">
                 {searching
-                  ? "該当するメールがありません（ローカルキャッシュ内を検索）"
+                  ? serverSearched
+                    ? "サーバ全履歴にも該当するメールがありません"
+                    : "該当するメールがありません（ローカルキャッシュ内を検索）"
                   : folder === "inbox"
                     ? "受信箱はすべて片付きました 🎉"
                     : "ここには何もありません"}
               </p>
+              {searching && !serverSearched && (
+                <ServerSearchButton searching={serverSearching} onClick={onServerSearch} />
+              )}
             </div>
           </div>
         ) : (
@@ -159,8 +171,40 @@ export function EmailList({
             />
           ))
         )}
+        {/* Deep dig (#40): widen the cache results to the providers' full
+            history — on demand only, so routine searches stay local-first. */}
+        {searching && rows.length > 0 && !loading && (
+          <div className="flex justify-center py-3">
+            {serverSearched ? (
+              <span className="text-[11px] text-fg-subtle">サーバ全履歴を含む結果です</span>
+            ) : (
+              <ServerSearchButton searching={serverSearching} onClick={onServerSearch} />
+            )}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/** 「サーバ全履歴を検索」— Gmail検索演算子（from: before: 等）も使える。 */
+function ServerSearchButton({
+  searching,
+  onClick,
+}: {
+  searching: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={searching}
+      title="キャッシュ外の過去メールも検索します（Gmailの検索演算子も使えます）"
+      className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+    >
+      {searching ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
+      {searching ? "サーバ全履歴を検索中…" : "サーバ全履歴を検索"}
+    </button>
   );
 }
 

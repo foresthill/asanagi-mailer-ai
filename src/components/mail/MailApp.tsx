@@ -91,8 +91,15 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     loadList(folder, account);
   }, [folder, account, loadList]);
 
+  // On-demand full-history search (#40): cache results come instantly via
+  // the debounce below; this widens to the providers' server search.
+  const [serverSearched, setServerSearched] = useState(false);
+  const [serverSearching, setServerSearching] = useState(false);
+
   // Debounced cache search; clearing the box returns to the folder view.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- query changed = new search session
+    setServerSearched(false);
     if (!searchQuery.trim()) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSearchResults(null);
@@ -155,6 +162,28 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setToast(msg);
     setTimeout(() => setToast(null), 2600);
   };
+
+  // Widen the current search to the providers' full history (#40).
+  const searchServer = useCallback(async () => {
+    const q = searchQuery.trim();
+    if (!q || serverSearching) return;
+    setServerSearching(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&scope=server`);
+      const data = await res.json();
+      setSearchResults(data.emails ?? []);
+      setServerSearched(true);
+      if (data.stale?.length) {
+        setToast(`接続できないアカウントがあります: ${data.stale.join(", ")}`);
+        setTimeout(() => setToast(null), 2600);
+      }
+    } catch {
+      setToast("サーバ検索に失敗しました");
+      setTimeout(() => setToast(null), 2600);
+    } finally {
+      setServerSearching(false);
+    }
+  }, [searchQuery, serverSearching]);
 
   // Surface the result of the Gmail OAuth round-trip (?gmail= / ?gmail_error=).
   useEffect(() => {
@@ -445,6 +474,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
               ? Object.fromEntries(accounts.map((a) => [a.key, a.address ?? a.label]))
               : null
           }
+          serverSearched={serverSearched}
+          serverSearching={serverSearching}
+          onServerSearch={searchServer}
           onSearchChange={setSearchQuery}
           onToggleGrouping={toggleGrouping}
           onSelect={selectEmail}
