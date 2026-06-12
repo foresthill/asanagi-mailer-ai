@@ -188,6 +188,24 @@ export class GmailProvider implements EmailProvider {
     return res.data ? toEmail(res.data) : null;
   }
 
+  /** Full-history server search — Gmail's own engine, operators included. */
+  async search(query: string, limit = 30): Promise<Email[]> {
+    const res = await this.gmail.users.messages.list({
+      userId: "me",
+      q: query,
+      maxResults: limit,
+    });
+    const ids = res.data.messages ?? [];
+    const full = await Promise.all(
+      ids.map((m) =>
+        this.gmail.users.messages.get({ userId: "me", id: m.id!, format: "full" }),
+      ),
+    );
+    return full
+      .map((r) => ({ ...toEmail(r.data), html: undefined }))
+      .sort((a, b) => +new Date(b.date) - +new Date(a.date));
+  }
+
   /** Server-side conversation: every message of the thread, oldest first. */
   async thread(threadId: string): Promise<Email[]> {
     const res = await this.gmail.users.threads.get({

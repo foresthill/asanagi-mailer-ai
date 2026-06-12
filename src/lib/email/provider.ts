@@ -35,4 +35,11 @@ export interface EmailProvider {
    * back to the local cache (see /api/threads).
    */
   thread?(threadId: string): Promise<Email[]>;
+
+  /**
+   * Server-side full-history search (過去の深掘り用) — on-demand only, never
+   * part of routine sync. Optional: backends without it stay cache-only.
+   * Gmail accepts its native search operators (from: before: …).
+   */
+  search?(query: string, limit?: number): Promise<Email[]>;
 }

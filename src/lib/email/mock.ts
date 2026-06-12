@@ -150,6 +150,21 @@ export class MockProvider implements EmailProvider {
     }
   }
 
+  async search(query: string, limit = 30): Promise<Email[]> {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const all = await load();
+    return all
+      .filter((e) =>
+        [e.subject, e.body, e.from.name ?? "", e.from.email]
+          .join("\n")
+          .toLowerCase()
+          .includes(q),
+      )
+      .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+      .slice(0, limit);
+  }
+
   async setStarred(id: string, starred: boolean): Promise<void> {
     const all = await load();
     const e = all.find((x) => x.id === id);

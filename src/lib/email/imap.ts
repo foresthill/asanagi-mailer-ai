@@ -221,6 +221,54 @@ export class ImapProvider implements EmailProvider {
     }
   }
 
+  /**
+   * Full-history server search via IMAP SEARCH, across inbox/archive/sent.
+   * From/subject/body run as separate searches and union (binary IMAP OR
+   * nesting varies by server). Body search speed depends on the server —
+   * acceptable because this only runs on demand.
+   */
+  async search(query: string, limit = 30): Promise<Email[]> {
+    const q = query.trim();
+    if (!q) return [];
+    const c = this.connection();
+    await c.connect();
+    const out: Email[] = [];
+    try {
+      for (const state of ["inbox", "archived", "sent"] as MailboxState[]) {
+        try {
+          const lock = await c.getMailboxLock(this.folders[state]);
+          try {
+            const uids = new Set<number>();
+            for (const criteria of [{ from: q }, { subject: q }, { body: q }]) {
+              const found = await c.search(criteria, { uid: true });
+              for (const u of found || []) uids.add(u);
+            }
+            // Newest first; cap per folder so one folder can't flood.
+            const picked = [...uids].sort((a, b) => b - a).slice(0, limit);
+            if (picked.length) {
+              for await (const msg of c.fetch(
+                picked.join(","),
+                { envelope: true, flags: true, bodyStructure: true, source: true },
+                { uid: true },
+              )) {
+                out.push({ ...(await this.materialize(msg, state)), html: undefined });
+              }
+            }
+          } finally {
+            lock.release();
+          }
+        } catch {
+          /* folder may not exist (e.g. no Archive) — search the rest */
+        }
+      }
+    } finally {
+      await c.logout();
+    }
+    return out
+      .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+      .slice(0, limit);
+  }
+
   async setState(id: string, state: MailboxState): Promise<void> {
     const [folder, uid] = id.split(":");
     const c = this.connection();
