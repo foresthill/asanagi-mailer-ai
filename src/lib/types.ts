@@ -140,6 +140,8 @@ export interface EmailSettings {
    * 受信箱の表示開始日（YYYY-MM-DD・任意）。これより古いメールは受信箱に
    * 出さない＝大量の過去メールを遡らずに「受信箱ゼロ」に到達できる。
    * サーバ上のメールには一切手を付けない（表示と取得クエリだけの地平線）。
+   * アカウント別の gmail.inboxCutoff / imap.inboxCutoff が優先され、
+   * この値は未設定アカウントのフォールバック。
    */
   inboxCutoff?: string;
   gmail?: {
@@ -150,8 +152,12 @@ export interface EmailSettings {
     refreshToken?: string;
     /** Connected account address, for display. */
     address?: string;
+    /** このアカウントの受信箱の表示開始日 (YYYY-MM-DD)。 */
+    inboxCutoff?: string;
   };
   imap?: {
+    /** このアカウントの受信箱の表示開始日 (YYYY-MM-DD)。 */
+    inboxCutoff?: string;
     host?: string;
     port?: string; // default "993"
     secure?: string; // "false" to disable TLS

@@ -8,8 +8,8 @@ import { ImapConnectSection, type ImapView } from "./ImapConnectSection";
 export interface EmailView {
   active: string; // what actually runs: gmail | imap | mock | error
   choice: "auto" | "gmail" | "imap" | "mock";
-  /** 受信箱の表示開始日 (YYYY-MM-DD)。空 = 制限なし。 */
-  inboxCutoff: string;
+  /** アカウント別の受信箱の表示開始日 (YYYY-MM-DD)。空 = 制限なし。 */
+  cutoffs: { gmail: string; imap: string };
   gmail: GmailView;
   imap: ImapView;
 }
@@ -37,13 +37,13 @@ export function EmailConnectSection() {
   const [switching, setSwitching] = useState(false);
   const [savingCutoff, setSavingCutoff] = useState(false);
 
-  async function saveCutoff(value: string) {
+  async function saveCutoff(account: "gmail" | "imap", value: string) {
     setSavingCutoff(true);
     try {
       const res = await fetch("/api/settings/email", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ inboxCutoff: value }),
+        body: JSON.stringify({ cutoffs: { [account]: value } }),
       });
       if (res.ok) setView((await res.json()) as EmailView);
     } finally {
@@ -110,31 +110,39 @@ export function EmailConnectSection() {
         </select>
       </label>
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-fg-muted">受信箱の表示開始日（任意）</span>
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={view.inboxCutoff}
-            disabled={savingCutoff}
-            onChange={(e) => saveCutoff(e.target.value)}
-            className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
-          />
-          {view.inboxCutoff && (
-            <button
-              onClick={() => saveCutoff("")}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-medium text-fg-muted">受信箱の表示開始日（アカウント別・任意）</span>
+        {(
+          [
+            { key: "gmail" as const, label: "Gmail", show: view.gmail.connected },
+            { key: "imap" as const, label: "IMAP（会社メール）", show: Boolean(view.imap.host || view.imap.envConfigured) },
+          ].filter((a) => a.show)
+        ).map((a) => (
+          <div key={a.key} className="flex items-center gap-2">
+            <span className="w-36 shrink-0 text-xs text-fg-muted">{a.label}</span>
+            <input
+              type="date"
+              value={view.cutoffs[a.key]}
               disabled={savingCutoff}
-              className="rounded-lg border border-border px-2.5 py-2 text-xs text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
-            >
-              解除
-            </button>
-          )}
-        </div>
+              onChange={(e) => saveCutoff(a.key, e.target.value)}
+              className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
+            />
+            {view.cutoffs[a.key] && (
+              <button
+                onClick={() => saveCutoff(a.key, "")}
+                disabled={savingCutoff}
+                className="rounded-lg border border-border px-2.5 py-2 text-xs text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                解除
+              </button>
+            )}
+          </div>
+        ))}
         <span className="text-[11px] leading-relaxed text-fg-subtle">
           この日付より前のメールは受信箱に表示しません（サーバからは消えません）。
           数万通の過去メールを遡らずに「受信箱ゼロ」に到達できます。
         </span>
-      </label>
+      </div>
 
       <GmailConnectSection gmail={view.gmail} onRefresh={refresh} />
 

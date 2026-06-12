@@ -40,7 +40,11 @@ async function safeView() {
   return {
     active, // what actually runs right now
     choice: (s.active ?? "auto") as Choice, // the stored preference
-    inboxCutoff: s.inboxCutoff ?? "",
+    // Per-account horizon; the stored legacy global acts as the fallback.
+    cutoffs: {
+      gmail: s.gmail?.inboxCutoff ?? s.inboxCutoff ?? "",
+      imap: s.imap?.inboxCutoff ?? s.inboxCutoff ?? "",
+    },
     gmail: {
       clientIdSet: Boolean(g.clientId || process.env.GOOGLE_CLIENT_ID),
       clientSecretSet: Boolean(g.clientSecret || process.env.GOOGLE_CLIENT_SECRET),
@@ -66,6 +70,7 @@ export async function POST(req: Request) {
   let body: {
     choice?: string;
     inboxCutoff?: string;
+    cutoffs?: { gmail?: string; imap?: string };
     gmail?: { clientId?: string; clientSecret?: string };
     imap?: Record<string, string>;
     disconnect?: "gmail" | "imap" | boolean;
@@ -87,6 +92,21 @@ export async function POST(req: Request) {
     const v = body.inboxCutoff.trim();
     if (v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v)) patch.inboxCutoff = v;
     else return NextResponse.json({ error: "日付は YYYY-MM-DD 形式で指定してください" }, { status: 400 });
+  }
+  // アカウント別の表示開始日（gmail / imap）。空文字 = そのアカウントの解除。
+  if (body.cutoffs) {
+    const cur = await getEmailSettings();
+    for (const acct of ["gmail", "imap"] as const) {
+      const v = body.cutoffs[acct];
+      // 未指定のアカウントは現在の実効値（アカウント別 ?? 旧グローバル）を維持。
+      const t = (typeof v === "string" ? v : (cur[acct]?.inboxCutoff ?? cur.inboxCutoff ?? "")).trim();
+      if (t !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+        return NextResponse.json({ error: "日付は YYYY-MM-DD 形式で指定してください" }, { status: 400 });
+      }
+      patch[acct] = { ...(patch[acct] ?? {}), inboxCutoff: t };
+    }
+    // 実効値をアカウント別へ確定させたので、紛らわしい旧グローバル値は撤去。
+    patch.inboxCutoff = "";
   }
 
   // disconnect: true (legacy) or "gmail" → drop Gmail token; "imap" → drop creds.

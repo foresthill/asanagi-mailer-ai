@@ -74,9 +74,17 @@ export async function GET(req: Request) {
     );
 
     // 受信箱の表示開始日: providers already query/filter with it, but the
-    // cache fallback path serves raw rows — enforce the horizon centrally.
-    const cutoff = state === "inbox" ? (await getEmailSettings()).inboxCutoff : undefined;
-    const cutoffMs = cutoff ? +new Date(cutoff) : NaN;
+    // cache fallback path serves raw rows — enforce the horizon centrally,
+    // per account (gmail/imap each have their own, legacy global = fallback).
+    const cfg = state === "inbox" ? await getEmailSettings() : null;
+    const cutoffMs: Record<string, number> = {
+      gmail: cfg ? +new Date(cfg.gmail?.inboxCutoff ?? cfg.inboxCutoff ?? NaN) : NaN,
+      imap: cfg ? +new Date(cfg.imap?.inboxCutoff ?? cfg.inboxCutoff ?? NaN) : NaN,
+    };
+    const afterHorizon = (e: Email) => {
+      const ms = cutoffMs[e.account ?? ""];
+      return ms === undefined || Number.isNaN(ms) || +new Date(e.date) >= ms;
+    };
 
     // Free importance layers (learned signals > keyword) for the whole list —
     // no AI cost; the LLM refines individual emails when opened.
@@ -84,7 +92,7 @@ export async function GET(req: Request) {
     const emails = annotateImportance(
       lists
         .flat()
-        .filter((e) => Number.isNaN(cutoffMs) || +new Date(e.date) >= cutoffMs)
+        .filter(afterHorizon)
         .sort((a, b) => +new Date(b.date) - +new Date(a.date))
         .slice(0, 100),
       signals,

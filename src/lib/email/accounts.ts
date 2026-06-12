@@ -46,17 +46,17 @@ export async function listAccounts(): Promise<AccountInfo[]> {
 
 /** Provider instance for a specific account key. */
 export async function getProviderFor(key: string): Promise<EmailProvider> {
-  const cutoff = (await getEmailSettings()).inboxCutoff;
+  const s = await getEmailSettings();
   switch (key) {
     case "gmail": {
       const creds = await resolveGmailCreds();
       if (!creds) throw new Error("Gmail の資格情報がありません（接続設定を確認）");
-      return new GmailProvider(creds, cutoff);
+      return new GmailProvider(creds, s.gmail?.inboxCutoff ?? s.inboxCutoff);
     }
     case "imap": {
       const creds = await resolveImapCreds();
       if (!creds) throw new Error("IMAP の資格情報がありません（接続設定を確認）");
-      return new ImapProvider(creds, cutoff);
+      return new ImapProvider(creds, s.imap?.inboxCutoff ?? s.inboxCutoff);
     }
     case "mock":
       return new MockProvider();
