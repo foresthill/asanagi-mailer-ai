@@ -80,6 +80,11 @@ export async function saveEmailSettings(patch: EmailSettings): Promise<EmailSett
   const cur = await getEmailSettings();
   const next: EmailSettings = { ...cur };
   if (patch.active) next.active = patch.active;
+  if (patch.inboxCutoff !== undefined) {
+    // Blank clears the horizon (= no limit).
+    if (patch.inboxCutoff.trim()) next.inboxCutoff = patch.inboxCutoff.trim();
+    else delete next.inboxCutoff;
+  }
 
   for (const section of ["gmail", "imap"] as const) {
     if (!patch[section]) continue;

@@ -63,19 +63,20 @@ export async function getProvider(): Promise<EmailProvider> {
 
   const gmail = await resolveGmailCreds();
   const imap = await resolveImapCreds();
+  const cutoff = s.inboxCutoff;
 
   if (choice === "gmail") {
     if (!gmail) throw new Error("Gmail が選択されていますが資格情報がありません（接続設定を確認）");
-    return new GmailProvider(gmail);
+    return new GmailProvider(gmail, cutoff);
   }
   if (choice === "imap") {
     if (!imap) throw new Error("IMAP が選択されていますが資格情報がありません（接続設定を確認）");
-    return new ImapProvider(imap);
+    return new ImapProvider(imap, cutoff);
   }
   if (choice === "mock") return new MockProvider();
 
-  if (gmail) return new GmailProvider(gmail);
-  if (imap) return new ImapProvider(imap);
+  if (gmail) return new GmailProvider(gmail, cutoff);
+  if (imap) return new ImapProvider(imap, cutoff);
   return new MockProvider();
 }
 

@@ -145,20 +145,29 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
 export class GmailProvider implements EmailProvider {
   readonly name = "gmail";
   private gmail: gmail_v1.Gmail;
+  /** 受信箱の表示開始日 (YYYY-MM-DD)。Gmail検索の after: に変換。 */
+  private inboxCutoff?: string;
 
-  constructor(creds: GmailCreds) {
+  constructor(creds: GmailCreds, inboxCutoff?: string) {
     this.gmail = client(creds);
+    this.inboxCutoff = inboxCutoff;
   }
 
   async list(state: MailboxState): Promise<Email[]> {
+    // The horizon keeps a years-deep inbox emptiable: without it, archiving
+    // the visible 50 just surfaces the next-older 50, forever (80k+ mails).
+    const horizon =
+      state === "inbox" && this.inboxCutoff
+        ? ` after:${this.inboxCutoff.replace(/-/g, "/")}`
+        : "";
     const q =
-      state === "inbox"
+      (state === "inbox"
         ? "in:inbox"
         : state === "trashed"
           ? "in:trash"
           : state === "sent"
             ? "in:sent"
-            : "-in:inbox -in:trash -in:sent"; // archived: exclude sent too
+            : "-in:inbox -in:trash -in:sent") + horizon; // archived: exclude sent too
     const res = await this.gmail.users.messages.list({ userId: "me", q, maxResults: 50 });
     const ids = res.data.messages ?? [];
     const full = await Promise.all(
