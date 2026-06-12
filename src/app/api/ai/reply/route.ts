@@ -39,6 +39,9 @@ export async function POST(req: Request) {
     const maskedHistory = cfg.piiMask ? history?.map((m) => masker.maskEmail(m)) : history;
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
+      // Explicit output budget: without it some providers reserve the model max
+      // (64k) and fail the affordability check when credits run low.
+      maxOutputTokens: 2000,
       schema: draftSchema,
       system: REPLY_SYSTEM,
       prompt: [
