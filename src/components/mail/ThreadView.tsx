@@ -6,6 +6,7 @@ import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ConversationBubbles } from "./ConversationBubbles";
+import { LinkedText } from "./LinkedText";
 
 /**
  * Thread rendering, oldest first, with two display modes:
@@ -119,7 +120,7 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
             </button>
             {expanded && (
               <article className="whitespace-pre-wrap border-t border-border px-4 py-4 text-[15px] leading-7 text-fg/90">
-                {m.body}
+                <LinkedText text={m.body} />
               </article>
             )}
           </div>

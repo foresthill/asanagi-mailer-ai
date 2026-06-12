@@ -73,6 +73,41 @@ function unscramble(s: string): string | null {
 const MOJIBAKE_GATE = /[À-ÿ]/; // needs Latin-1 supplement chars to even be a candidate
 const CJK = /[　-ヿ㐀-鿿＀-￯]/;
 
+// ---------------------------------------------------------------------------
+// HTML entities — plain-text bodies derived from HTML mail (and Gmail API
+// snippets, which arrive HTML-escaped) must not show &gt; / &quot; literally.
+// ---------------------------------------------------------------------------
+
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  hellip: "…",
+  mdash: "—",
+  ndash: "–",
+  copy: "©",
+  rsquo: "’",
+  lsquo: "‘",
+  rdquo: "”",
+  ldquo: "“",
+};
+
+/** Decode numeric (&#12345; / &#x3042;) and common named HTML entities. */
+export function decodeEntities(s: string): string {
+  if (!s || !s.includes("&")) return s;
+  return s.replace(/&(#[xX]?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, body: string) => {
+    if (body.startsWith("#")) {
+      const hex = body[1] === "x" || body[1] === "X";
+      const cp = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
+      return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m;
+    }
+    return NAMED_ENTITIES[body.toLowerCase()] ?? m;
+  });
+}
+
 /** Repair double-mojibake text; returns the input unchanged when not applicable. */
 export function repairMojibake(s: string): string {
   if (!s || !MOJIBAKE_GATE.test(s)) return s;

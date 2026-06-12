@@ -1,7 +1,7 @@
 import { google, type gmail_v1 } from "googleapis";
 import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
-import { repairMojibake } from "./encoding";
+import { decodeEntities, repairMojibake } from "./encoding";
 
 /**
  * Gmail adapter (OAuth2). Credentials come from the in-app connect flow
@@ -81,13 +81,11 @@ function decodeHtml(payload?: gmail_v1.Schema$MessagePart): string | undefined {
 
 /** Plain-text fallback for HTML-only mail (list snippets, AI context). */
 function stripHtml(html: string): string {
-  return html
-    .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
+  return decodeEntities(
+    html
+      .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, ""),
+  )
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -130,7 +128,8 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
     to: (header(headers, "To") ?? "").split(",").filter(Boolean).map(parseAddress).map(fixAddr),
     cc: (header(headers, "Cc") ?? "").split(",").filter(Boolean).map(parseAddress).map(fixAddr),
     subject: repairMojibake(header(headers, "Subject") ?? "(件名なし)"),
-    snippet: repairMojibake(msg.snippet ?? body.slice(0, 140)),
+    // Gmail API snippets arrive HTML-escaped (&gt; etc.) — decode for display.
+    snippet: repairMojibake(decodeEntities(msg.snippet ?? "") || body.slice(0, 140)),
     body,
     html,
     date: header(headers, "Date")

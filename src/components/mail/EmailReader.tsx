@@ -18,6 +18,7 @@ import type { Email, FolderView, Importance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ThreadView } from "./ThreadView";
+import { LinkedText } from "./LinkedText";
 import { HtmlMailView } from "./HtmlMailView";
 import type { ComposeAI, ComposeKind } from "./compose";
 
@@ -163,7 +164,7 @@ export function EmailReader({
                 <HtmlMailView html={email.html} />
               ) : (
                 <article className="mt-6 whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
-                  {email.body}
+                  <LinkedText text={email.body} />
                 </article>
               )}
             </>
