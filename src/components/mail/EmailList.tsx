@@ -2,6 +2,7 @@
 
 import {
   Archive,
+  Check,
   Trash2,
   Loader2,
   Inbox,
@@ -36,6 +37,12 @@ export function EmailList({
   serverSearched,
   serverSearching,
   accountLabels,
+  checkedIds,
+  onToggleCheck,
+  onCheckAll,
+  onClearChecked,
+  onBulkArchive,
+  onBulkTrash,
   onSearchChange,
   onServerSearch,
   onToggleGrouping,
@@ -62,6 +69,13 @@ export function EmailList({
   /** account key → short label; non-null shows the origin badge per row
    *  (unified inbox / search across multiple accounts). */
   accountLabels: Record<string, string> | null;
+  /** Bulk selection — row representative ids currently checked. */
+  checkedIds: Set<string>;
+  onToggleCheck: (repId: string) => void;
+  onCheckAll: () => void;
+  onClearChecked: () => void;
+  onBulkArchive: () => void;
+  onBulkTrash: () => void;
   onSearchChange: (q: string) => void;
   onServerSearch: () => void;
   onToggleGrouping: () => void;
@@ -72,40 +86,83 @@ export function EmailList({
   onToggleStar: (id: string) => void;
   onRefresh: () => void;
 }) {
+  const selectionActive = checkedIds.size > 0;
   return (
     <div className="flex w-[384px] shrink-0 flex-col border-r border-border bg-surface">
-      <header className="flex items-center gap-2 px-5 pb-2 pt-5">
-        <h1 className="text-base font-semibold tracking-tight">
-          {searching ? "検索結果" : FOLDER_LABEL[folder]}
-        </h1>
-        {!searching && (
-          <>
-            <button
-              onClick={onRefresh}
-              disabled={loading}
-              title="更新"
-              className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-50"
-            >
-              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-            </button>
-            <button
-              onClick={onToggleGrouping}
-              title={
-                grouping
-                  ? "スレッド表示中（1会話=1行）— クリックで個別表示"
-                  : "個別表示中 — クリックでスレッド表示（1会話=1行）"
-              }
-              className={cn(
-                "grid size-6 place-items-center rounded-md transition-colors hover:bg-surface-2",
-                grouping ? "text-accent" : "text-fg-subtle hover:text-fg",
-              )}
-            >
-              <Layers className="size-3.5" />
-            </button>
-          </>
-        )}
-        <span className="ml-auto text-xs text-fg-subtle">{rows.length}件</span>
-      </header>
+      {selectionActive ? (
+        // Bulk action bar — replaces the header while rows are checked.
+        <header className="flex items-center gap-1.5 px-4 pb-2 pt-5">
+          <button
+            onClick={onClearChecked}
+            title="選択を解除"
+            className="grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
+          >
+            <X className="size-4" />
+          </button>
+          <span className="text-sm font-semibold tabular-nums">{checkedIds.size}件選択中</span>
+          <button
+            onClick={onCheckAll}
+            className="rounded-md px-1.5 py-0.5 text-xs text-accent hover:bg-accent-soft"
+          >
+            全選択
+          </button>
+          <span className="ml-auto flex items-center gap-1">
+            {folder !== "archived" && folder !== "sent" && (
+              <button
+                onClick={onBulkArchive}
+                title="選択した会話をすべてアーカイブ"
+                className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-accent"
+              >
+                <Archive className="size-3.5" />
+                アーカイブ
+              </button>
+            )}
+            {folder !== "trashed" && (
+              <button
+                onClick={onBulkTrash}
+                title="選択した会話をすべてゴミ箱へ"
+                className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-high hover:text-high"
+              >
+                <Trash2 className="size-3.5" />
+                ゴミ箱
+              </button>
+            )}
+          </span>
+        </header>
+      ) : (
+        <header className="flex items-center gap-2 px-5 pb-2 pt-5">
+          <h1 className="text-base font-semibold tracking-tight">
+            {searching ? "検索結果" : FOLDER_LABEL[folder]}
+          </h1>
+          {!searching && (
+            <>
+              <button
+                onClick={onRefresh}
+                disabled={loading}
+                title="更新"
+                className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-50"
+              >
+                <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+              </button>
+              <button
+                onClick={onToggleGrouping}
+                title={
+                  grouping
+                    ? "スレッド表示中（1会話=1行）— クリックで個別表示"
+                    : "個別表示中 — クリックでスレッド表示（1会話=1行）"
+                }
+                className={cn(
+                  "grid size-6 place-items-center rounded-md transition-colors hover:bg-surface-2",
+                  grouping ? "text-accent" : "text-fg-subtle hover:text-fg",
+                )}
+              >
+                <Layers className="size-3.5" />
+              </button>
+            </>
+          )}
+          <span className="ml-auto text-xs text-fg-subtle">{rows.length}件</span>
+        </header>
+      )}
 
       {/* Search across the local cache (all accounts & folders). */}
       <div className="px-4 pb-2">
@@ -159,12 +216,15 @@ export function EmailList({
               row={row}
               active={row.email.id === selectedId}
               folder={folder}
+              checked={checkedIds.has(row.email.id)}
+              selectionActive={selectionActive}
               accountLabel={
                 accountLabels && row.email.account
                   ? (accountLabels[row.email.account] ?? row.email.account)
                   : null
               }
               onSelect={() => onSelect(row.email.id)}
+              onToggleCheck={() => onToggleCheck(row.email.id)}
               onArchive={() => onArchive(row.ids)}
               onTrash={() => onTrash(row.ids)}
               onToggleStar={() => onToggleStar(row.email.id)}
@@ -212,8 +272,11 @@ function EmailListItem({
   row,
   active,
   folder,
+  checked,
+  selectionActive,
   accountLabel,
   onSelect,
+  onToggleCheck,
   onArchive,
   onTrash,
   onToggleStar,
@@ -221,9 +284,14 @@ function EmailListItem({
   row: ThreadRow;
   active: boolean;
   folder: FolderView;
+  /** This row is in the bulk selection. */
+  checked: boolean;
+  /** Any row is checked → checkboxes stay visible on every row. */
+  selectionActive: boolean;
   /** Origin account badge text (unified inbox only); null hides it. */
   accountLabel: string | null;
   onSelect: () => void;
+  onToggleCheck: () => void;
   onArchive: () => void;
   onTrash: () => void;
   onToggleStar: () => void;
@@ -232,21 +300,52 @@ function EmailListItem({
   const threadActionHint = count > 1 ? `（会話${count}通すべて）` : "";
   // Sent mail: the avatar represents the recipient (the row shows "To: …").
   const face = email.state === "sent" && email.to[0] ? email.to[0] : email.from;
+  const showCheckbox = checked || selectionActive;
   return (
     <div
       onClick={onSelect}
       className={cn(
         "group relative mb-0.5 cursor-pointer rounded-xl px-3 py-3 transition-colors",
-        active ? "bg-accent-soft" : "hover:bg-surface-2",
+        active ? "bg-accent-soft" : checked ? "bg-accent-soft/60" : "hover:bg-surface-2",
       )}
     >
       <div className="flex items-start gap-3">
-        <div
-          className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold text-white"
-          style={{ background: avatarColor(participants) }}
+        {/* Avatar ⇄ checkbox (Gmail-style): hover or active selection swaps. */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCheck();
+          }}
+          title={checked ? "選択を外す (X)" : "選択する (X)"}
+          className="relative mt-0.5 size-9 shrink-0"
         >
-          {initials(face)}
-        </div>
+          <span
+            className={cn(
+              "grid size-9 place-items-center rounded-full text-xs font-semibold text-white transition-opacity",
+              showCheckbox ? "opacity-0" : "group-hover:opacity-0",
+            )}
+            style={{ background: avatarColor(participants) }}
+          >
+            {initials(face)}
+          </span>
+          <span
+            className={cn(
+              "absolute inset-0 grid place-items-center transition-opacity",
+              showCheckbox ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            )}
+          >
+            <span
+              className={cn(
+                "grid size-5 place-items-center rounded-md border transition-colors",
+                checked
+                  ? "border-accent bg-accent text-accent-fg"
+                  : "border-border bg-surface hover:border-accent",
+              )}
+            >
+              {checked && <Check className="size-3.5" />}
+            </span>
+          </span>
+        </button>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
