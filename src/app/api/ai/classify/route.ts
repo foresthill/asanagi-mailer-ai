@@ -5,7 +5,7 @@ import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { CLASSIFY_SYSTEM, classifyContext } from "@/lib/ai/prompts";
 import { guessFromSignals, listSignals } from "@/lib/store";
 import { heuristicImportance } from "@/lib/importance";
-import { logJudgment } from "@/lib/db";
+import { logAiUsage, logJudgment } from "@/lib/db";
 import type { Email, Importance } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -56,13 +56,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       schema,
       system: CLASSIFY_SYSTEM,
       prompt: classifyContext(email, signals),
     });
     record(email, object.importance, object.reason, "ai");
+    logAiUsage("classify", cfg.model, usage?.inputTokens, usage?.outputTokens);
     return NextResponse.json({ ...object, source: "ai" });
   } catch (err) {
     return NextResponse.json(

@@ -120,7 +120,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     return () => clearTimeout(t);
   }, [searchQuery]);
 
+  // Never destroy an in-progress draft silently (実害が大きい). Any action
+  // that would close the composer asks first.
+  const confirmDiscard = () =>
+    compose === null ||
+    window.confirm("作成中のメールを破棄しますか？（まだ送信されていません）");
+
   const changeFolder = (f: FolderView) => {
+    if (!confirmDiscard()) return;
     setView("mail");
     setFolder(f);
     // Folder clicks must visibly switch even while showing search results.
@@ -134,6 +141,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   };
 
   const changeAccount = (key: string) => {
+    if (!confirmDiscard()) return;
     setAccount(key);
     setSearchQuery("");
     setSearchResults(null);
@@ -244,6 +252,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   const selectEmail = useCallback(
     async (id: string) => {
+      // Opening another mail would close the composer — ask before losing it.
+      if (
+        compose !== null &&
+        !window.confirm("作成中のメールを破棄しますか？（まだ送信されていません）")
+      )
+        return;
       setSelectedId(id);
       setCompose(null);
       setEmails((list) => list.map((e) => (e.id === id ? { ...e, read: true } : e)));
@@ -255,7 +269,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         loadThread(data.email);
       }
     },
-    [classify, loadThread],
+    [classify, loadThread, compose],
   );
 
   // Thread-unit by default: a conversation row carries every member id, so
@@ -371,6 +385,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const openCompose = useCallback(
     (kind: ComposeKind, mode: ComposeAI) => {
       if (kind !== "new" && !selected) return;
+      // Starting a new compose while one is open would replace the draft.
+      if (
+        compose !== null &&
+        !window.confirm("作成中のメールを破棄しますか？（まだ送信されていません）")
+      )
+        return;
       const selfAddresses = accounts.map((a) => a.address).filter((s): s is string => !!s);
       const init = buildCompose(kind, mode, selected ?? undefined, selfAddresses);
       // New mail from a specific account view sends from that account.
@@ -379,7 +399,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       if (kind !== "new" && thread && thread.length > 1) init.history = thread;
       setCompose(init);
     },
-    [selected, accounts, account, thread],
+    [selected, accounts, account, thread, compose],
   );
 
   const onSent = (kind: "sent" | "scheduled") => {
@@ -462,6 +482,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         storage={storage}
         onSelect={changeFolder}
         onSelectView={(v) => {
+          if (!confirmDiscard()) return;
           setView(v);
           setCompose(null);
         }}
