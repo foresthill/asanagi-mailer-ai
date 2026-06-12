@@ -10,6 +10,7 @@ import { ConnectionsSettings } from "./ConnectionsSettings";
 import { ScheduledPanel } from "./ScheduledPanel";
 import { ContactsView } from "./ContactsView";
 import { TriageView } from "./TriageView";
+import { SweepDialog } from "./SweepDialog";
 import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
 import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from "./compose";
@@ -34,6 +35,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [aiOk, setAiOk] = useState(aiConfigured);
   const [showSettings, setShowSettings] = useState(false);
   const [showScheduled, setShowScheduled] = useState(false);
+  const [showSweep, setShowSweep] = useState(false);
+  // Auto-open the morning sweep at most once per session (and 12h via storage).
+  const sweepPrompted = useRef(false);
   const [emails, setEmails] = useState<Email[]>([]);
   // Cache-wide search (all accounts & folders); null = not searching.
   const [searchQuery, setSearchQuery] = useState("");
@@ -93,6 +97,18 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadList(folder, account);
   }, [folder, account, loadList]);
+
+  // 朝の一掃: 受信箱が読み込まれた直後に1日の最初だけポップアップ。
+  useEffect(() => {
+    if (sweepPrompted.current || showSweep) return;
+    if (view !== "mail" || folder !== "inbox" || compose || searchResults !== null) return;
+    if (emails.length < 5) return;
+    const last = Number(localStorage.getItem("asanagi:last-sweep") ?? 0);
+    if (Date.now() - last < 12 * 3600_000) return;
+    sweepPrompted.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShowSweep(true);
+  }, [emails, view, folder, compose, searchResults, showSweep]);
 
   // On-demand full-history search (#40): cache results come instantly via
   // the debounce below; this widens to the providers' server search.
@@ -299,6 +315,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   );
 
   const archive = (ids: string[]) => mutateState(ids, "archived", "アーカイブしました");
+
+  /** 朝の一掃の実行: 推奨ごとにまとめて移動し、スヌーズ時刻を記録。 */
+  const applySweep = async (archiveIds: string[], trashIds: string[]) => {
+    if (archiveIds.length) await mutateState(archiveIds, "archived", "一掃: アーカイブ");
+    if (trashIds.length) await mutateState(trashIds, "trashed", "一掃: ゴミ箱へ");
+    localStorage.setItem("asanagi:last-sweep", String(Date.now()));
+  };
   const trash = (ids: string[]) => mutateState(ids, "trashed", "ゴミ箱に移動しました");
   const restore = (ids: string[]) => mutateState(ids, "inbox", "受信箱に戻しました");
 
@@ -489,6 +512,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         onSelectAccount={changeAccount}
         onOpenSettings={() => setShowSettings(true)}
         onOpenScheduled={() => setShowScheduled(true)}
+        onOpenSweep={() => setShowSweep(true)}
         onCompose={() => openCompose("new", "plain")}
       />
       {view === "contacts" && !compose && (
@@ -569,6 +593,18 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 animate-slide-up rounded-full bg-fg px-4 py-2 text-sm text-bg shadow-[var(--shadow)]">
           {toast}
         </div>
+      )}
+
+      {showSweep && (
+        <SweepDialog
+          emails={emails}
+          onApply={applySweep}
+          onClose={() => {
+            // スキップでも12時間はスヌーズ（毎回せがまない）。
+            localStorage.setItem("asanagi:last-sweep", String(Date.now()));
+            setShowSweep(false);
+          }}
+        />
       )}
 
       <ConnectionsSettings

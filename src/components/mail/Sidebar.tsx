@@ -3,6 +3,7 @@
 import {
   Archive,
   Inbox,
+  Sunrise,
   Send,
   Star,
   Trash2,
@@ -41,6 +42,7 @@ export function Sidebar({
   onSelectAccount,
   onOpenSettings,
   onOpenScheduled,
+  onOpenSweep,
   onCompose,
   onSelectView,
 }: {
@@ -57,6 +59,7 @@ export function Sidebar({
   onSelectAccount: (key: string) => void;
   onOpenSettings: () => void;
   onOpenScheduled: () => void;
+  onOpenSweep: () => void;
   onCompose: () => void;
 }) {
   return (
@@ -155,6 +158,14 @@ export function Sidebar({
       )}
 
       <div className="mt-2 border-t border-border pt-2">
+        <button
+          onClick={onOpenSweep}
+          title="受信箱を一括判定して片付け推奨を表示（差出人・件名・冒頭のみで判定）"
+          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg"
+        >
+          <Sunrise className="size-4" />
+          <span className="flex-1 text-left">朝の一掃</span>
+        </button>
         <button
           onClick={onOpenScheduled}
           title="メール送信予定を表示"
