@@ -69,10 +69,15 @@ export function ReplyComposer({
   // Initial draft. Plain modes start from the prepared body; "ai" asks the
   // model to draft a reply — or, for forwards, a short forwarding note that
   // goes above the quoted original (subject stays "Fwd:").
+  // Replies keep the quoted original below the new text (メールの礼儀:
+  // top-posting with the ">" quote preserved for the recipient's context).
+  const withQuote = (text: string) =>
+    init.quote ? `${text.replace(/\s+$/, "")}\n\n${init.quote}` : text;
+
   useEffect(() => {
     if (init.mode === "plain" || !init.source) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot init, no fetch
-      setInitialDraft(init.body);
+      setInitialDraft(init.kind === "new" ? init.body : withQuote(init.body));
       setGenerating(false);
       return;
     }
@@ -101,11 +106,11 @@ export function ReplyComposer({
             setInitialDraft(`${data.draft.body.trim()}\n${init.body}`);
           } else {
             setSubject(data.draft.subject);
-            setInitialDraft(data.draft.body);
+            setInitialDraft(withQuote(data.draft.body));
           }
         }
       } catch {
-        if (active) setInitialDraft(init.body);
+        if (active) setInitialDraft(isForward ? init.body : withQuote(init.body));
       } finally {
         if (active) setGenerating(false);
       }
