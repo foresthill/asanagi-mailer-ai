@@ -4,6 +4,7 @@ import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { REPLY_SYSTEM, emailContext, historyContext } from "@/lib/ai/prompts";
 import { logAiUsage } from "@/lib/db";
+import { PiiMasker } from "@/lib/ai/pii";
 import type { DraftRequest } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -31,6 +32,11 @@ export async function POST(req: Request) {
   }
 
   try {
+    // 構造化PIIはローカルでトークン化してから送り、下書き中のトークンは
+    // 端末側で原文に戻す（lib/ai/pii.ts — 可逆なので品質を落とさない）。
+    const masker = new PiiMasker();
+    const target = cfg.piiMask ? masker.maskEmail(email) : email;
+    const maskedHistory = cfg.piiMask ? history?.map((m) => masker.maskEmail(m)) : history;
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       schema: draftSchema,
@@ -39,18 +45,21 @@ export async function POST(req: Request) {
         "以下のメールに対する返信の下書きを作成してください。",
         guidance ? `補足の指示: ${guidance}` : "",
         // Conversation so far — agreed dates, open questions, tone.
-        ...(history?.length
-          ? ["", "--- これまでのやりとり（古い順・抜粋） ---", historyContext(history, email.id)]
+        ...(maskedHistory?.length
+          ? ["", "--- これまでのやりとり（古い順・抜粋） ---", historyContext(maskedHistory, email.id)]
           : []),
         "",
         "--- 返信対象の受信メール ---",
-        emailContext(email),
+        emailContext(target),
       ]
         .filter(Boolean)
         .join("\n"),
     });
     logAiUsage("reply", cfg.model, usage?.inputTokens, usage?.outputTokens);
-    return NextResponse.json({ draft: object, ai: true });
+    return NextResponse.json({
+      draft: { subject: masker.unmask(object.subject), body: masker.unmask(object.body) },
+      ai: true,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "generation failed" },

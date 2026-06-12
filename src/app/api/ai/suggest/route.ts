@@ -4,6 +4,7 @@ import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { REFINE_SYSTEM, emailContext } from "@/lib/ai/prompts";
 import { logAiUsage } from "@/lib/db";
+import { PiiMasker } from "@/lib/ai/pii";
 import type { Email } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -28,16 +29,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ revised: draft, ai: false });
   }
 
-  const scope = selection?.text
-    ? [
-        "【重要】修正してよいのは次の「対象範囲」だけです。それ以外は一字一句変更しないでください。",
-        "対象範囲:",
-        "<<<",
-        selection.text,
-        ">>>",
-      ].join("\n")
-    : "下書き全体を対象に、指示に関係する箇所のみ最小限で修正してください。";
-
   // Subject relief: when the user hasn't written one, have the model propose
   // it alongside the revision (件名を考えるのがしんどい問題).
   const needSubject = !subject?.trim();
@@ -51,6 +42,21 @@ export async function POST(req: Request) {
     : z.object({ revised: z.string() });
 
   try {
+    // 構造化PIIをローカルでトークン化（下書き・元メール・選択範囲すべて
+    // 同じトークン表を共有）。出力は端末側で原文に復元する。
+    const masker = new PiiMasker();
+    const maskedDraft = cfg.piiMask ? masker.mask(draft) : draft;
+    const maskedEmail = cfg.piiMask && email ? masker.maskEmail(email) : email;
+    const maskedSel = cfg.piiMask && selection?.text ? masker.mask(selection.text) : selection?.text;
+    const scope = maskedSel
+      ? [
+          "【重要】修正してよいのは次の「対象範囲」だけです。それ以外は一字一句変更しないでください。",
+          "対象範囲:",
+          "<<<",
+          maskedSel,
+          ">>>",
+        ].join("\n")
+      : "下書き全体を対象に、指示に関係する箇所のみ最小限で修正してください。";
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       schema,
@@ -63,12 +69,12 @@ export async function POST(req: Request) {
         ...(needSubject
           ? ["", "件名が未入力です。subject にこの下書きに合う簡潔な件名も提案してください。"]
           : []),
-        ...(email
-          ? ["", "--- 返信対象の元メール（文脈） ---", emailContext(email)]
+        ...(maskedEmail
+          ? ["", "--- 返信対象の元メール（文脈） ---", emailContext(maskedEmail)]
           : []),
         "",
         "--- 現在の下書き（全文） ---",
-        draft,
+        maskedDraft,
         "",
         "revised には修正後の下書き全文のみを入れてください（前置き・説明・引用符なし）。",
       ].join("\n"),
@@ -76,8 +82,8 @@ export async function POST(req: Request) {
     logAiUsage("suggest", cfg.model, usage?.inputTokens, usage?.outputTokens);
     const out = object as { revised: string; subject?: string };
     return NextResponse.json({
-      revised: out.revised.trim(),
-      subject: needSubject ? out.subject?.trim() : undefined,
+      revised: masker.unmask(out.revised.trim()),
+      subject: needSubject ? masker.unmask(out.subject?.trim() ?? "") || undefined : undefined,
       ai: true,
     });
   } catch (err) {

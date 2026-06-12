@@ -5,6 +5,7 @@ import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { CLASSIFY_SYSTEM, classifyContext } from "@/lib/ai/prompts";
 import { guessFromSignals, listSignals } from "@/lib/store";
 import { heuristicImportance } from "@/lib/importance";
+import { PiiMasker } from "@/lib/ai/pii";
 import { logAiUsage, logJudgment } from "@/lib/db";
 import type { Email, Importance } from "@/lib/types";
 
@@ -56,15 +57,18 @@ export async function POST(req: Request) {
   }
 
   try {
+    // 構造化PIIはローカルでトークン化してから送る（lib/ai/pii.ts）。
+    const masker = new PiiMasker();
+    const target = cfg.piiMask ? masker.maskEmail(email) : email;
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       schema,
       system: CLASSIFY_SYSTEM,
-      prompt: classifyContext(email, signals),
+      prompt: classifyContext(target, signals),
     });
     record(email, object.importance, object.reason, "ai");
     logAiUsage("classify", cfg.model, usage?.inputTokens, usage?.outputTokens);
-    return NextResponse.json({ ...object, source: "ai" });
+    return NextResponse.json({ ...object, reason: masker.unmask(object.reason), source: "ai" });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "classify failed" },
