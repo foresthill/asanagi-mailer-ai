@@ -117,6 +117,8 @@ export type AIProvider = "anthropic" | "openai" | "openrouter" | "gateway";
  */
 export interface AISettings {
   provider?: AIProvider | "auto";
+  /** 構造化PII（メアド・電話番号等）をAI送信前にマスクする。既定ON。 */
+  piiMask?: boolean;
   /** Provider-specific model id. Empty → sensible per-provider default. */
   model?: string;
   /** API keys keyed by provider. Stored locally only. */

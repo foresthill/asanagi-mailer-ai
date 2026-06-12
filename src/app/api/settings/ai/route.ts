@@ -22,6 +22,7 @@ async function safeView() {
   return {
     provider: s.provider ?? "auto",
     model: s.model ?? "",
+    piiMask: s.piiMask ?? true,
     keys,
     defaultModels: DEFAULT_MODELS,
     active: {
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
     patch.provider = body.provider;
   }
   if (typeof body.model === "string") patch.model = body.model;
+  if (typeof body.piiMask === "boolean") patch.piiMask = body.piiMask;
   if (body.keys && typeof body.keys === "object") {
     const keys: Partial<Record<AIProvider, string>> = {};
     for (const p of PROVIDERS) {

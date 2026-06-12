@@ -15,6 +15,7 @@ interface KeyStatus {
 interface View {
   provider: ProviderChoice;
   model: string;
+  piiMask: boolean;
   keys: Record<AIProvider, KeyStatus>;
   defaultModels: Record<AIProvider, string>;
   active: { provider: AIProvider; model: string; configured: boolean; source: "settings" | "env" };
@@ -259,6 +260,31 @@ export function ConnectionsSettings({
                 <span className="break-all">{test.msg}</span>
               </div>
             )}
+
+            <label className="flex items-start gap-2 rounded-xl border border-border bg-bg px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={view?.piiMask ?? true}
+                onChange={async (e) => {
+                  const piiMask = e.target.checked;
+                  const res = await fetch("/api/settings/ai", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ piiMask }),
+                  });
+                  if (res.ok) setView((await res.json()) as View);
+                }}
+                className="mt-0.5 size-4 accent-[var(--accent,#6d5ae6)]"
+              />
+              <span className="flex flex-col gap-0.5 text-xs">
+                <span className="font-medium">個人情報マスキング（推奨・既定ON）</span>
+                <span className="text-[11px] leading-relaxed text-fg-subtle">
+                  本文中のメールアドレス・電話番号・クレジットカード番号・12桁番号・郵便番号を
+                  端末内で <code>[EMAIL_1]</code> 等に置換してからAIへ送り、AIの出力では原文に復元します
+                  （可逆なので品質への影響は最小）。人名のマスキングは今後対応予定です。
+                </span>
+              </span>
+            </label>
 
             <AiUsageSection />
 
