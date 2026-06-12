@@ -207,6 +207,9 @@ export function ReplyComposer({
         body: JSON.stringify(outgoing()),
       });
       if (!res.ok) throw new Error("送信に失敗しました");
+      const data = await res.json().catch(() => ({}));
+      // 送信自体は成功したが控えの保存等に失敗 — 黙殺せず必ず知らせる。
+      if (data.warning) alert(data.warning);
       onSent("sent");
     } catch (e) {
       alert(e instanceof Error ? e.message : "送信に失敗しました");

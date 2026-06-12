@@ -300,8 +300,9 @@ function AiUsageSection() {
   const [stats, setStats] = useState<{
     total: { calls: number; inputTokens: number; outputTokens: number };
     recent: { calls: number; inputTokens: number; outputTokens: number };
-    byModel: { model: string; calls: number; inputTokens: number; outputTokens: number }[];
+    byModel: { model: string; calls: number; inputTokens: number; outputTokens: number; estUsd?: number }[];
     byKind: { kind: string; calls: number; inputTokens: number; outputTokens: number }[];
+    totalEstUsd?: number | null;
   } | null>(null);
 
   useEffect(() => {
@@ -317,6 +318,7 @@ function AiUsageSection() {
 
   if (!stats || stats.total.calls === 0) return null;
   const fmt = (n: number) => n.toLocaleString("ja-JP");
+  const usd = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`);
   const KIND_LABEL: Record<string, string> = {
     reply: "返信生成",
     suggest: "添削",
@@ -331,6 +333,14 @@ function AiUsageSection() {
         {fmt(stats.recent.outputTokens)} トークン（累計 {fmt(stats.total.calls)}回・入力{" "}
         {fmt(stats.total.inputTokens)} / 出力 {fmt(stats.total.outputTokens)}）
       </p>
+      {typeof stats.totalEstUsd === "number" && (
+        <p className="mt-1 text-sm font-semibold text-fg">
+          累計の目安金額: {usd(stats.totalEstUsd)}
+          <span className="ml-1.5 text-[10px] font-normal text-fg-subtle">
+            OpenRouter公表単価で計算
+          </span>
+        </p>
+      )}
       <div className="mt-2 space-y-0.5">
         {stats.byKind.map((k) => (
           <p key={k.kind} className="flex justify-between text-[11px] text-fg-muted">
@@ -345,12 +355,14 @@ function AiUsageSection() {
             <span className="truncate">{m.model}</span>
             <span className="shrink-0 tabular-nums">
               in {fmt(m.inputTokens)} / out {fmt(m.outputTokens)}
+              {typeof m.estUsd === "number" ? ` ≈ ${usd(m.estUsd)}` : ""}
             </span>
           </p>
         ))}
       </div>
       <p className="mt-1.5 text-[10px] text-fg-subtle">
-        金額はプロバイダのダッシュボード（OpenRouter等）で確認してください（単価はモデル・プランで変動するため）。
+        金額は<a className="underline" href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouterの公表単価</a>
+        から計算した目安です。正確な請求はプロバイダのダッシュボードで確認してください。
       </p>
     </div>
   );

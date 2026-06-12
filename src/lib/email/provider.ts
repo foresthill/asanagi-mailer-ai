@@ -26,8 +26,10 @@ export interface EmailProvider {
   /** Permanently delete (empty-trash semantics). */
   remove(id: string): Promise<void>;
 
-  /** Send a message now. Returns the provider message id when available. */
-  send(message: OutgoingMessage): Promise<{ messageId?: string }>;
+  /** Send a message now. Returns the provider message id when available.
+   *  `warning` = sent OK but a follow-up step failed (e.g. 控えの保存) —
+   *  must be surfaced to the user, never swallowed. */
+  send(message: OutgoingMessage): Promise<{ messageId?: string; warning?: string }>;
 
   /**
    * All messages of a conversation, oldest first — across folders (inbox,
