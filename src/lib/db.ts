@@ -65,6 +65,11 @@ function getDb(): DatabaseSync {
   } catch {
     /* column already exists */
   }
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN bcc_json TEXT");
+  } catch {
+    /* column already exists */
+  }
   return db;
 }
 
@@ -75,6 +80,7 @@ function rowToEmail(r: Record<string, unknown>): Email {
     from: { name: (r.from_name as string) || undefined, email: String(r.from_email ?? "") },
     to: JSON.parse(String(r.to_json ?? "[]")) as EmailAddress[],
     cc: JSON.parse(String(r.cc_json ?? "[]")) as EmailAddress[],
+    bcc: JSON.parse(String(r.bcc_json ?? "[]")) as EmailAddress[],
     subject: String(r.subject ?? ""),
     snippet: String(r.snippet ?? ""),
     body: String(r.body ?? ""),
@@ -93,9 +99,9 @@ export function upsertEmails(account: string, emails: Email[]): void {
   const d = getDb();
   const stmt = d.prepare(`
     INSERT OR REPLACE INTO messages
-      (account, id, thread_id, from_name, from_email, to_json, cc_json,
+      (account, id, thread_id, from_name, from_email, to_json, cc_json, bcc_json,
        subject, snippet, body, date, read, starred, state, message_id, fetched_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const now = new Date().toISOString();
   d.exec("BEGIN");
@@ -109,6 +115,7 @@ export function upsertEmails(account: string, emails: Email[]): void {
         e.from.email,
         JSON.stringify(e.to ?? []),
         JSON.stringify(e.cc ?? []),
+        JSON.stringify(e.bcc ?? []),
         e.subject,
         e.snippet,
         e.body,
@@ -311,7 +318,7 @@ export function contactsList(selfEmails: string[], limit = 500): ContactInfo[] {
 
   // To AND Cc of our sent mail — people we only ever Cc'd were previously
   // invisible here (取りこぼし).
-  for (const column of ["to_json", "cc_json"]) {
+  for (const column of ["to_json", "cc_json", "bcc_json"]) {
     const sentRows = d
       .prepare(
         `SELECT LOWER(json_extract(j.value, '$.email')) AS email,
