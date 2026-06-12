@@ -323,9 +323,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       const init = buildCompose(kind, mode, selected ?? undefined, selfAddresses);
       // New mail from a specific account view sends from that account.
       if (kind === "new" && account !== "all") init.account = account;
+      // Conversation so far → AI drafting context (agreed dates, open points).
+      if (kind !== "new" && thread && thread.length > 1) init.history = thread;
       setCompose(init);
     },
-    [selected, accounts, account],
+    [selected, accounts, account, thread],
   );
 
   const onSent = (kind: "sent" | "scheduled") => {
