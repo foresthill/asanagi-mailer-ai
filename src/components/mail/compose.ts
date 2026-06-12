@@ -26,6 +26,8 @@ export interface ComposeInit {
   source?: Email;
   /** Conversation so far (oldest first) — extra AI context for drafting. */
   history?: Email[];
+  /** ">"-quoted original, appended below the new text (replies only). */
+  quote?: string;
 }
 
 const KIND_LABEL: Record<ComposeKind, string> = {
@@ -41,6 +43,22 @@ export function composeTitle(init: ComposeInit): string {
 
 function rePrefix(subject: string): string {
   return subject.startsWith("Re:") ? subject : `Re: ${subject}`;
+}
+
+/**
+ * Gmail-style inline quote of the message being replied to — kept below the
+ * new text (top-posting) so the recipient retains the conversation context
+ * （メールの礼儀）. Existing ">" lines gain another level (">>").
+ */
+export function quoteOriginal(source: Email): string {
+  const attribution = `${fullTime(source.date)} ${displayName(source.from)} <${source.from.email}>:`;
+  const quoted = source.body
+    .replace(/\r\n?/g, "\n") // CRLF mail bodies would leave stray \r per line
+    .trimEnd()
+    .split("\n")
+    .map((l) => (l.startsWith(">") ? `>${l}` : `> ${l}`))
+    .join("\n");
+  return `${attribution}\n${quoted}`;
 }
 
 /** Everyone on the original mail except our own addresses, de-duplicated. */
@@ -86,6 +104,7 @@ export function buildCompose(
         body: `${displayName(greetTarget)} 様\n\n`,
         inReplyTo: source.messageId,
         threadId: source.threadId,
+        quote: quoteOriginal(source),
       };
     case "replyAll": {
       // From + the other To recipients; Cc carried over (minus ourselves).
@@ -100,6 +119,7 @@ export function buildCompose(
         body: `${displayName(to[0] ?? source.from)} 様\n\n`,
         inReplyTo: source.messageId,
         threadId: source.threadId,
+        quote: quoteOriginal(source),
       };
     }
     case "forward":
