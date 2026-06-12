@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
-import { removeCached, updateCached } from "@/lib/db";
+import { removeCached, setJudgmentVerdict, updateCached } from "@/lib/db";
 import { recordImportanceFeedback } from "@/lib/store";
 import type { EmailProvider } from "@/lib/email";
 import type { Importance, MailboxState } from "@/lib/types";
@@ -73,6 +73,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         body.importanceFeedback.fromEmail,
         body.importanceFeedback.importance,
       );
+      // Keep the triage review in sync: feedback given from the reader is
+      // the same supervision as a verdict click on the 仕分けレビュー screen.
+      if (account) {
+        try {
+          setJudgmentVerdict(account, `${account}/${id}`, body.importanceFeedback.importance);
+        } catch {
+          /* judgment log may not exist yet — feedback itself still applies */
+        }
+      }
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
