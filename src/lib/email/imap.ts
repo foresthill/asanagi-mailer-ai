@@ -153,6 +153,7 @@ export class ImapProvider implements EmailProvider {
       from: addr(env.from?.[0]),
       to: (env.to ?? []).map(addr),
       cc: (env.cc ?? []).map(addr),
+      bcc: (env.bcc ?? []).map(addr),
       subject: repairMojibake(env.subject ?? "(件名なし)"),
       snippet: body.slice(0, 140),
       body,
@@ -323,11 +324,25 @@ export class ImapProvider implements EmailProvider {
     });
 
     // Save a copy to the Sent folder. Non-fatal: the mail already went out.
+    // MailComposer never puts Bcc into the generated message (so recipients
+    // can't see it) — re-add it to OUR copy only, as the sending record (証跡).
+    let stored = raw;
+    if (message.bcc?.length) {
+      const headerEnd = raw.indexOf("\r\n\r\n");
+      if (headerEnd >= 0) {
+        const bccLine = `Bcc: ${message.bcc.map((a) => a.email).join(", ")}\r\n`;
+        stored = Buffer.concat([
+          raw.subarray(0, headerEnd + 2),
+          Buffer.from(bccLine, "utf8"),
+          raw.subarray(headerEnd + 2),
+        ]);
+      }
+    }
     try {
       const c = this.connection();
       await c.connect();
       try {
-        await c.append(this.folders.sent, raw, ["\\Seen"]);
+        await c.append(this.folders.sent, stored, ["\\Seen"]);
       } finally {
         await c.logout();
       }

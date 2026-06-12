@@ -127,6 +127,8 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
     from: fixAddr(parseAddress(header(headers, "From"))),
     to: (header(headers, "To") ?? "").split(",").filter(Boolean).map(parseAddress).map(fixAddr),
     cc: (header(headers, "Cc") ?? "").split(",").filter(Boolean).map(parseAddress).map(fixAddr),
+    // Sent copies keep the Bcc header in Gmail — the sender's record (証跡).
+    bcc: (header(headers, "Bcc") ?? "").split(",").filter(Boolean).map(parseAddress).map(fixAddr),
     subject: repairMojibake(header(headers, "Subject") ?? "(件名なし)"),
     // Gmail API snippets arrive HTML-escaped (&gt; etc.) — decode for display.
     snippet: repairMojibake(decodeEntities(msg.snippet ?? "") || body.slice(0, 140)),

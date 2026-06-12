@@ -134,10 +134,24 @@ export function EmailReader({
               {email.to.length > 0 && (
                 <p
                   className="truncate text-xs text-fg-subtle"
-                  title={email.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}
+                  title={[
+                    `To: ${email.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`,
+                    email.cc?.length
+                      ? `Cc: ${email.cc.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`
+                      : "",
+                    email.bcc?.length
+                      ? `Bcc: ${email.bcc.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join("\n")}
                 >
                   宛先: {email.to.map((a) => a.name || a.email).join("、")}
                   {email.cc?.length ? `（CC: ${email.cc.map((a) => a.name || a.email).join("、")}）` : ""}
+                  {/* BCC exists only on our own sent copies — the sending record. */}
+                  {email.bcc?.length
+                    ? `（BCC: ${email.bcc.map((a) => a.name || a.email).join("、")}）`
+                    : ""}
                 </p>
               )}
             </div>

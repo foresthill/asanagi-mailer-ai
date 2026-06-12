@@ -174,6 +174,7 @@ export class MockProvider implements EmailProvider {
       from: { name: "You", email: "you@example.com" },
       to: message.to,
       cc: message.cc,
+      bcc: message.bcc,
       subject: message.subject,
       snippet: message.body.slice(0, 140),
       body: message.body,

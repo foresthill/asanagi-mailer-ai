@@ -19,6 +19,9 @@ export interface Email {
   from: EmailAddress;
   to: EmailAddress[];
   cc?: EmailAddress[];
+  /** BCC — present only on our own sent copies (送信証跡). Never visible
+   *  to recipients (mail protocol strips it on delivery). */
+  bcc?: EmailAddress[];
   subject: string;
   /** Short preview snippet (first ~140 chars of body). */
   snippet: string;
