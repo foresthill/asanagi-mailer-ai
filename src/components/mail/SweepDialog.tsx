@@ -137,7 +137,7 @@ export function SweepDialog({
           </div>
           <div className="flex flex-col leading-tight">
             <h2 className="text-sm font-semibold">
-              一凪 <span className="text-[10px] font-normal text-fg-subtle">ひとなぎ</span>
+              朝の一凪 <span className="text-[10px] font-normal text-fg-subtle">ひとなぎ</span>
             </h2>
             <span className="text-[11px] text-fg-subtle">
               AIの推奨を各行で変更できます（本文はAIに送りません）
