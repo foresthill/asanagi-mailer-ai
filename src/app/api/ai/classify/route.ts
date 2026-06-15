@@ -62,6 +62,9 @@ export async function POST(req: Request) {
     const target = cfg.piiMask ? masker.maskEmail(email) : email;
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
+      // Explicit output budget: without it some providers reserve the model max
+      // (64k) and fail the affordability check when credits run low.
+      maxOutputTokens: 300,
       schema,
       system: CLASSIFY_SYSTEM,
       prompt: classifyContext(target, signals),
