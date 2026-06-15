@@ -99,6 +99,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   }, [folder, account, loadList]);
 
   // 朝の一掃: 受信箱が読み込まれた直後に1日の最初だけポップアップ。
+  // 判断済みを除いた「未さばき」が5通以上あるときだけ開く（空ポップアップや
+  // 永遠の再表示を防ぐ）。
   useEffect(() => {
     if (sweepPrompted.current || showSweep) return;
     if (view !== "mail" || folder !== "inbox" || compose || searchResults !== null) return;
@@ -106,8 +108,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     const last = Number(localStorage.getItem("asanagi:last-sweep") ?? 0);
     if (Date.now() - last < 12 * 3600_000) return;
     sweepPrompted.current = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setShowSweep(true);
+    (async () => {
+      try {
+        const res = await fetch("/api/sweep/reviewed");
+        const reviewed = new Set<string>((await res.json()).ids ?? []);
+        const pending = emails.filter((e) => !reviewed.has(e.id)).length;
+        if (pending >= 5) setShowSweep(true);
+      } catch {
+        setShowSweep(true); // 取得失敗時は従来どおり開く
+      }
+    })();
   }, [emails, view, folder, compose, searchResults, showSweep]);
 
   // On-demand full-history search (#40): cache results come instantly via

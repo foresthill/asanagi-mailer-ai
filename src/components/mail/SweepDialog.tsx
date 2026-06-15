@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Inbox, Loader2, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, Check, Inbox, Loader2, Sparkles, Trash2, X } from "lucide-react";
 import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { displayName } from "./helpers";
@@ -43,6 +43,8 @@ export function SweepDialog({
   const [actions, setActions] = useState<Record<string, SweepAction>>({});
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** AI判定が使えずキーワード判定にフォールバックした場合の注意書き。 */
+  const [warning, setWarning] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -69,6 +71,7 @@ export function SweepDialog({
         const list = (data.items ?? []) as SweepItem[];
         setItems(list);
         setActions(Object.fromEntries(list.map((i) => [i.id, i.action])));
+        if (data.warning) setWarning(data.warning as string);
       } catch (e) {
         if (active) setError(e instanceof Error ? e.message : "判定に失敗しました");
       } finally {
@@ -98,12 +101,24 @@ export function SweepDialog({
   const setAll = (action: SweepAction) =>
     setActions(Object.fromEntries(items.map((i) => [i.id, action])));
 
+  /** 確定: アーカイブ/ゴミ箱を実行し、表示した全件（残す含む）を
+   *  「さばき済み」として記録 → 次回以降の一掃に二度と出さない。 */
   async function apply() {
     setApplying(true);
     try {
       const archiveIds = items.filter((i) => actions[i.id] === "archive").map((i) => i.id);
       const trashIds = items.filter((i) => actions[i.id] === "trash").map((i) => i.id);
       await onApply(archiveIds, trashIds);
+      // 残す判断も含め、今見た全件を判断済みにする（再提示を止める）。
+      try {
+        await fetch("/api/sweep/reviewed", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ids: items.map((i) => i.id) }),
+        });
+      } catch {
+        /* 記録失敗は致命的でない */
+      }
       onClose();
     } finally {
       setApplying(false);
@@ -148,6 +163,11 @@ export function SweepDialog({
             </p>
           ) : (
             <>
+              {warning && (
+                <p className="mb-2 rounded-lg bg-high-soft px-3 py-2 text-[11px] text-high">
+                  {warning}
+                </p>
+              )}
               {/* 一括変更（全部アーカイブ / 全部ゴミ箱 / 全部残す） */}
               <div className="mb-2 flex items-center gap-2 text-[11px] text-fg-subtle">
                 <span>すべてを:</span>
@@ -226,17 +246,16 @@ export function SweepDialog({
             今回はスキップ
           </button>
           <span className="text-[11px] text-fg-subtle">
-            {actionable > 0
-              ? `アーカイブ${archiveCount}・ゴミ箱${trashCount}`
-              : "処分する項目を選んでください"}
+            アーカイブ{archiveCount}・ゴミ箱{trashCount}・残す{items.length - actionable}
           </span>
           <button
             onClick={apply}
-            disabled={loading || applying || actionable === 0}
+            disabled={loading || applying || items.length === 0}
+            title="この内容で確定（残したメールも含め、次回の一掃には出ません）"
             className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-sm hover:opacity-90 disabled:opacity-50"
           >
-            {applying ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-            {actionable}件を実行
+            {applying ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+            確定
           </button>
         </div>
       </div>
