@@ -164,7 +164,7 @@ export function SweepDialog({
           ) : (
             <>
               {warning && (
-                <p className="mb-2 rounded-lg bg-high-soft px-3 py-2 text-[11px] text-high">
+                <p className="mb-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/10 dark:text-amber-300">
                   {warning}
                 </p>
               )}

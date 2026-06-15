@@ -116,13 +116,14 @@ export async function POST(req: Request) {
   } catch (err) {
     // AI失敗（クレジット切れ等）でも止めない: 無料のキーワード判定で続行する。
     // 全体を500で落とすと「朝の一掃」自体が使えなくなるため。
+    // 技術的な詳細（トークン数・課金URL等）はサーバログにだけ出し、UIには
+    // 簡潔なメッセージだけ返す。
+    console.warn("[sweep] AI判定フォールバック:", err instanceof Error ? err.message : err);
     for (const e of undecided) items.push(heuristicItem(e));
     return NextResponse.json({
       items,
       ai: false,
-      warning: `AI判定は使えませんでした（${
-        err instanceof Error ? err.message : "失敗"
-      }）。簡易判定（無料）で表示しています。`,
+      warning: "AI判定は使えませんでした。簡易判定（無料）で表示しています。",
     });
   }
 }
