@@ -328,8 +328,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   /** 朝の一掃の実行: 推奨ごとにまとめて移動し、スヌーズ時刻を記録。 */
   const applySweep = async (archiveIds: string[], trashIds: string[]) => {
-    if (archiveIds.length) await mutateState(archiveIds, "archived", "一掃: アーカイブ");
-    if (trashIds.length) await mutateState(trashIds, "trashed", "一掃: ゴミ箱へ");
+    if (archiveIds.length) await mutateState(archiveIds, "archived", "一凪: アーカイブ");
+    if (trashIds.length) await mutateState(trashIds, "trashed", "一凪: ゴミ箱へ");
     localStorage.setItem("asanagi:last-sweep", String(Date.now()));
   };
   const trash = (ids: string[]) => mutateState(ids, "trashed", "ゴミ箱に移動しました");

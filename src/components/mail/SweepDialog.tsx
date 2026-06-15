@@ -136,7 +136,9 @@ export function SweepDialog({
             <Sparkles className="size-4" />
           </div>
           <div className="flex flex-col leading-tight">
-            <h2 className="text-sm font-semibold">朝の一掃</h2>
+            <h2 className="text-sm font-semibold">
+              一凪 <span className="text-[10px] font-normal text-fg-subtle">ひとなぎ</span>
+            </h2>
             <span className="text-[11px] text-fg-subtle">
               AIの推奨を各行で変更できます（本文はAIに送りません）
             </span>
@@ -161,7 +163,7 @@ export function SweepDialog({
             <p className="py-10 text-center text-sm text-high">{error}</p>
           ) : items.length === 0 ? (
             <p className="py-10 text-center text-sm text-fg-subtle">
-              受信箱は澄んでいます 🎉
+受信箱は凪いでいます 🌊
             </p>
           ) : (
             <>
@@ -254,7 +256,7 @@ export function SweepDialog({
           <button
             onClick={apply}
             disabled={loading || applying || items.length === 0}
-            title="この内容で確定（残したメールも含め、次回の一掃には出ません）"
+            title="この内容で確定（残したメールも含め、次回の一凪には出ません）"
             className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-sm hover:opacity-90 disabled:opacity-50"
           >
             {applying ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
