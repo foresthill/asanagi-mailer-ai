@@ -101,15 +101,15 @@ export function SweepDialog({
   const setAll = (action: SweepAction) =>
     setActions(Object.fromEntries(items.map((i) => [i.id, action])));
 
-  /** 確定: アーカイブ/ゴミ箱を実行し、表示した全件（残す含む）を
-   *  「さばき済み」として記録 → 次回以降の一掃に二度と出さない。 */
+  /** 確定: アーカイブ/ゴミ箱を実行し、表示した全件（残す含む）を判定済みに
+   *  記録して閉じる → 次回以降は出さない。キャンセル（閉じる/×/背景）は
+   *  何も記録せず、次回また提示される。 */
   async function apply() {
     setApplying(true);
     try {
       const archiveIds = items.filter((i) => actions[i.id] === "archive").map((i) => i.id);
       const trashIds = items.filter((i) => actions[i.id] === "trash").map((i) => i.id);
       await onApply(archiveIds, trashIds);
-      // 残す判断も含め、今見た全件を判断済みにする（再提示を止める）。
       try {
         await fetch("/api/sweep/reviewed", {
           method: "POST",
@@ -243,6 +243,7 @@ export function SweepDialog({
         <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3">
           <button
             onClick={onClose}
+            title="何も変更せず閉じます（次回また提示されます）"
             className="rounded-lg px-3 py-2 text-sm text-fg-muted hover:bg-surface-2"
           >
             今回はスキップ
