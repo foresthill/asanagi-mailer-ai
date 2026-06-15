@@ -74,7 +74,7 @@ export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () =
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {items === null ? (
             <div className="grid place-items-center py-12 text-fg-muted">
               <Loader2 className="size-5 animate-spin" />

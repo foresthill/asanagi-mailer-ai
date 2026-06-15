@@ -202,3 +202,22 @@ export function guessFromSignals(
   if (dom) return dom.importance;
   return undefined;
 }
+
+// ---------------------------------------------------------------------------
+// 朝の一掃: 判断済みメールID — 一度さばいた（残す含む）メールは再提示しない。
+// 毎回の再判定を防ぎAIコストを抑える＋「永遠に出てくる」解消。直近に絞る。
+// ---------------------------------------------------------------------------
+const SWEPT_IDS = "swept-ids.json";
+const SWEPT_CAP = 8000;
+
+export async function getSweptIds(): Promise<Set<string>> {
+  return new Set(await readJson<string[]>(SWEPT_IDS, []));
+}
+
+export async function addSweptIds(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const cur = await readJson<string[]>(SWEPT_IDS, []);
+  // 新しいものを末尾に積み、上限超過分は古いものから捨てる。
+  const merged = [...cur.filter((id) => !ids.includes(id)), ...ids];
+  await writeJson(SWEPT_IDS, merged.slice(-SWEPT_CAP));
+}

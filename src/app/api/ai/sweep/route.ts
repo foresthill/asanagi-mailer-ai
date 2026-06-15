@@ -5,7 +5,7 @@ import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { SWEEP_SYSTEM } from "@/lib/ai/prompts";
 import { PiiMasker } from "@/lib/ai/pii";
 import { logAiUsage } from "@/lib/db";
-import { guessFromSignals, listSignals } from "@/lib/store";
+import { getSweptIds, guessFromSignals, listSignals } from "@/lib/store";
 import { heuristicImportance } from "@/lib/importance";
 import type { Email } from "@/lib/types";
 
@@ -36,15 +36,31 @@ const schema = z.object({
  * ＆プライバシー減）。学習済みシグナルがある送信者はAIを呼ばず即断。
  * 迷ったら keep（誤って人のメールを片付けない）。
  */
+/** Free keyword fallback row (no AI cost). */
+function heuristicItem(e: Email): SweepItem {
+  const imp = heuristicImportance(e);
+  return {
+    id: e.id,
+    action: imp === "low" ? "archive" : "keep",
+    reason: imp === "low" ? "簡易判定: 低" : "簡易判定",
+    source: "heuristic",
+  };
+}
+
 export async function POST(req: Request) {
   const { emails } = (await req.json()) as { emails: Email[] };
   if (!emails?.length) return NextResponse.json({ items: [] });
+
+  // 判断済み（前回さばいた）メールは除外 — 再判定しない＝再提示しない＆コスト減。
+  const swept = await getSweptIds();
+  const fresh = emails.filter((e) => !swept.has(e.id));
+  if (!fresh.length) return NextResponse.json({ items: [], allReviewed: true });
 
   const signals = await listSignals();
   const items: SweepItem[] = [];
   const undecided: Email[] = [];
 
-  for (const e of emails.slice(0, 100)) {
+  for (const e of fresh.slice(0, 100)) {
     const learned = guessFromSignals(e.from.email, signals);
     if (learned === "low") {
       items.push({ id: e.id, action: "archive", reason: "学習済み: 低", source: "learned" });
@@ -58,15 +74,7 @@ export async function POST(req: Request) {
   const cfg = await loadAIConfig();
   if (!cfg.configured || undecided.length === 0) {
     // No AI key → keyword heuristic only (free).
-    for (const e of undecided) {
-      const imp = heuristicImportance(e);
-      items.push({
-        id: e.id,
-        action: imp === "low" ? "archive" : "keep",
-        reason: imp === "low" ? "簡易判定: 低" : "簡易判定",
-        source: "heuristic",
-      });
-    }
+    for (const e of undecided) items.push(heuristicItem(e));
     return NextResponse.json({ items, ai: cfg.configured });
   }
 
@@ -106,9 +114,16 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ items, ai: true });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "sweep failed" },
-      { status: 500 },
-    );
+    // AI失敗（クレジット切れ等）でも止めない: 無料のキーワード判定で続行する。
+    // 全体を500で落とすと「朝の一掃」自体が使えなくなるため。
+    // 技術的な詳細（トークン数・課金URL等）はサーバログにだけ出し、UIには
+    // 簡潔なメッセージだけ返す。
+    console.warn("[sweep] AI判定フォールバック:", err instanceof Error ? err.message : err);
+    for (const e of undecided) items.push(heuristicItem(e));
+    return NextResponse.json({
+      items,
+      ai: false,
+      warning: "AI判定は使えませんでした。簡易判定（無料）で表示しています。",
+    });
   }
 }
