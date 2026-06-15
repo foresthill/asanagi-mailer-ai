@@ -155,7 +155,7 @@ export function ConnectionsSettings({
             <Loader2 className="size-5 animate-spin" />
           </div>
         ) : (
-          <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 text-accent" />
               <h3 className="text-xs font-semibold">AI（BYOK）</h3>

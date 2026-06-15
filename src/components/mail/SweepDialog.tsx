@@ -149,7 +149,9 @@ export function SweepDialog({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        {/* min-h-0 is required: without it a flex child grows past the
+            container and pushes the footer (確定) out of view. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {loading ? (
             <div className="flex flex-col items-center gap-2 py-12 text-fg-subtle">
               <Loader2 className="size-5 animate-spin text-accent" />
