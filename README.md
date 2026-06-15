@@ -82,15 +82,15 @@ AI_PROVIDER=anthropic
 自分専用の OAuth クライアント（BYOクライアント）を1回作れば、以後はアプリ内のボタンだけで接続できます。メールは**オンデマンド取得（直近50件/フォルダ）**で、端末へ全件ダウンロードはしません。トークンはローカル（`.data/`）にのみ保存されます。
 
 1. [Google Cloud Console](https://console.cloud.google.com/) → プロジェクト作成（既存でも可）
-2. 「APIとサービス → ライブラリ」で **Gmail API を有効化**
+2. 「APIとサービス → ライブラリ」で **Gmail API を有効化**（カレンダー連携を使う場合は **Google Calendar API も有効化**）
 3. 「APIとサービス → OAuth同意画面」→ User Type **外部** → アプリ名等を入力 → **テストユーザーに自分の Gmail アドレスを追加**
 4. 「認証情報 → 認証情報を作成 → **OAuth クライアント ID**」→ 種類 **ウェブアプリケーション** → 承認済みリダイレクトURIに以下を追加:
    - `http://localhost:3000/api/auth/google/callback`
    - （別ポートで動かすなら `http://localhost:3100/api/auth/google/callback` も）
 5. 発行された**クライアントID / シークレット**を、アプリの「接続設定 → メールアカウント（Gmail）」に貼り付け → **「Google で認証して接続」** → 同意画面で許可
 
-要求スコープは `gmail.modify` のみ（読む・送る・アーカイブ/ゴミ箱。**完全削除は不可**）。
-出典: [Gmail API scopes](https://developers.google.com/workspace/gmail/api/auth/scopes)
+要求スコープは `gmail.modify`（読む・送る・アーカイブ/ゴミ箱。**完全削除は不可**）と `calendar.events`（招待メールのカレンダー登録用・イベント編集のみの最小権限）。
+出典: [Gmail API scopes](https://developers.google.com/workspace/gmail/api/auth/scopes) / [Calendar API auth](https://developers.google.com/workspace/calendar/api/auth)
 
 > ⚠️ OAuth同意画面が「テスト」ステータスの場合、Googleの仕様で**リフレッシュトークンが7日で失効**します（再接続すれば復旧）。長く使う場合は同意画面を「本番」に公開してください（未審査でも自分用なら警告画面を経て利用可）。
 > 出典: [Using OAuth 2.0 — Refresh token expiration](https://developers.google.com/identity/protocols/oauth2#expiration)

@@ -5,6 +5,7 @@ import { simpleParser } from "mailparser";
 import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
 import { decodeEntities, repairMojibake } from "./encoding";
+import { detectJoinUrl, parseIcs } from "./ics";
 
 /**
  * Generic IMAP (read) + SMTP (send) adapter. Credentials come from the
@@ -192,8 +193,10 @@ export class ImapProvider implements EmailProvider {
     folderPath: string,
   ): Promise<Email> {
     const env = msg.envelope ?? {};
-    const { text: body, html, refRoot } = await this.parseMime(msg.source);
+    const { text: body, html, refRoot, ics } = await this.parseMime(msg.source);
     const flags: Set<string> = msg.flags ?? new Set();
+    const invite = ics ? (parseIcs(ics) ?? undefined) : undefined;
+    const joinUrl = invite?.joinUrl ?? detectJoinUrl(body);
     return {
       id: `${folderPath}:${msg.uid}`,
       // Thread = first id of the References chain (the conversation root).
@@ -213,6 +216,7 @@ export class ImapProvider implements EmailProvider {
       starred: flags.has("\\Flagged"),
       state,
       messageId: env.messageId,
+      invite: invite ?? (joinUrl ? { joinUrl } : undefined),
     };
   }
 
@@ -223,7 +227,7 @@ export class ImapProvider implements EmailProvider {
    */
   private async parseMime(
     source?: Buffer,
-  ): Promise<{ text: string; html?: string; refRoot?: string }> {
+  ): Promise<{ text: string; html?: string; refRoot?: string; ics?: string }> {
     if (!source) return { text: "" };
     try {
       const parsed = await simpleParser(source, { skipImageLinks: true });
@@ -231,7 +235,12 @@ export class ImapProvider implements EmailProvider {
       // Conversation root: References lists ancestors oldest-first.
       const refs = parsed.references;
       const refRoot = normId(Array.isArray(refs) ? refs[0] : refs);
-      if (parsed.text?.trim()) return { text: parsed.text.trim(), html, refRoot };
+      // Meeting invite part (mailparser surfaces text/calendar as attachment).
+      const icsPart = parsed.attachments?.find(
+        (a) => a.contentType === "text/calendar" || a.filename?.toLowerCase().endsWith(".ics"),
+      );
+      const ics = icsPart ? icsPart.content.toString("utf8") : undefined;
+      if (parsed.text?.trim()) return { text: parsed.text.trim(), html, refRoot, ics };
       if (html) {
         const stripped = decodeEntities(
           html
@@ -240,9 +249,9 @@ export class ImapProvider implements EmailProvider {
         )
           .replace(/\n{3,}/g, "\n\n")
           .trim();
-        return { text: stripped, html, refRoot };
+        return { text: stripped, html, refRoot, ics };
       }
-      return { text: "", refRoot };
+      return { text: "", refRoot, ics };
     } catch {
       // Unparseable message — show the raw tail rather than nothing.
       const raw = source.toString("utf8");

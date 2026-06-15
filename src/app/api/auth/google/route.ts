@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Start the Gmail OAuth consent flow with the user's own OAuth client
- * (BYO client, saved in settings or env). Minimal scope: gmail.modify —
+ * (BYO client, saved in settings or env). Minimal scopes: gmail.modify —
  * read/compose/send/labels/trash, no permanent delete.
  */
 export async function GET(req: NextRequest) {
@@ -27,7 +27,12 @@ export async function GET(req: NextRequest) {
   const url = auth.generateAuthUrl({
     access_type: "offline",
     prompt: "consent", // always issue a refresh token
-    scope: ["https://www.googleapis.com/auth/gmail.modify"],
+    scope: [
+      "https://www.googleapis.com/auth/gmail.modify",
+      // 招待メール→カレンダー登録（docs/05）。イベント編集のみの最小権限で、
+      // カレンダー全体の管理権限（auth/calendar）は要求しない。
+      "https://www.googleapis.com/auth/calendar.events",
+    ],
     state,
   });
 
