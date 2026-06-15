@@ -101,32 +101,42 @@ export function SweepDialog({
   const setAll = (action: SweepAction) =>
     setActions(Object.fromEntries(items.map((i) => [i.id, action])));
 
-  /** 確定: アーカイブ/ゴミ箱を実行し、表示した全件（残す含む）を
-   *  「さばき済み」として記録 → 次回以降の一掃に二度と出さない。 */
+  /** 表示した全件（残す含む）を「判定済み」として記録 → 二度と出さない。
+   *  確定・閉じる・×・背景クリックのどの閉じ方でも必ず通す。 */
+  async function recordShown() {
+    if (!items.length) return;
+    try {
+      await fetch("/api/sweep/reviewed", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids: items.map((i) => i.id) }),
+      });
+    } catch {
+      /* 記録失敗は致命的でない */
+    }
+  }
+
+  /** どんな閉じ方でも「判定済み」を記録してから閉じる。 */
+  async function dismiss() {
+    await recordShown();
+    onClose();
+  }
+
+  /** 確定: アーカイブ/ゴミ箱を実行し、表示した全件を判定済みにして閉じる。 */
   async function apply() {
     setApplying(true);
     try {
       const archiveIds = items.filter((i) => actions[i.id] === "archive").map((i) => i.id);
       const trashIds = items.filter((i) => actions[i.id] === "trash").map((i) => i.id);
       await onApply(archiveIds, trashIds);
-      // 残す判断も含め、今見た全件を判断済みにする（再提示を止める）。
-      try {
-        await fetch("/api/sweep/reviewed", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ids: items.map((i) => i.id) }),
-        });
-      } catch {
-        /* 記録失敗は致命的でない */
-      }
-      onClose();
+      await dismiss();
     } finally {
       setApplying(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={dismiss}>
       <div
         className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]"
         onClick={(e) => e.stopPropagation()}
@@ -142,7 +152,7 @@ export function SweepDialog({
             </span>
           </div>
           <button
-            onClick={onClose}
+            onClick={dismiss}
             className="ml-auto grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
           >
             <X className="size-4" />
@@ -242,10 +252,11 @@ export function SweepDialog({
 
         <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3">
           <button
-            onClick={onClose}
+            onClick={dismiss}
+            title="処分はせず閉じます。表示中のメールは判定済みとして次回は出ません"
             className="rounded-lg px-3 py-2 text-sm text-fg-muted hover:bg-surface-2"
           >
-            今回はスキップ
+            閉じる
           </button>
           <span className="text-[11px] text-fg-subtle">
             アーカイブ{archiveCount}・ゴミ箱{trashCount}・残す{items.length - actionable}
