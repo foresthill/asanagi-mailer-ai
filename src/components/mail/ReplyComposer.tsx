@@ -106,8 +106,9 @@ export function ReplyComposer({
               : undefined,
           }),
         });
-        const data = await res.json();
-        if (active && data.draft) {
+        const data = await res.json().catch(() => ({}));
+        if (!active) return;
+        if (data.draft) {
           if (isForward) {
             // Keep the Fwd: subject; the AI note sits above the quote block.
             setInitialDraft(`${data.draft.body.trim()}\n${init.body}`);
@@ -115,6 +116,11 @@ export function ReplyComposer({
             setSubject(data.draft.subject);
             setInitialDraft(withQuote(data.draft.body));
           }
+        } else {
+          // AI生成が失敗（クレジット切れ等で500）でも、引用付きの定型文を必ず
+          // 用意して手書きできるようにする（引用が消える問題の修正）。
+          setInitialDraft(isForward ? init.body : withQuote(init.body));
+          if (data.error) setNote("AIの下書きを生成できませんでした。引用はそのまま、手書きでどうぞ。");
         }
       } catch (e) {
         // Cancelled or failed → fall back to the plain template (editable).
