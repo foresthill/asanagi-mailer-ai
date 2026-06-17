@@ -125,6 +125,42 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [serverSearched, setServerSearched] = useState(false);
   const [serverSearching, setServerSearching] = useState(false);
 
+  // ブラウザの「戻る」で、開いている重なり（作成画面・モーダル・選択中の
+  // メール）を1枚ずつ閉じる。Next.js は SPA で履歴が1件しか積まれないため、
+  // 重なりが開いたら History API で1件積み、popstate で最前面を閉じる。
+  // （URLは変えない＝ルーティング不要）
+  const backArmed = useRef(false);
+  useEffect(() => {
+    const open =
+      compose !== null || showSettings || showScheduled || showSweep || selectedId !== null;
+    if (open && !backArmed.current) {
+      backArmed.current = true;
+      history.pushState({ asanagiOverlay: true }, "");
+    } else if (!open && backArmed.current) {
+      // UI操作で全部閉じた → 積んだ履歴を1件消費して綺麗にする。
+      backArmed.current = false;
+      history.back();
+    }
+  }, [compose, showSettings, showScheduled, showSweep, selectedId]);
+
+  useEffect(() => {
+    const onPop = () => {
+      backArmed.current = false;
+      // 最前面のレイヤーを1枚だけ閉じる（残りは上のeffectが再度積み直す）。
+      if (compose !== null) setCompose(null);
+      else if (showSweep) setShowSweep(false);
+      else if (showScheduled) setShowScheduled(false);
+      else if (showSettings) setShowSettings(false);
+      else if (selectedId !== null) {
+        setSelectedId(null);
+        setSelected(null);
+        setThread(null);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [compose, showSweep, showScheduled, showSettings, selectedId]);
+
   // Debounced cache search; clearing the box returns to the folder view.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- query changed = new search session
