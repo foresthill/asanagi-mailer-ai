@@ -44,4 +44,13 @@ export interface EmailProvider {
    * Gmail accepts its native search operators (from: before: …).
    */
   search?(query: string, limit?: number): Promise<Email[]>;
+
+  /**
+   * Fetch one attachment's bytes on demand (添付は端末に保存せず都度取得).
+   * `attachmentId` is the Attachment.id this provider produced.
+   */
+  getAttachment?(
+    messageId: string,
+    attachmentId: string,
+  ): Promise<{ filename: string; mimeType: string; content: Buffer } | null>;
 }

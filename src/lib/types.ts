@@ -32,6 +32,16 @@ export interface MeetingInvite {
   recurring?: boolean;
 }
 
+/** Attachment metadata (bytes are fetched on demand, never cached). */
+export interface Attachment {
+  /** Gmail: attachmentId / IMAP: part index — how to fetch the bytes. */
+  id: string;
+  filename: string;
+  mimeType: string;
+  /** Size in bytes (best-effort). */
+  size?: number;
+}
+
 export interface Email {
   id: string;
   threadId: string;
@@ -65,6 +75,8 @@ export interface Email {
   replied?: boolean;
   /** Meeting invite found in this mail (live fetches only — not cached). */
   invite?: MeetingInvite;
+  /** Attachments on this mail (metadata only — bytes fetched on demand). */
+  attachments?: Attachment[];
 }
 
 export interface DraftRequest {

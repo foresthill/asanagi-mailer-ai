@@ -2,7 +2,7 @@ import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer";
 import { simpleParser } from "mailparser";
-import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
+import type { Attachment, Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
 import { decodeEntities, repairMojibake } from "./encoding";
 import { detectJoinUrl, parseIcs } from "./ics";
@@ -193,7 +193,7 @@ export class ImapProvider implements EmailProvider {
     folderPath: string,
   ): Promise<Email> {
     const env = msg.envelope ?? {};
-    const { text: body, html, refRoot, ics } = await this.parseMime(msg.source);
+    const { text: body, html, refRoot, ics, attachments } = await this.parseMime(msg.source);
     const flags: Set<string> = msg.flags ?? new Set();
     const invite = ics ? (parseIcs(ics) ?? undefined) : undefined;
     const joinUrl = invite?.joinUrl ?? detectJoinUrl(body);
@@ -217,6 +217,7 @@ export class ImapProvider implements EmailProvider {
       state,
       messageId: env.messageId,
       invite: invite ?? (joinUrl ? { joinUrl } : undefined),
+      attachments,
     };
   }
 
@@ -227,7 +228,13 @@ export class ImapProvider implements EmailProvider {
    */
   private async parseMime(
     source?: Buffer,
-  ): Promise<{ text: string; html?: string; refRoot?: string; ics?: string }> {
+  ): Promise<{
+    text: string;
+    html?: string;
+    refRoot?: string;
+    ics?: string;
+    attachments?: Attachment[];
+  }> {
     if (!source) return { text: "" };
     try {
       const parsed = await simpleParser(source, { skipImageLinks: true });
@@ -240,7 +247,24 @@ export class ImapProvider implements EmailProvider {
         (a) => a.contentType === "text/calendar" || a.filename?.toLowerCase().endsWith(".ics"),
       );
       const ics = icsPart ? icsPart.content.toString("utf8") : undefined;
-      if (parsed.text?.trim()) return { text: parsed.text.trim(), html, refRoot, ics };
+      // Real attachments: id = index in parsed.attachments (download re-parses
+      // and picks the same index). Inline images and the invite are excluded.
+      const attachments: Attachment[] = (parsed.attachments ?? [])
+        .map((a, index) => ({ a, index }))
+        .filter(
+          ({ a }) =>
+            a.contentType !== "text/calendar" &&
+            !a.filename?.toLowerCase().endsWith(".ics") &&
+            a.contentDisposition !== "inline" &&
+            !!a.filename,
+        )
+        .map(({ a, index }) => ({
+          id: String(index),
+          filename: repairMojibake(a.filename ?? "添付ファイル"),
+          mimeType: a.contentType ?? "application/octet-stream",
+          size: a.size,
+        }));
+      if (parsed.text?.trim()) return { text: parsed.text.trim(), html, refRoot, ics, attachments };
       if (html) {
         const stripped = decodeEntities(
           html
@@ -249,9 +273,9 @@ export class ImapProvider implements EmailProvider {
         )
           .replace(/\n{3,}/g, "\n\n")
           .trim();
-        return { text: stripped, html, refRoot, ics };
+        return { text: stripped, html, refRoot, ics, attachments };
       }
-      return { text: "", refRoot, ics };
+      return { text: "", refRoot, ics, attachments };
     } catch {
       // Unparseable message — show the raw tail rather than nothing.
       const raw = source.toString("utf8");
@@ -278,6 +302,32 @@ export class ImapProvider implements EmailProvider {
       try {
         const msg = await c.fetchOne(uid, { envelope: true, flags: true, source: true }, { uid: true });
         return msg ? await this.materialize(msg, state, folder) : null;
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await c.logout();
+    }
+  }
+
+  /** On-demand attachment bytes — re-fetch the message and pick by index. */
+  async getAttachment(id: string, attachmentId: string) {
+    const { folder, uid } = this.splitId(id);
+    const c = this.connection();
+    await c.connect();
+    try {
+      const lock = await c.getMailboxLock(folder);
+      try {
+        const msg = await c.fetchOne(uid, { source: true }, { uid: true });
+        if (!msg || !msg.source) return null;
+        const parsed = await simpleParser(msg.source, { skipImageLinks: true });
+        const att = parsed.attachments?.[Number(attachmentId)];
+        if (!att) return null;
+        return {
+          filename: repairMojibake(att.filename ?? "添付ファイル"),
+          mimeType: att.contentType ?? "application/octet-stream",
+          content: att.content as Buffer,
+        };
       } finally {
         lock.release();
       }

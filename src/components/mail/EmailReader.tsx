@@ -20,6 +20,7 @@ import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ThreadView } from "./ThreadView";
 import { LinkedText } from "./LinkedText";
 import { MeetingCard } from "./MeetingCard";
+import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
 import type { ComposeAI, ComposeKind } from "./compose";
 
@@ -161,6 +162,10 @@ export function EmailReader({
 
           {/* Meeting invite → calendar bridge (docs/05) */}
           {email.invite && <MeetingCard emailId={email.id} invite={email.invite} />}
+
+          {email.attachments && email.attachments.length > 0 && (
+            <AttachmentList emailId={email.id} attachments={email.attachments} />
+          )}
 
           {/* AI importance */}
           <ImportanceBar
