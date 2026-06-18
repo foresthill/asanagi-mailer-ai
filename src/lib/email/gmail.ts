@@ -1,5 +1,5 @@
 import { google, type gmail_v1 } from "googleapis";
-import type { Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
+import type { Attachment, Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
 import { decodeEntities, repairMojibake } from "./encoding";
 import { detectJoinUrl, parseIcs } from "./ics";
@@ -66,6 +66,27 @@ function findPart(
     if (found) return found;
   }
   return "";
+}
+
+/** Attachments = parts with a filename and an attachmentId, walking nested
+ *  multiparts. Inline calendar (.ics) is handled separately as an invite. */
+function collectAttachments(
+  payload: gmail_v1.Schema$MessagePart | undefined,
+  out: Attachment[] = [],
+): Attachment[] {
+  if (!payload) return out;
+  const filename = payload.filename ?? "";
+  const attachmentId = payload.body?.attachmentId;
+  if (filename && attachmentId && payload.mimeType !== "text/calendar") {
+    out.push({
+      id: attachmentId,
+      filename: repairMojibake(filename),
+      mimeType: payload.mimeType ?? "application/octet-stream",
+      size: payload.body?.size ?? undefined,
+    });
+  }
+  for (const p of payload.parts ?? []) collectAttachments(p, out);
+  return out;
 }
 
 function decodeBody(payload?: gmail_v1.Schema$MessagePart): string {
@@ -147,6 +168,7 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
     state,
     messageId: header(headers, "Message-ID"),
     invite: invite ?? (joinUrl ? { joinUrl } : undefined),
+    attachments: collectAttachments(msg.payload),
   };
 }
 
@@ -192,6 +214,30 @@ export class GmailProvider implements EmailProvider {
   async get(id: string): Promise<Email | null> {
     const res = await this.gmail.users.messages.get({ userId: "me", id, format: "full" });
     return res.data ? toEmail(res.data) : null;
+  }
+
+  /** On-demand attachment bytes — never cached locally. */
+  async getAttachment(messageId: string, attachmentId: string) {
+    // Metadata (filename/mime) lives in the message structure; bytes come
+    // from the dedicated attachments endpoint (keeps the message lean).
+    const msg = await this.gmail.users.messages.get({
+      userId: "me",
+      id: messageId,
+      format: "full",
+    });
+    const meta = collectAttachments(msg.data.payload).find((a) => a.id === attachmentId);
+    if (!meta) return null;
+    const res = await this.gmail.users.messages.attachments.get({
+      userId: "me",
+      messageId,
+      id: attachmentId,
+    });
+    const data = res.data.data ?? "";
+    return {
+      filename: meta.filename,
+      mimeType: meta.mimeType,
+      content: Buffer.from(data, "base64url"),
+    };
   }
 
   /** Full-history server search — Gmail's own engine, operators included. */
