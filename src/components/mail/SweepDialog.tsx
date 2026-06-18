@@ -101,6 +101,15 @@ export function SweepDialog({
   const setAll = (action: SweepAction) =>
     setActions(Object.fromEntries(items.map((i) => [i.id, action])));
 
+  /** いま「from」の判定になっている行だけ、まとめて「to」へ振り替える。
+   *  例: アーカイブ推奨をまとめてゴミ箱へ（数件だけ残してあとは削除の運用）。 */
+  const convert = (from: SweepAction, to: SweepAction) =>
+    setActions((prev) => {
+      const next = { ...prev };
+      for (const i of items) if ((prev[i.id] ?? i.action) === from) next[i.id] = to;
+      return next;
+    });
+
   /** 確定: アーカイブ/ゴミ箱を実行し、表示した全件（残す含む）を判定済みに
    *  記録して閉じる → 次回以降は出さない。キャンセル（閉じる/×/背景）は
    *  何も記録せず、次回また提示される。 */
@@ -172,18 +181,41 @@ export function SweepDialog({
                   {warning}
                 </p>
               )}
-              {/* 一括変更（全部アーカイブ / 全部ゴミ箱 / 全部残す） */}
-              <div className="mb-2 flex items-center gap-2 text-[11px] text-fg-subtle">
-                <span>すべてを:</span>
-                {ACTIONS.map((a) => (
+              {/* 一括変更 */}
+              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-fg-subtle">
+                <span className="flex items-center gap-2">
+                  すべてを:
+                  {ACTIONS.map((a) => (
+                    <button
+                      key={a.value}
+                      onClick={() => setAll(a.value)}
+                      className="rounded-md border border-border px-2 py-0.5 hover:border-accent hover:text-accent"
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </span>
+                {/* 振り替え: 推奨はアーカイブ多めだが実際は大半を削除したい運用向け */}
+                {archiveCount > 0 && (
                   <button
-                    key={a.value}
-                    onClick={() => setAll(a.value)}
-                    className="rounded-md border border-border px-2 py-0.5 hover:border-accent hover:text-accent"
+                    onClick={() => convert("archive", "trash")}
+                    title="現在アーカイブ判定のものを、まとめてゴミ箱に変更（残したい数件だけ手で戻す）"
+                    className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 hover:border-high hover:text-high"
                   >
-                    {a.label}
+                    <Archive className="size-3" />→<Trash2 className="size-3" />
+                    アーカイブ{archiveCount}件をゴミ箱へ
                   </button>
-                ))}
+                )}
+                {trashCount > 0 && (
+                  <button
+                    onClick={() => convert("trash", "archive")}
+                    title="現在ゴミ箱判定のものを、まとめてアーカイブに変更"
+                    className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 hover:border-accent hover:text-accent"
+                  >
+                    <Trash2 className="size-3" />→<Archive className="size-3" />
+                    ゴミ箱{trashCount}件をアーカイブへ
+                  </button>
+                )}
               </div>
               <div className="flex flex-col gap-0.5">
                 {ordered.map((i) => {
