@@ -324,11 +324,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       setCompose(null);
       setEmails((list) => list.map((e) => (e.id === id ? { ...e, read: true } : e)));
       const res = await fetch(`/api/emails/${encodeURIComponent(id)}`);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data.email) {
         setSelected(data.email);
         classify(data.email);
         loadThread(data.email);
+      } else {
+        // 開けなかった理由を黙殺しない（Gmailトークン失効など）。
+        setSelectedId(null);
+        showToast(data.error ?? "メールを開けませんでした");
+        if (data.needsReauth) setShowSettings(true); // 再認証へ誘導
       }
     },
     [classify, loadThread, compose],
