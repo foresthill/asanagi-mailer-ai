@@ -24,6 +24,7 @@ import {
   splitQuotedDraft,
   type ComposeInit,
 } from "./compose";
+import type { AccountInfo } from "@/lib/email/accounts";
 
 const QUICK_PROMPTS = ["もっと丁寧に", "もっと短く", "カジュアルに", "英語にして", "感謝を加えて"];
 
@@ -36,16 +37,28 @@ interface HistoryItem {
 
 export function ReplyComposer({
   init,
+  accounts,
   aiConfigured,
   onSent,
   onClose,
 }: {
   /** Prepared initial state (kind/mode/recipients/subject/body) — compose.ts. */
   init: ComposeInit;
+  /** Configured accounts — for the 送信元 display and (multi-account) picker. */
+  accounts: AccountInfo[];
   aiConfigured: boolean;
   onSent: (kind: "sent" | "scheduled") => void;
   onClose: () => void;
 }) {
+  // Which account to send from. Defaults to the conversation's account (reply)
+  // or the active account (new mail); user can switch when 2+ are configured.
+  const [account, setAccount] = useState<string | undefined>(
+    init.account ?? accounts[0]?.key,
+  );
+  // Switching account on a reply means it can't join the original Gmail/IMAP
+  // thread (threadId is account-specific) — it goes out as a fresh message.
+  const accountChanged = Boolean(init.threadId) && account !== init.account;
+  const fromAccount = accounts.find((a) => a.key === account);
   const [subject, setSubject] = useState(init.subject);
   const [recipients, setRecipients] = useState<RecipientValues>({
     to: formatAddressList(init.to),
@@ -210,15 +223,18 @@ export function ReplyComposer({
 
   /** Outgoing message built from the editable recipient fields. */
   function outgoing() {
+    // Threading is account-specific: only carry it when sending from the
+    // conversation's original account (switching account ⇒ fresh message).
+    const sameAccount = account === init.account;
     return {
       to: parseAddressList(recipients.to),
       cc: parseAddressList(recipients.cc),
       bcc: parseAddressList(recipients.bcc),
       subject,
       body,
-      inReplyTo: init.inReplyTo,
-      threadId: init.threadId,
-      account: init.account, // send from the account the thread belongs to
+      inReplyTo: sameAccount ? init.inReplyTo : undefined,
+      threadId: sameAccount ? init.threadId : undefined,
+      account, // chosen 送信元（既定は会話の元アカウント / 新規はアクティブ）
     };
   }
 
@@ -273,17 +289,44 @@ export function ReplyComposer({
       {/* Draft editor */}
       <div className="flex flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-border bg-surface px-5 py-3">
-          <h2 className="text-sm font-semibold">{composeTitle(init)}</h2>
-          {init.account && (
-            <span className="truncate text-xs text-fg-subtle">送信元: {init.account}</span>
+          <h2 className="shrink-0 text-sm font-semibold">{composeTitle(init)}</h2>
+          {accounts.length > 0 && (
+            <span className="flex min-w-0 items-center gap-1.5 text-xs text-fg-subtle">
+              <span className="shrink-0">送信元:</span>
+              {accounts.length > 1 ? (
+                <select
+                  value={account ?? ""}
+                  onChange={(e) => setAccount(e.target.value)}
+                  disabled={sending}
+                  className="min-w-0 rounded-md border border-border bg-surface px-1.5 py-0.5 text-xs text-fg outline-none focus:border-accent"
+                >
+                  {accounts.map((a) => (
+                    <option key={a.key} value={a.key}>
+                      {a.address ? `${a.label}：${a.address}` : a.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="truncate font-medium text-fg">
+                  {fromAccount?.address
+                    ? `${fromAccount.label}：${fromAccount.address}`
+                    : (fromAccount?.label ?? account)}
+                </span>
+              )}
+            </span>
           )}
           <button
             onClick={onClose}
-            className="ml-auto grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
+            className="ml-auto grid size-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
           >
             <X className="size-4" />
           </button>
         </div>
+        {accountChanged && (
+          <div className="border-b border-border bg-amber-500/10 px-5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+            別アカウントから送るため、このメールは元のスレッドには連なりません（新規メール扱い）。
+          </div>
+        )}
 
         <div className="flex flex-1 flex-col overflow-hidden px-6 py-4">
           <RecipientFields values={recipients} onChange={setRecipients} disabled={sending} />

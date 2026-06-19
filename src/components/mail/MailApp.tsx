@@ -665,6 +665,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           // Restart the composer whenever the kind/mode/source changes.
           key={`${compose.kind}-${compose.mode}-${compose.source?.id ?? "new"}-${compose.to[0]?.email ?? ""}`}
           init={compose}
+          accounts={accounts}
           aiConfigured={aiOk}
           onSent={onSent}
           onClose={() => setCompose(null)}

@@ -214,11 +214,12 @@ export function RecipientFields({
             onBlur={() => {
               // Delay so a click on a suggestion (mousedown) lands first.
               setTimeout(() => {
-                setActiveField((f) => {
-                  if (f !== key) return f;
-                  commitDraft(key);
-                  return null;
-                });
+                // Commit OUTSIDE the updater: calling the parent's onChange
+                // from inside setActiveField's updater triggers React's
+                // "setState while rendering another component" warning and can
+                // drop the render (suggestions flicker / fail to show).
+                setActiveField((f) => (f === key ? null : f));
+                commitDraft(key);
               }, 150);
             }}
             onKeyDown={(e) => {
