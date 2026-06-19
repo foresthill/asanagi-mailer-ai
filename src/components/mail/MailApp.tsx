@@ -351,19 +351,21 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         setThread(null);
         setCompose(null);
       }
-      // サーバへ反映。失敗を握りつぶすと「消えたのに箱に残る」ズレになるため、
-      // 成否を確認し、失敗時はサーバから取り直して実状態に合わせる。
-      const results = await Promise.all(
-        ids.map((id) =>
-          fetch(`/api/emails/${encodeURIComponent(id)}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ state }),
-          }).catch(() => null),
-        ),
-      );
-      const failed = results.filter((r) => !r || !r.ok);
-      if (failed.length) {
+      // 即時フィードバック（一覧は上で除去済み）。サーバ反映は待たず背後で行い、
+      // 90通でもUIが固まらない。失敗時だけ通知して実状態に取り直す。
+      showToast(ids.length > 1 ? `${label}（${ids.length}通）` : label);
+      void (async () => {
+        const results = await Promise.all(
+          ids.map((id) =>
+            fetch(`/api/emails/${encodeURIComponent(id)}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ state }),
+            }).catch(() => null),
+          ),
+        );
+        const failed = results.filter((r) => !r || !r.ok);
+        if (!failed.length) return;
         const reauth = results.some((r) => r?.status === 401);
         showToast(
           reauth
@@ -372,9 +374,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         );
         if (reauth) setShowSettings(true);
         loadList(folder, account); // 楽観的除去を取り消し、実状態に同期
-        return;
-      }
-      showToast(ids.length > 1 ? `${label}（会話${ids.length}通）` : label);
+      })();
     },
     [selectedId, folder, account, loadList],
   );
