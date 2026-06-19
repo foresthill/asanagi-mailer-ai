@@ -24,6 +24,32 @@ function markReplied(account: string, emails: Email[]): Email[] {
 }
 
 /**
+ * Shared post-processing: enforce the per-account 受信箱の表示開始日 horizon,
+ * layer free importance (learned signals > keyword), sort newest-first, cap.
+ * Used by both the live and the cache-only paths so they stay identical.
+ */
+async function finalize(lists: Email[][], state: FolderView): Promise<Email[]> {
+  const cfg = state === "inbox" ? await getEmailSettings() : null;
+  const cutoffMs: Record<string, number> = {
+    gmail: cfg ? +new Date(cfg.gmail?.inboxCutoff ?? cfg.inboxCutoff ?? NaN) : NaN,
+    imap: cfg ? +new Date(cfg.imap?.inboxCutoff ?? cfg.inboxCutoff ?? NaN) : NaN,
+  };
+  const afterHorizon = (e: Email) => {
+    const ms = cutoffMs[e.account ?? ""];
+    return ms === undefined || Number.isNaN(ms) || +new Date(e.date) >= ms;
+  };
+  const signals = await listSignals();
+  return annotateImportance(
+    lists
+      .flat()
+      .filter(afterHorizon)
+      .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+      .slice(0, 100),
+    signals,
+  );
+}
+
+/**
  * List emails for one account or all accounts (unified inbox).
  *   GET /api/emails?state=inbox&account=all|gmail|imap|mock
  * Live-fetches each account, writes through to the local SQLite cache, and
@@ -54,6 +80,17 @@ export async function GET(req: Request) {
       return NextResponse.json({ emails, accounts, stale: [] });
     }
 
+    // Cache-only fast path (?cached=1): serve the local SQLite instantly with
+    // NO provider calls, so the UI can paint immediately and revalidate live
+    // in the background (stale-while-revalidate). stale = all targets.
+    if (url.searchParams.get("cached") === "1") {
+      const lists = targets.map((a) =>
+        markReplied(a.key, cachedList([a.key], state)).map((e) => tag(a.key, e)),
+      );
+      const emails = await finalize(lists, state);
+      return NextResponse.json({ emails, accounts, stale: targets.map((a) => a.key) });
+    }
+
     const stale: string[] = [];
     const lists = await Promise.all(
       targets.map(async (a) => {
@@ -65,39 +102,12 @@ export async function GET(req: Request) {
         } catch {
           // Provider unreachable → serve the local cache for this account.
           stale.push(a.key);
-          return markReplied(a.key, cachedList([a.key], state)).map((e) => ({
-            ...e,
-            id: `${a.key}/${e.id}`,
-          }));
+          return markReplied(a.key, cachedList([a.key], state)).map((e) => tag(a.key, e));
         }
       }),
     );
 
-    // 受信箱の表示開始日: providers already query/filter with it, but the
-    // cache fallback path serves raw rows — enforce the horizon centrally,
-    // per account (gmail/imap each have their own, legacy global = fallback).
-    const cfg = state === "inbox" ? await getEmailSettings() : null;
-    const cutoffMs: Record<string, number> = {
-      gmail: cfg ? +new Date(cfg.gmail?.inboxCutoff ?? cfg.inboxCutoff ?? NaN) : NaN,
-      imap: cfg ? +new Date(cfg.imap?.inboxCutoff ?? cfg.inboxCutoff ?? NaN) : NaN,
-    };
-    const afterHorizon = (e: Email) => {
-      const ms = cutoffMs[e.account ?? ""];
-      return ms === undefined || Number.isNaN(ms) || +new Date(e.date) >= ms;
-    };
-
-    // Free importance layers (learned signals > keyword) for the whole list —
-    // no AI cost; the LLM refines individual emails when opened.
-    const signals = await listSignals();
-    const emails = annotateImportance(
-      lists
-        .flat()
-        .filter(afterHorizon)
-        .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-        .slice(0, 100),
-      signals,
-    );
-
+    const emails = await finalize(lists, state);
     return NextResponse.json({ emails, accounts, stale });
   } catch (err) {
     return NextResponse.json(
