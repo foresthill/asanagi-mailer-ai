@@ -21,14 +21,20 @@ interface ContactHit {
 }
 
 /**
- * Gmail-style recipient rows with draggable chips. To always visible, Cc/Bcc
- * revealed on demand (auto-expanded when prefilled, e.g. reply-all). Each
- * recipient is a chip you can DRAG between To/Cc/Bcc or remove with ×; typing
- * in the inline input adds new ones (comma/Enter commits). Values stay
+ * Gmail-style recipient rows with editable, draggable chips. To always
+ * visible, Cc/Bcc revealed on demand (auto-expanded when prefilled, e.g.
+ * reply-all). Each recipient is a chip you can:
+ *   - CLICK to edit (chip turns back into editable text)
+ *   - DRAG between To/Cc/Bcc
+ *   - remove with ×
+ * Typing in the inline input adds new ones (comma/Enter commits). Values stay
  * comma-separated strings so compose.ts parses them unchanged at send time.
  *
  * Typing filters the auto-derived address book (連絡先) and suggests
  * completions: ↑↓ to move, Enter/Tab/click to insert. IME-safe.
+ *
+ * Drafts are kept PER FIELD (not one shared string): switching focus or
+ * editing a chip in one row never clobbers another row's in-progress text.
  */
 export function RecipientFields({
   values,
@@ -43,9 +49,20 @@ export function RecipientFields({
   const [showBcc, setShowBcc] = useState(Boolean(values.bcc));
   const [contacts, setContacts] = useState<ContactHit[]>([]);
   const [activeField, setActiveField] = useState<FieldKey | null>(null);
-  const [draft, setDraft] = useState("");
+  const [drafts, setDrafts] = useState<Record<FieldKey, string>>({ to: "", cc: "", bcc: "" });
   const [highlight, setHighlight] = useState(0);
   const [dropTarget, setDropTarget] = useState<FieldKey | null>(null);
+  // Latest drafts, readable from delayed callbacks (onBlur commit) without
+  // capturing a stale render value.
+  const draftsRef = useRef(drafts);
+  useEffect(() => {
+    draftsRef.current = drafts;
+  }, [drafts]);
+  const inputRefs = useRef<Record<FieldKey, HTMLInputElement | null>>({
+    to: null,
+    cc: null,
+    bcc: null,
+  });
   // Source of an in-flight drag — dataTransfer alone isn't readable on dragover.
   const dragFrom = useRef<{ field: FieldKey; index: number } | null>(null);
 
@@ -75,7 +92,7 @@ export function RecipientFields({
 
   /** Append addresses to a field, de-duplicating by email. */
   const addTo = (key: FieldKey, add: EmailAddress[]) => {
-    const cur = tokensOf(key);
+    const cur = parseAddressList(values[key]);
     const seen = new Set(cur.map((a) => a.email.toLowerCase()));
     const merged = [...cur];
     for (const a of add) {
@@ -92,6 +109,25 @@ export function RecipientFields({
     const list = tokensOf(key);
     list.splice(index, 1);
     onChange({ ...values, [key]: formatAddressList(list) });
+  };
+
+  /** Click a chip → pull it back into the input for editing. */
+  const editChip = (key: FieldKey, index: number) => {
+    if (disabled) return;
+    const list = tokensOf(key);
+    const a = list[index];
+    if (!a) return;
+    list.splice(index, 1);
+    onChange({ ...values, [key]: formatAddressList(list) });
+    const text = a.name ? `${a.name} <${a.email}>` : a.email;
+    setDrafts((d) => ({ ...d, [key]: text }));
+    setActiveField(key);
+    setHighlight(0);
+    setTimeout(() => {
+      const el = inputRefs.current[key];
+      el?.focus();
+      el?.select();
+    }, 0);
   };
 
   /** Move one chip from one field to another in a single update (no clobber). */
@@ -111,16 +147,17 @@ export function RecipientFields({
     reveal(to);
   };
 
-  /** Commit the typed text (minus any trailing separator) as new chips. */
-  const commitDraft = (key: FieldKey, text = draft) => {
-    const t = text.replace(/[,;、]+\s*$/, "").trim();
+  /** Commit a field's typed text (minus any trailing separator) as new chips. */
+  const commitDraft = (key: FieldKey, text?: string) => {
+    const raw = text ?? draftsRef.current[key];
+    const t = raw.replace(/[,;、]+\s*$/, "").trim();
     if (t) addTo(key, parseAddressList(t));
-    setDraft("");
+    setDrafts((d) => ({ ...d, [key]: "" }));
     setHighlight(0);
   };
 
   const suggestionsFor = (key: FieldKey): ContactHit[] => {
-    const q = draft.trim().toLowerCase();
+    const q = drafts[key].trim().toLowerCase();
     if (q.length < 1) return [];
     const already = values[key].toLowerCase();
     return contacts
@@ -134,7 +171,7 @@ export function RecipientFields({
 
   const insertContact = (key: FieldKey, c: ContactHit) => {
     addTo(key, [{ email: c.email, name: c.name }]);
-    setDraft("");
+    setDrafts((d) => ({ ...d, [key]: "" }));
     setHighlight(0);
   };
 
@@ -179,10 +216,17 @@ export function RecipientFields({
                 dragFrom.current = null;
                 setDropTarget(null);
               }}
-              title={a.name ? `${a.name} <${a.email}>` : a.email}
-              className="inline-flex max-w-[220px] cursor-grab items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-xs active:cursor-grabbing"
+              title={`${a.name ? `${a.name} <${a.email}>` : a.email}（クリックで編集・ドラッグで移動）`}
+              className="inline-flex max-w-[220px] cursor-grab items-center gap-1 rounded-full border border-border bg-surface py-0.5 pl-2 pr-1 text-xs active:cursor-grabbing"
             >
-              <span className="truncate">{a.name ?? a.email}</span>
+              <button
+                type="button"
+                onClick={() => editChip(key, i)}
+                disabled={disabled}
+                className="min-w-0 cursor-pointer truncate hover:text-accent"
+              >
+                {a.name ?? a.email}
+              </button>
               {!disabled && (
                 <button
                   type="button"
@@ -196,37 +240,39 @@ export function RecipientFields({
             </span>
           ))}
           <input
-            value={open ? draft : ""}
+            ref={(el) => {
+              inputRefs.current[key] = el;
+            }}
+            value={drafts[key]}
             disabled={disabled}
             onChange={(e) => {
               const v = e.target.value;
               if (/[,;、]\s*$/.test(v)) commitDraft(key, v);
               else {
-                setDraft(v);
+                setDrafts((d) => ({ ...d, [key]: v }));
                 setHighlight(0);
               }
             }}
             onFocus={() => {
               setActiveField(key);
-              setDraft("");
               setHighlight(0);
             }}
             onBlur={() => {
               // Delay so a click on a suggestion (mousedown) lands first.
+              // Commit OUTSIDE any state updater — calling the parent onChange
+              // from inside one triggers React's "setState while rendering"
+              // warning and can drop the render (suggestions flicker).
               setTimeout(() => {
-                // Commit OUTSIDE the updater: calling the parent's onChange
-                // from inside setActiveField's updater triggers React's
-                // "setState while rendering another component" warning and can
-                // drop the render (suggestions flicker / fail to show).
-                setActiveField((f) => (f === key ? null : f));
                 commitDraft(key);
+                setActiveField((f) => (f === key ? null : f));
               }, 150);
             }}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
-              if (e.key === "Backspace" && draft === "" && chips.length > 0) {
+              if (e.key === "Backspace" && drafts[key] === "" && chips.length > 0) {
+                // Empty input + Backspace → edit the last chip (Gmail-like).
                 e.preventDefault();
-                removeAt(key, chips.length - 1);
+                editChip(key, chips.length - 1);
                 return;
               }
               if (hits.length > 0) {
@@ -245,7 +291,7 @@ export function RecipientFields({
                   insertContact(key, hits[Math.min(highlight, hits.length - 1)]);
                   return;
                 }
-              } else if ((e.key === "Enter" || e.key === "Tab") && draft.trim()) {
+              } else if ((e.key === "Enter" || e.key === "Tab") && drafts[key].trim()) {
                 e.preventDefault();
                 commitDraft(key);
                 return;
@@ -302,7 +348,7 @@ export function RecipientFields({
       {row(
         "To",
         "to",
-        "to@example.com（カンマ/Enterで確定・チップはドラッグで移動）",
+        "to@example.com（カンマ/Enterで確定・チップはクリックで編集/ドラッグで移動）",
         <span className="flex shrink-0 items-center gap-1.5 pt-1 text-[11px]">
           {!showCc && (
             <button

@@ -158,8 +158,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     const onPop = () => {
       backArmed.current = false;
       // 最前面のレイヤーを1枚だけ閉じる（残りは上のeffectが再度積み直す）。
-      if (compose !== null) setCompose(null);
-      else if (showSweep) setShowSweep(false);
+      // 作成/返信はリーダーを覆い隠すので、戻るで一段＝一覧まで戻す（裏の
+      // リーダーへ中途半端に戻らない）。返信の元メールの選択も解除する。
+      if (compose !== null) {
+        setCompose(null);
+        setSelectedId(null);
+        setSelected(null);
+        setThread(null);
+      } else if (showSweep) setShowSweep(false);
       else if (showScheduled) setShowScheduled(false);
       else if (showSettings) setShowSettings(false);
       else if (selectedId !== null) {
