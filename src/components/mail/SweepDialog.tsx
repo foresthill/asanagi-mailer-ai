@@ -128,6 +128,28 @@ export function SweepDialog({
       } catch {
         /* 記録失敗は致命的でない */
       }
+      // 確定した判断を送信者の学習シグナルへ（keep=normal / それ以外=low）。
+      // 次回の判定（無料の簡易判定含む）がどんどん賢くなる。
+      try {
+        const signals = items
+          .map((i) => {
+            const from = byId.get(i.id)?.from.email;
+            const action = actions[i.id] ?? i.action;
+            return from
+              ? { fromEmail: from, importance: action === "keep" ? "normal" : "low" }
+              : null;
+          })
+          .filter(Boolean);
+        if (signals.length) {
+          await fetch("/api/sweep/learn", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ signals }),
+          });
+        }
+      } catch {
+        /* 学習は best-effort */
+      }
       onClose();
     } finally {
       setApplying(false);
