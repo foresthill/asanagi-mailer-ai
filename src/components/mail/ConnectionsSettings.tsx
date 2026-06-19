@@ -349,6 +349,7 @@ function AiUsageSection() {
     reply: "返信生成",
     suggest: "添削",
     classify: "重要度判定",
+    sweep: "朝の一凪",
   };
 
   return (
