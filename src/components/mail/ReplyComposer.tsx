@@ -217,8 +217,9 @@ export function ReplyComposer({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(outgoing()),
       });
-      if (!res.ok) throw new Error("送信に失敗しました");
       const data = await res.json().catch(() => ({}));
+      // サーバの実エラー（Gmailトークン失効など）をそのまま見せる。
+      if (!res.ok) throw new Error(data.error ?? "送信に失敗しました");
       // 送信自体は成功したが控えの保存等に失敗 — 黙殺せず必ず知らせる。
       if (data.warning) alert(data.warning);
       onSent("sent");

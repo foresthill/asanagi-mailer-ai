@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
-import { removeCached, setJudgmentVerdict, updateCached } from "@/lib/db";
+import { cachedGet, removeCached, setJudgmentVerdict, updateCached } from "@/lib/db";
 import { recordImportanceFeedback } from "@/lib/store";
 import type { EmailProvider } from "@/lib/email";
 import type { Importance, MailboxState } from "@/lib/types";
@@ -25,22 +25,55 @@ async function resolve(raw: string): Promise<{
   return { provider: await getProvider(), account: null, id: decoded };
 }
 
+/** Gmail OAuth token expiry (OAuthテストは7日失効) → 再認証が必要。 */
+function isAuthError(err: unknown): boolean {
+  const m = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return m.includes("invalid_grant") || m.includes("expired") || m.includes("revoked");
+}
+
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: rawId } = await ctx.params;
   const { provider, account, id } = await resolve(rawId);
-  const email = await provider.get(id);
-  if (!email) return NextResponse.json({ error: "not found" }, { status: 404 });
-  // Opening an email marks it read.
-  if (!email.read) {
-    await provider.setRead(email.id, true);
-    if (account) updateCached(account, email.id, { read: true });
-    email.read = true;
+  try {
+    const email = await provider.get(id);
+    if (!email) return NextResponse.json({ error: "not found" }, { status: 404 });
+    // Opening an email marks it read.
+    if (!email.read) {
+      try {
+        await provider.setRead(email.id, true);
+        if (account) updateCached(account, email.id, { read: true });
+      } catch {
+        /* marking read is best-effort */
+      }
+      email.read = true;
+    }
+    if (account) {
+      email.account = account;
+      email.id = `${account}/${email.id}`;
+    }
+    return NextResponse.json({ email });
+  } catch (err) {
+    // プロバイダ不達でも、本文がキャッシュにあれば見せる（offline/失効耐性）。
+    const cached = account ? cachedGet(account, id) : null;
+    if (cached) {
+      return NextResponse.json({
+        email: { ...cached, account, id: `${account}/${cached.id}` },
+        stale: true,
+      });
+    }
+    const reauth = isAuthError(err);
+    return NextResponse.json(
+      {
+        error: reauth
+          ? "Gmailの認証が切れています（接続設定から再認証してください）"
+          : err instanceof Error
+            ? err.message
+            : "メールを取得できませんでした",
+        needsReauth: reauth,
+      },
+      { status: reauth ? 401 : 500 },
+    );
   }
-  if (account) {
-    email.account = account;
-    email.id = `${account}/${email.id}`;
-  }
-  return NextResponse.json({ email });
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {

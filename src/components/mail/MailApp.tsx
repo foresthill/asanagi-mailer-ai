@@ -324,11 +324,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       setCompose(null);
       setEmails((list) => list.map((e) => (e.id === id ? { ...e, read: true } : e)));
       const res = await fetch(`/api/emails/${encodeURIComponent(id)}`);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data.email) {
         setSelected(data.email);
         classify(data.email);
         loadThread(data.email);
+      } else {
+        // 開けなかった理由を黙殺しない（Gmailトークン失効など）。
+        setSelectedId(null);
+        showToast(data.error ?? "メールを開けませんでした");
+        if (data.needsReauth) setShowSettings(true); // 再認証へ誘導
       }
     },
     [classify, loadThread, compose],
@@ -346,18 +351,32 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         setThread(null);
         setCompose(null);
       }
-      await Promise.all(
-        ids.map((id) =>
-          fetch(`/api/emails/${encodeURIComponent(id)}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ state }),
-          }),
-        ),
-      );
-      showToast(ids.length > 1 ? `${label}（会話${ids.length}通）` : label);
+      // 即時フィードバック（一覧は上で除去済み）。サーバ反映は待たず背後で行い、
+      // 90通でもUIが固まらない。失敗時だけ通知して実状態に取り直す。
+      showToast(ids.length > 1 ? `${label}（${ids.length}通）` : label);
+      void (async () => {
+        const results = await Promise.all(
+          ids.map((id) =>
+            fetch(`/api/emails/${encodeURIComponent(id)}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ state }),
+            }).catch(() => null),
+          ),
+        );
+        const failed = results.filter((r) => !r || !r.ok);
+        if (!failed.length) return;
+        const reauth = results.some((r) => r?.status === 401);
+        showToast(
+          reauth
+            ? "Gmailの認証が切れています（接続設定から再認証してください）"
+            : `${failed.length}通を移動できませんでした（サーバ反映に失敗）`,
+        );
+        if (reauth) setShowSettings(true);
+        loadList(folder, account); // 楽観的除去を取り消し、実状態に同期
+      })();
     },
-    [selectedId],
+    [selectedId, folder, account, loadList],
   );
 
   const archive = (ids: string[]) => mutateState(ids, "archived", "アーカイブしました");
