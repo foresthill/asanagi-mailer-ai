@@ -38,6 +38,10 @@ export function TriageView() {
   const [stats, setStats] = useState<{ total: number; reviewed: number; agreed: number } | null>(
     null,
   );
+  // AIへのメモ（嗜好プロファイル, docs/02 §5.4）: 自然文ルール → 判定に注入。
+  const [profile, setProfile] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -46,7 +50,28 @@ export function TriageView() {
       setItems(data.items ?? []);
       setStats(data.stats ?? null);
     })();
+    (async () => {
+      const res = await fetch("/api/ai/profile");
+      const data = await res.json();
+      setProfile(data.profile ?? "");
+    })();
   }, []);
+
+  async function saveProfile() {
+    if (profile === null) return;
+    setSavingProfile(true);
+    try {
+      await fetch("/api/ai/profile", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: profile }),
+      });
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2000);
+    } finally {
+      setSavingProfile(false);
+    }
+  }
 
   async function vote(j: Judgment, verdict: Importance) {
     // Optimistic update.
@@ -92,6 +117,41 @@ export function TriageView() {
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-2">
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <div className="mb-1 flex items-center gap-2">
+              <Sparkles className="size-3.5 text-accent" />
+              <h2 className="text-sm font-semibold">AIへのメモ（嗜好プロファイル）</h2>
+            </div>
+            <p className="mb-2 text-[11px] text-fg-muted">
+              あなたのルールを自然文で書くと、<strong>朝の一凪</strong>と<strong>個別の重要度判定</strong>に反映されます。
+              例:「ニュースレターは全部アーカイブ」「上司の田中さんからは必ず重要」「請求書・契約は必ず残す」。
+            </p>
+            <textarea
+              value={profile ?? ""}
+              disabled={profile === null}
+              onChange={(e) => setProfile(e.target.value)}
+              rows={4}
+              placeholder="例: 取引先Acmeの返信要求は重要。SaaSの自動通知は低。CC止まりは低。"
+              className="w-full resize-y rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={saveProfile}
+                disabled={savingProfile || profile === null}
+                className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-50"
+              >
+                {savingProfile && <Loader2 className="size-4 animate-spin" />}
+                保存
+              </button>
+              {profileSaved && (
+                <span className="flex items-center gap-1 text-xs text-emerald-600">
+                  <Check className="size-3" />
+                  保存しました
+                </span>
+              )}
+              <span className="ml-auto text-[10px] text-fg-subtle">端末内に保存（AI判定にのみ使用）</span>
+            </div>
+          </div>
           {items === null ? (
             <div className="grid h-40 place-items-center text-fg-subtle">
               <Loader2 className="size-5 animate-spin" />

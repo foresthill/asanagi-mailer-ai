@@ -168,6 +168,21 @@ export async function deleteDraft(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// 嗜好プロファイル（AIへのメモ） — 自然文の判定ルール。判定プロンプトに注入。
+// docs/02 §5.4 / §6.2。ユーザーが直接編集できる learned instructions。
+// ---------------------------------------------------------------------------
+const JUDGMENT_PROFILE = "judgment-profile.json";
+
+export async function getJudgmentProfile(): Promise<string> {
+  const d = await readJson<{ text: string }>(JUDGMENT_PROFILE, { text: "" });
+  return d.text ?? "";
+}
+
+export async function saveJudgmentProfile(text: string): Promise<void> {
+  await writeJson(JUDGMENT_PROFILE, { text: text.slice(0, 4000) });
+}
+
+// ---------------------------------------------------------------------------
 // Learned importance signals (seed of the per-user knowledge base)
 // ---------------------------------------------------------------------------
 const SIGNALS = "signals.json";

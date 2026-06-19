@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
-import { SWEEP_SYSTEM } from "@/lib/ai/prompts";
+import { SWEEP_SYSTEM, profileBlock } from "@/lib/ai/prompts";
 import { PiiMasker } from "@/lib/ai/pii";
 import { logAiUsage } from "@/lib/db";
-import { getSweptIds, guessFromSignals, listSignals } from "@/lib/store";
+import { getJudgmentProfile, getSweptIds, guessFromSignals, listSignals } from "@/lib/store";
 import { heuristicImportance } from "@/lib/importance";
 import type { Email } from "@/lib/types";
 
@@ -96,6 +96,7 @@ export async function POST(req: Request) {
       system: SWEEP_SYSTEM,
       prompt: [
         `以下の${undecided.length}通について、index ごとに action と reason を返してください。`,
+        profileBlock(await getJudgmentProfile()),
         "",
         ...lines,
       ].join("\n"),

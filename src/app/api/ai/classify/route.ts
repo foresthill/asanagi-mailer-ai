@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
-import { CLASSIFY_SYSTEM, classifyContext } from "@/lib/ai/prompts";
-import { guessFromSignals, listSignals } from "@/lib/store";
+import { CLASSIFY_SYSTEM, classifyContext, profileBlock } from "@/lib/ai/prompts";
+import { getJudgmentProfile, guessFromSignals, listSignals } from "@/lib/store";
 import { heuristicImportance } from "@/lib/importance";
 import { PiiMasker } from "@/lib/ai/pii";
 import { logAiUsage, logJudgment } from "@/lib/db";
@@ -60,6 +60,8 @@ export async function POST(req: Request) {
     // 構造化PIIはローカルでトークン化してから送る（lib/ai/pii.ts）。
     const masker = new PiiMasker();
     const target = cfg.piiMask ? masker.maskEmail(email) : email;
+    // 嗜好メモ（ユーザー自筆の指示）はマスクせず素のまま注入する。
+    const profile = await getJudgmentProfile();
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       // Explicit output budget: without it some providers reserve the model max
@@ -67,7 +69,7 @@ export async function POST(req: Request) {
       maxOutputTokens: 300,
       schema,
       system: CLASSIFY_SYSTEM,
-      prompt: classifyContext(target, signals),
+      prompt: classifyContext(target, signals) + profileBlock(profile),
     });
     record(email, object.importance, object.reason, "ai");
     logAiUsage("classify", cfg.model, usage?.inputTokens, usage?.outputTokens);
