@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import {
   Archive,
   Check,
+  ChevronDown,
+  ChevronRight,
   Trash2,
   Loader2,
   Inbox,
@@ -26,6 +29,49 @@ const FOLDER_LABEL: Record<FolderView, string> = {
   trashed: "ゴミ箱",
 };
 
+/** 一覧のグループ化軸（折りたたみセクション）。 */
+export type GroupAxis = "none" | "account" | "sender";
+
+const AXIS_LABEL: Record<GroupAxis, string> = {
+  none: "なし",
+  account: "アカウント",
+  sender: "送信者",
+};
+
+/** メールアドレスのドメイン部（送信者グループのキー）。 */
+function domainOf(email: string): string {
+  const at = email.lastIndexOf("@");
+  return at >= 0 ? email.slice(at + 1).toLowerCase() : email.toLowerCase();
+}
+
+/** rows を選択軸でセクションに束ねる。各セクションは元の日付順を保つ。 */
+function buildSections(
+  rows: ThreadRow[],
+  axis: GroupAxis,
+  accountLabels: Record<string, string> | null,
+): { key: string; label: string; rows: ThreadRow[] }[] {
+  if (axis === "none") return [{ key: "_all", label: "", rows }];
+  const map = new Map<string, { key: string; label: string; rows: ThreadRow[] }>();
+  for (const r of rows) {
+    let key: string;
+    let label: string;
+    if (axis === "account") {
+      key = r.email.account ?? "";
+      label = (accountLabels && accountLabels[key]) || key || "(不明)";
+    } else {
+      key = domainOf(r.email.from.email);
+      label = key || "(不明)";
+    }
+    const sec = map.get(key);
+    if (sec) sec.rows.push(r);
+    else map.set(key, { key, label, rows: [r] });
+  }
+  // 最新メールを含むグループを上に。
+  return [...map.values()].sort(
+    (a, b) => +new Date(b.rows[0].email.date) - +new Date(a.rows[0].email.date),
+  );
+}
+
 export function EmailList({
   folder,
   rows,
@@ -34,6 +80,8 @@ export function EmailList({
   searchQuery,
   searching,
   grouping,
+  groupAxis,
+  onChangeGroupAxis,
   serverSearched,
   serverSearching,
   accountLabels,
@@ -63,6 +111,9 @@ export function EmailList({
   searching: boolean;
   /** スレッド表示（1会話=1行）が有効か。検索結果では常に個別表示。 */
   grouping: boolean;
+  /** セクション分けの軸（なし/アカウント別/送信者ドメイン別）。 */
+  groupAxis: GroupAxis;
+  onChangeGroupAxis: (axis: GroupAxis) => void;
   /** 今回の検索語でサーバ全履歴検索を実行済みか（#40）。 */
   serverSearched: boolean;
   serverSearching: boolean;
@@ -87,6 +138,40 @@ export function EmailList({
   onRefresh: () => void;
 }) {
   const selectionActive = checkedIds.size > 0;
+  // 折りたたんだセクションのキー（軸ごとに保持）。
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // 検索結果は横断のため軸グループ化しない（特定の1通を探す行為）。
+  const effectiveAxis: GroupAxis = searching ? "none" : groupAxis;
+  const sections = buildSections(rows, effectiveAxis, accountLabels);
+  const toggleSection = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const renderRow = (row: ThreadRow) => (
+    <EmailListItem
+      key={row.email.id}
+      row={row}
+      active={row.email.id === selectedId}
+      folder={folder}
+      checked={checkedIds.has(row.email.id)}
+      selectionActive={selectionActive}
+      accountLabel={
+        accountLabels && row.email.account
+          ? (accountLabels[row.email.account] ?? row.email.account)
+          : null
+      }
+      onSelect={() => onSelect(row.email.id)}
+      onToggleCheck={() => onToggleCheck(row.email.id)}
+      onArchive={() => onArchive(row.ids)}
+      onTrash={() => onTrash(row.ids)}
+      onToggleStar={() => onToggleStar(row.email.id)}
+    />
+  );
+
   return (
     <div className="flex w-[384px] shrink-0 flex-col border-r border-border bg-surface">
       {selectionActive ? (
@@ -186,6 +271,27 @@ export function EmailList({
         </div>
       </div>
 
+      {/* グループ化軸: なし / アカウント別 / 送信者ドメイン別（折りたたみ表示）。 */}
+      {!searching && (
+        <div className="flex items-center gap-1.5 px-4 pb-2 text-[11px] text-fg-subtle">
+          <span>グループ:</span>
+          {(["none", "account", "sender"] as GroupAxis[]).map((a) => (
+            <button
+              key={a}
+              onClick={() => onChangeGroupAxis(a)}
+              className={cn(
+                "rounded-md border px-2 py-0.5 transition-colors",
+                groupAxis === a
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border hover:border-accent hover:text-accent",
+              )}
+            >
+              {AXIS_LABEL[a]}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto px-2 pb-4">
         {loading ? (
           <div className="grid h-40 place-items-center text-fg-subtle">
@@ -209,27 +315,29 @@ export function EmailList({
               )}
             </div>
           </div>
+        ) : effectiveAxis === "none" ? (
+          rows.map(renderRow)
         ) : (
-          rows.map((row) => (
-            <EmailListItem
-              key={row.email.id}
-              row={row}
-              active={row.email.id === selectedId}
-              folder={folder}
-              checked={checkedIds.has(row.email.id)}
-              selectionActive={selectionActive}
-              accountLabel={
-                accountLabels && row.email.account
-                  ? (accountLabels[row.email.account] ?? row.email.account)
-                  : null
-              }
-              onSelect={() => onSelect(row.email.id)}
-              onToggleCheck={() => onToggleCheck(row.email.id)}
-              onArchive={() => onArchive(row.ids)}
-              onTrash={() => onTrash(row.ids)}
-              onToggleStar={() => onToggleStar(row.email.id)}
-            />
-          ))
+          sections.map((sec) => {
+            const isCollapsed = collapsed.has(sec.key);
+            return (
+              <div key={sec.key} className="mb-1">
+                <button
+                  onClick={() => toggleSection(sec.key)}
+                  className="sticky top-0 z-10 flex w-full items-center gap-1.5 bg-surface/95 px-2 py-1.5 text-left text-xs font-medium text-fg-muted backdrop-blur hover:text-fg"
+                >
+                  {isCollapsed ? (
+                    <ChevronRight className="size-3.5 shrink-0" />
+                  ) : (
+                    <ChevronDown className="size-3.5 shrink-0" />
+                  )}
+                  <span className="truncate">{sec.label}</span>
+                  <span className="shrink-0 tabular-nums text-fg-subtle">{sec.rows.length}</span>
+                </button>
+                {!isCollapsed && sec.rows.map(renderRow)}
+              </div>
+            );
+          })
         )}
         {/* Deep dig (#40): widen the cache results to the providers' full
             history — on demand only, so routine searches stay local-first. */}

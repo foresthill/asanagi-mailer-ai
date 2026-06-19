@@ -15,13 +15,22 @@ import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
 import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from "./compose";
 import { buildRows } from "./threadList";
+import type { GroupAxis } from "./EmailList";
 
 /** スレッド表示（1会話=1行）の永続化キー。既定はON。 */
 const GROUPING_PREF_KEY = "asanagi:list-grouping";
+/** グループ化軸（なし/アカウント別/送信者別）の永続化キー。 */
+const GROUP_AXIS_KEY = "asanagi:list-group-axis";
 
 function loadGroupingPref(): boolean {
   if (typeof window === "undefined") return true;
   return localStorage.getItem(GROUPING_PREF_KEY) !== "off";
+}
+
+function loadGroupAxis(): GroupAxis {
+  if (typeof window === "undefined") return "none";
+  const v = localStorage.getItem(GROUP_AXIS_KEY);
+  return v === "account" || v === "sender" ? v : "none";
 }
 
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
@@ -44,6 +53,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [searchResults, setSearchResults] = useState<Email[] | null>(null);
   // Gmail-style flat conversation rows (docs/04 §1.6); off = 1 mail = 1 row.
   const [grouping, setGrouping] = useState(loadGroupingPref);
+  // Section grouping axis (none / by account / by sender domain).
+  const [groupAxis, setGroupAxis] = useState<GroupAxis>(loadGroupAxis);
   // Bulk selection — keyed by row representative id; actions apply to every
   // mail of each checked conversation row.
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -382,6 +393,15 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       return next;
     });
 
+  const changeGroupAxis = (axis: GroupAxis) => {
+    setGroupAxis(axis);
+    try {
+      localStorage.setItem(GROUP_AXIS_KEY, axis);
+    } catch {
+      /* private mode etc. — preference just won't stick */
+    }
+  };
+
   // Search results stay ungrouped: they span folders and the user is
   // locating a specific mail, not triaging conversations.
   const rows = buildRows(searchResults ?? emails, grouping && searchResults === null);
@@ -586,6 +606,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           searchQuery={searchQuery}
           searching={searchResults !== null}
           grouping={grouping}
+          groupAxis={groupAxis}
+          onChangeGroupAxis={changeGroupAxis}
           accountLabels={
             // Show the origin badge when rows can mix accounts:
             // unified inbox, or search results (always cross-account).
