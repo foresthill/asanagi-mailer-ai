@@ -123,6 +123,18 @@ export interface ScheduledSend extends OutgoingMessage {
 }
 
 /**
+ * A saved (unsent) draft. Local-first: kept in `.data/` only, never pushed to
+ * the provider's Drafts folder — the composer content stays on the device.
+ * Threading fields (inReplyTo/threadId) are preserved so a reply draft still
+ * threads when finally sent.
+ */
+export interface SavedDraft extends OutgoingMessage {
+  id: string;
+  /** ISO 8601 last-updated time. */
+  updatedAt: string;
+}
+
+/**
  * A piece of learned knowledge about what matters to this user.
  * This is the seed of the per-user RAG / importance knowledge base.
  */
