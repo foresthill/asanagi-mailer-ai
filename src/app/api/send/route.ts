@@ -34,9 +34,20 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
+    // Gmail OAuthトークン失効（7日失効）を分かりやすく案内し、再認証へ誘導。
+    const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+    const reauth =
+      msg.includes("invalid_grant") || msg.includes("expired") || msg.includes("revoked");
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "send failed" },
-      { status: 500 },
+      {
+        error: reauth
+          ? "Gmailの認証が切れているため送信できませんでした（接続設定から再認証してください）"
+          : err instanceof Error
+            ? err.message
+            : "送信に失敗しました",
+        needsReauth: reauth,
+      },
+      { status: reauth ? 401 : 500 },
     );
   }
 }
