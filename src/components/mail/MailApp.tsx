@@ -351,18 +351,32 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         setThread(null);
         setCompose(null);
       }
-      await Promise.all(
+      // サーバへ反映。失敗を握りつぶすと「消えたのに箱に残る」ズレになるため、
+      // 成否を確認し、失敗時はサーバから取り直して実状態に合わせる。
+      const results = await Promise.all(
         ids.map((id) =>
           fetch(`/api/emails/${encodeURIComponent(id)}`, {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ state }),
-          }),
+          }).catch(() => null),
         ),
       );
+      const failed = results.filter((r) => !r || !r.ok);
+      if (failed.length) {
+        const reauth = results.some((r) => r?.status === 401);
+        showToast(
+          reauth
+            ? "Gmailの認証が切れています（接続設定から再認証してください）"
+            : `${failed.length}通を移動できませんでした（サーバ反映に失敗）`,
+        );
+        if (reauth) setShowSettings(true);
+        loadList(folder, account); // 楽観的除去を取り消し、実状態に同期
+        return;
+      }
       showToast(ids.length > 1 ? `${label}（会話${ids.length}通）` : label);
     },
-    [selectedId],
+    [selectedId, folder, account, loadList],
   );
 
   const archive = (ids: string[]) => mutateState(ids, "archived", "アーカイブしました");
