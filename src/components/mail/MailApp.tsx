@@ -340,6 +340,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     async (ids: string[], state: MailboxState, label: string) => {
       const set = new Set(ids);
       setEmails((list) => list.filter((e) => !set.has(e.id)));
+      // 消したメールを選択状態からも外す（行ホバーのアーカイブ等で選択に
+      // ゴミが残り、一括操作が破綻するのを防ぐ）。
+      setChecked((prev) => {
+        if (prev.size === 0) return prev;
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next.size === prev.size ? prev : next;
+      });
       if (selectedId && set.has(selectedId)) {
         setSelectedId(null);
         setSelected(null);
