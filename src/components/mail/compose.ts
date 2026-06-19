@@ -61,6 +61,37 @@ export function quoteOriginal(source: Email): string {
   return `${attribution}\n${quoted}`;
 }
 
+/**
+ * Split an editable reply draft into the user's own writing (head) and the
+ * quoted original (tail). AI 添削 must only ever see/touch the head — the quote
+ * is held back so the model can't rewrite it or "complete" the mail with a
+ * footer/timestamp it invented (ユーザー要望: 添削は自分の書いた文章だけ).
+ *
+ * Detection: prefer an exact match of the known `quote`; if the user edited
+ * around it, fall back to the structural marker — an attribution line ending
+ * with `<addr>:` immediately followed by ">"-quoted lines.
+ */
+export function splitQuotedDraft(
+  body: string,
+  quote: string,
+): { head: string; tail: string } {
+  if (!quote) return { head: body, tail: "" };
+  const idx = body.lastIndexOf(quote);
+  if (idx >= 0) {
+    return { head: body.slice(0, idx).replace(/\s+$/, ""), tail: body.slice(idx) };
+  }
+  const lines = body.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (/<[^@\s]+@[^>\s]+>\s*:\s*$/.test(lines[i]) && /^>/.test(lines[i + 1] ?? "")) {
+      return {
+        head: lines.slice(0, i).join("\n").replace(/\s+$/, ""),
+        tail: lines.slice(i).join("\n"),
+      };
+    }
+  }
+  return { head: body, tail: "" };
+}
+
 /** Everyone on the original mail except our own addresses, de-duplicated. */
 function others(list: EmailAddress[] | undefined, self: Set<string>): EmailAddress[] {
   const seen = new Set<string>();
