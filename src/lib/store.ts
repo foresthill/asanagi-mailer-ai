@@ -7,6 +7,7 @@ import type {
   ImportanceSignal,
   Importance,
   ScheduledSend,
+  SavedDraft,
 } from "@/lib/types";
 
 /**
@@ -137,6 +138,33 @@ export async function updateScheduled(
 export async function dueScheduled(now = new Date()): Promise<ScheduledSend[]> {
   const all = await listScheduled();
   return all.filter((s) => s.status === "scheduled" && new Date(s.sendAt) <= now);
+}
+
+// ---------------------------------------------------------------------------
+// Saved drafts (local-first — never pushed to the provider Drafts folder)
+// ---------------------------------------------------------------------------
+const DRAFTS = "drafts.json";
+
+export async function listDrafts(): Promise<SavedDraft[]> {
+  return readJson<SavedDraft[]>(DRAFTS, []);
+}
+
+/** Upsert a draft by id (newest content wins). */
+export async function saveDraft(draft: SavedDraft): Promise<SavedDraft> {
+  const all = await listDrafts();
+  const idx = all.findIndex((d) => d.id === draft.id);
+  if (idx === -1) all.push(draft);
+  else all[idx] = draft;
+  await writeJson(DRAFTS, all);
+  return draft;
+}
+
+export async function deleteDraft(id: string): Promise<void> {
+  const all = await listDrafts();
+  await writeJson(
+    DRAFTS,
+    all.filter((d) => d.id !== id),
+  );
 }
 
 // ---------------------------------------------------------------------------

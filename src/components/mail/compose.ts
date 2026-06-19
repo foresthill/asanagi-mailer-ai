@@ -28,6 +28,8 @@ export interface ComposeInit {
   history?: Email[];
   /** ">"-quoted original, appended below the new text (replies only). */
   quote?: string;
+  /** Set when editing a saved draft — save updates it, send deletes it. */
+  draftId?: string;
 }
 
 const KIND_LABEL: Record<ComposeKind, string> = {

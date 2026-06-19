@@ -1,13 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Email, EmailAddress, FolderView, Importance, MailboxState } from "@/lib/types";
+import type {
+  Email,
+  EmailAddress,
+  FolderView,
+  Importance,
+  MailboxState,
+  SavedDraft,
+} from "@/lib/types";
 import { Sidebar } from "./Sidebar";
 import { EmailList } from "./EmailList";
 import { EmailReader } from "./EmailReader";
 import { ReplyComposer } from "./ReplyComposer";
 import { ConnectionsSettings } from "./ConnectionsSettings";
 import { ScheduledPanel } from "./ScheduledPanel";
+import { DraftsPanel } from "./DraftsPanel";
 import { ContactsView } from "./ContactsView";
 import { TriageView } from "./TriageView";
 import { SweepDialog } from "./SweepDialog";
@@ -44,6 +52,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [aiOk, setAiOk] = useState(aiConfigured);
   const [showSettings, setShowSettings] = useState(false);
   const [showScheduled, setShowScheduled] = useState(false);
+  const [showDrafts, setShowDrafts] = useState(false);
   const [showSweep, setShowSweep] = useState(false);
   // Auto-open the morning sweep at most once per session (and 12h via storage).
   const sweepPrompted = useRef(false);
@@ -69,6 +78,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [classifying, setClassifying] = useState(false);
   const [counts, setCounts] = useState<Partial<Record<FolderView, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
+  const [draftsCount, setDraftsCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
 
@@ -78,6 +88,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       setStorage(await res.json());
     } catch {
       /* meter is non-critical */
+    }
+  }, []);
+
+  const loadDraftsCount = useCallback(async () => {
+    try {
+      const res = await fetch("/api/drafts");
+      const data = await res.json();
+      setDraftsCount((data.drafts ?? []).length);
+    } catch {
+      /* count badge is non-critical */
     }
   }, []);
 
@@ -132,6 +152,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     loadList(folder, account);
   }, [folder, account, loadList]);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async count fetch
+    loadDraftsCount();
+  }, [loadDraftsCount]);
+
   // 朝の一掃: 受信箱が読み込まれた直後に1日の最初だけポップアップ。
   // 判断済みを除いた「未さばき」が5通以上あるときだけ開く（空ポップアップや
   // 永遠の再表示を防ぐ）。
@@ -166,7 +191,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const backArmed = useRef(false);
   useEffect(() => {
     const open =
-      compose !== null || showSettings || showScheduled || showSweep || selectedId !== null;
+      compose !== null ||
+      showSettings ||
+      showScheduled ||
+      showDrafts ||
+      showSweep ||
+      selectedId !== null;
     if (open && !backArmed.current) {
       backArmed.current = true;
       history.pushState({ asanagiOverlay: true }, "");
@@ -175,7 +205,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       backArmed.current = false;
       history.back();
     }
-  }, [compose, showSettings, showScheduled, showSweep, selectedId]);
+  }, [compose, showSettings, showScheduled, showDrafts, showSweep, selectedId]);
 
   useEffect(() => {
     const onPop = () => {
@@ -189,6 +219,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         setSelected(null);
         setThread(null);
       } else if (showSweep) setShowSweep(false);
+      else if (showDrafts) setShowDrafts(false);
       else if (showScheduled) setShowScheduled(false);
       else if (showSettings) setShowSettings(false);
       else if (selectedId !== null) {
@@ -199,7 +230,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [compose, showSweep, showScheduled, showSettings, selectedId]);
+  }, [compose, showSweep, showDrafts, showScheduled, showSettings, selectedId]);
 
   // Debounced cache search; clearing the box returns to the folder view.
   useEffect(() => {
@@ -549,6 +580,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   const onSent = (kind: "sent" | "scheduled") => {
     const wasReply = compose?.kind === "reply" || compose?.kind === "replyAll";
+    const fromDraft = compose?.draftId != null;
     setCompose(null);
     if (wasReply && selected && folder === "inbox") {
       // Send & archive — keep the inbox clean (replies only; not forward/new).
@@ -556,6 +588,31 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     } else {
       showToast(kind === "sent" ? "送信しました" : "予約しました");
     }
+    if (fromDraft) loadDraftsCount(); // sent draft was deleted server-side
+  };
+
+  // Draft saved from the composer → close it, confirm, refresh the badge.
+  const onSavedDraft = () => {
+    setCompose(null);
+    showToast("下書きを保存しました");
+    loadDraftsCount();
+  };
+
+  // Resume editing a saved draft in the composer.
+  const openDraft = (d: SavedDraft) => {
+    setShowDrafts(false);
+    setCompose({
+      kind: "new",
+      mode: "plain",
+      to: d.to ?? [],
+      cc: d.cc ?? [],
+      subject: d.subject,
+      body: d.body,
+      account: d.account,
+      inReplyTo: d.inReplyTo,
+      threadId: d.threadId,
+      draftId: d.id,
+    });
   };
 
   // Keyboard shortcuts.
@@ -621,6 +678,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         view={view}
         counts={counts}
         scheduledCount={scheduledCount}
+        draftsCount={draftsCount}
         aiConfigured={aiOk}
         accounts={accounts}
         account={account}
@@ -634,6 +692,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         onSelectAccount={changeAccount}
         onOpenSettings={() => setShowSettings(true)}
         onOpenScheduled={() => setShowScheduled(true)}
+        onOpenDrafts={() => setShowDrafts(true)}
         onOpenSweep={() => setShowSweep(true)}
         onCompose={() => openCompose("new", "plain")}
       />
@@ -699,6 +758,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onSent={onSent}
           onClose={() => setCompose(null)}
           onNeedsReauth={() => setShowSettings(true)}
+          onSavedDraft={onSavedDraft}
         />
       ) : view === "mail" ? (
         <EmailReader
@@ -739,6 +799,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         onSaved={setAiOk}
       />
       <ScheduledPanel open={showScheduled} onClose={() => setShowScheduled(false)} />
+      <DraftsPanel
+        open={showDrafts}
+        onClose={() => setShowDrafts(false)}
+        onOpenDraft={openDraft}
+        onChanged={loadDraftsCount}
+      />
     </div>
   );
 }

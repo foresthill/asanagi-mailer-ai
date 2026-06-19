@@ -11,6 +11,7 @@ import {
   Check,
   Wand2,
   CheckCheck,
+  Save,
 } from "lucide-react";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { buildSegments, pendingCount } from "@/lib/diff";
@@ -42,6 +43,7 @@ export function ReplyComposer({
   onSent,
   onClose,
   onNeedsReauth,
+  onSavedDraft,
 }: {
   /** Prepared initial state (kind/mode/recipients/subject/body) — compose.ts. */
   init: ComposeInit;
@@ -52,6 +54,8 @@ export function ReplyComposer({
   onClose: () => void;
   /** Auth expired mid-send → open 接続設定 so the user can re-auth. */
   onNeedsReauth: () => void;
+  /** Draft saved locally → parent closes the composer and refreshes the count. */
+  onSavedDraft: () => void;
 }) {
   // Which account to send from. Defaults to the conversation's account (reply)
   // or the active account (new mail); user can switch when 2+ are configured.
@@ -77,6 +81,7 @@ export function ReplyComposer({
   // Persistent send error (draft is kept) — clearer than a transient alert
   // for the「送ったつもりが送れてない」problem.
   const [sendError, setSendError] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -244,6 +249,38 @@ export function ReplyComposer({
     };
   }
 
+  /** Remove the saved draft once it's been sent/scheduled (best-effort). */
+  async function discardSavedDraft() {
+    if (!init.draftId) return;
+    try {
+      await fetch(`/api/drafts/${encodeURIComponent(init.draftId)}`, { method: "DELETE" });
+    } catch {
+      /* leftover draft is harmless; user can delete it manually */
+    }
+  }
+
+  /** Save the current draft locally (.data) without sending. */
+  async function saveDraft() {
+    setSavingDraft(true);
+    setSendError(null);
+    try {
+      const res = await fetch("/api/drafts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: init.draftId, ...outgoing() }),
+      });
+      if (!res.ok) {
+        setSendError("下書きの保存に失敗しました");
+        setSavingDraft(false);
+        return;
+      }
+      onSavedDraft();
+    } catch {
+      setSendError("下書きの保存に失敗しました");
+      setSavingDraft(false);
+    }
+  }
+
   async function sendNow() {
     setSending(true);
     setSendError(null);
@@ -263,6 +300,7 @@ export function ReplyComposer({
       }
       // 送信自体は成功したが控えの保存等に失敗 — 黙殺せず必ず知らせる。
       if (data.warning) alert(data.warning);
+      await discardSavedDraft(); // 送れたら下書きは消す
       onSent("sent");
     } catch {
       setSendError("送信に失敗しました（ネットワークを確認してください）");
@@ -287,6 +325,7 @@ export function ReplyComposer({
         setSending(false);
         return;
       }
+      await discardSavedDraft(); // 予約できたら下書きは消す
       onSent("scheduled");
     } catch {
       setSendError("予約に失敗しました（ネットワークを確認してください）");
@@ -302,6 +341,15 @@ export function ReplyComposer({
     !!body &&
     !!subject.trim() &&
     looksLikeAddressList(recipients.to);
+
+  // Save is allowed with partial content (the whole point of a draft).
+  const canSaveDraft =
+    !sending &&
+    !savingDraft &&
+    !generating &&
+    !busy &&
+    !reviewing &&
+    (!!body.trim() || !!subject.trim() || !!recipients.to.trim());
 
   return (
     <div className="flex flex-1 overflow-hidden bg-bg">
@@ -464,8 +512,17 @@ export function ReplyComposer({
               予約送信
             </button>
             <button
+              onClick={saveDraft}
+              disabled={!canSaveDraft}
+              title="送らずに下書きとして保存（端末内のみ）"
+              className="ml-auto flex items-center gap-2 rounded-lg border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+            >
+              {savingDraft ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              下書き保存
+            </button>
+            <button
               onClick={onClose}
-              className="ml-auto rounded-lg px-3 py-2 text-sm text-fg-muted hover:bg-surface-2"
+              className="rounded-lg px-3 py-2 text-sm text-fg-muted hover:bg-surface-2"
             >
               破棄
             </button>

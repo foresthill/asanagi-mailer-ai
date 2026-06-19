@@ -15,6 +15,7 @@ import {
   SquarePen,
   Users,
   ListChecks,
+  FileText,
 } from "lucide-react";
 import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,7 @@ export function Sidebar({
   folder,
   counts,
   scheduledCount,
+  draftsCount,
   aiConfigured,
   accounts,
   account,
@@ -42,6 +44,7 @@ export function Sidebar({
   onSelectAccount,
   onOpenSettings,
   onOpenScheduled,
+  onOpenDrafts,
   onOpenSweep,
   onCompose,
   onSelectView,
@@ -49,6 +52,7 @@ export function Sidebar({
   folder: FolderView;
   counts: Partial<Record<FolderView, number>>;
   scheduledCount: number;
+  draftsCount: number;
   aiConfigured: boolean;
   accounts: AccountInfo[];
   account: string; // "all" or an account key
@@ -59,6 +63,7 @@ export function Sidebar({
   onSelectAccount: (key: string) => void;
   onOpenSettings: () => void;
   onOpenScheduled: () => void;
+  onOpenDrafts: () => void;
   onOpenSweep: () => void;
   onCompose: () => void;
 }) {
@@ -165,6 +170,19 @@ export function Sidebar({
         >
           <Sunrise className="size-4" />
           <span className="flex-1 text-left">朝の一凪</span>
+        </button>
+        <button
+          onClick={onOpenDrafts}
+          title="保存した下書きを表示"
+          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg"
+        >
+          <FileText className="size-4" />
+          <span className="flex-1 text-left">下書き</span>
+          {draftsCount ? (
+            <span className="rounded-full bg-accent-soft px-1.5 text-xs tabular-nums text-accent">
+              {draftsCount}
+            </span>
+          ) : null}
         </button>
         <button
           onClick={onOpenScheduled}
