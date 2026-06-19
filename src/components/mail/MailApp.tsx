@@ -81,22 +81,45 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     }
   }, []);
 
+  // Newest request wins: a slow live response must never overwrite a fresher
+  // folder/account the user has since switched to.
+  const listReq = useRef(0);
   const loadList = useCallback(
     async (f: FolderView, acct: string) => {
+      const token = ++listReq.current;
       setLoading(true);
-      try {
-        const res = await fetch(`/api/emails?state=${f}&account=${encodeURIComponent(acct)}`);
-        const data = await res.json();
+      const apply = (data: { emails?: Email[]; accounts?: AccountInfo[] }) => {
+        if (token !== listReq.current) return; // superseded
         const list: Email[] = data.emails ?? [];
         setEmails(list);
         if (data.accounts) setAccounts(data.accounts);
+        setCounts((c) => ({ ...c, [f]: list.filter((e) => !e.read || f !== "inbox").length }));
+      };
+      const base = `/api/emails?state=${f}&account=${encodeURIComponent(acct)}`;
+      try {
+        // 1) Paint instantly from the local cache (no provider round-trip).
+        try {
+          const cres = await fetch(`${base}&cached=1`);
+          const cdata = await cres.json();
+          if (token !== listReq.current) return;
+          if ((cdata.emails ?? []).length) {
+            apply(cdata);
+            setLoading(false); // content is on screen; revalidate quietly
+          }
+        } catch {
+          /* cache is best-effort; fall through to live */
+        }
+        // 2) Revalidate live and replace when it lands.
+        const res = await fetch(base);
+        const data = await res.json();
+        if (token !== listReq.current) return;
+        apply(data);
         if (data.stale?.length) {
           setToast(`オフライン表示: ${data.stale.join(", ")} はキャッシュから表示中`);
           setTimeout(() => setToast(null), 4000);
         }
-        setCounts((c) => ({ ...c, [f]: list.filter((e) => !e.read || f !== "inbox").length }));
       } finally {
-        setLoading(false);
+        if (token === listReq.current) setLoading(false);
         loadStorage(); // cache just changed → refresh the meter
       }
     },
