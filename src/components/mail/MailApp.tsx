@@ -698,6 +698,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           aiConfigured={aiOk}
           onSent={onSent}
           onClose={() => setCompose(null)}
+          onNeedsReauth={() => setShowSettings(true)}
         />
       ) : view === "mail" ? (
         <EmailReader

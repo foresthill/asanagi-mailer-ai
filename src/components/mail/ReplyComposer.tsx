@@ -41,6 +41,7 @@ export function ReplyComposer({
   aiConfigured,
   onSent,
   onClose,
+  onNeedsReauth,
 }: {
   /** Prepared initial state (kind/mode/recipients/subject/body) — compose.ts. */
   init: ComposeInit;
@@ -49,6 +50,8 @@ export function ReplyComposer({
   aiConfigured: boolean;
   onSent: (kind: "sent" | "scheduled") => void;
   onClose: () => void;
+  /** Auth expired mid-send → open 接続設定 so the user can re-auth. */
+  onNeedsReauth: () => void;
 }) {
   // Which account to send from. Defaults to the conversation's account (reply)
   // or the active account (new mail); user can switch when 2+ are configured.
@@ -71,6 +74,9 @@ export function ReplyComposer({
   const [generating, setGenerating] = useState(init.mode === "ai");
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
+  // Persistent send error (draft is kept) — clearer than a transient alert
+  // for the「送ったつもりが送れてない」problem.
+  const [sendError, setSendError] = useState<string | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -240,6 +246,7 @@ export function ReplyComposer({
 
   async function sendNow() {
     setSending(true);
+    setSendError(null);
     try {
       const res = await fetch("/api/send", {
         method: "POST",
@@ -247,13 +254,18 @@ export function ReplyComposer({
         body: JSON.stringify(outgoing()),
       });
       const data = await res.json().catch(() => ({}));
-      // サーバの実エラー（Gmailトークン失効など）をそのまま見せる。
-      if (!res.ok) throw new Error(data.error ?? "送信に失敗しました");
+      if (!res.ok) {
+        // 送信失敗は下書きを残したまま赤バナーで明示（消えるalertにしない）。
+        setSendError(data.error ?? "送信に失敗しました");
+        if (data.needsReauth) onNeedsReauth(); // 接続設定を開いて再認証へ
+        setSending(false);
+        return;
+      }
       // 送信自体は成功したが控えの保存等に失敗 — 黙殺せず必ず知らせる。
       if (data.warning) alert(data.warning);
       onSent("sent");
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "送信に失敗しました");
+    } catch {
+      setSendError("送信に失敗しました（ネットワークを確認してください）");
       setSending(false);
     }
   }
@@ -261,16 +273,23 @@ export function ReplyComposer({
   async function schedule(iso: string) {
     setShowSchedule(false);
     setSending(true);
+    setSendError(null);
     try {
       const res = await fetch("/api/schedule", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message: outgoing(), sendAt: iso }),
       });
-      if (!res.ok) throw new Error("予約に失敗しました");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSendError(data.error ?? "予約に失敗しました");
+        if (data.needsReauth) onNeedsReauth();
+        setSending(false);
+        return;
+      }
       onSent("scheduled");
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "予約に失敗しました");
+    } catch {
+      setSendError("予約に失敗しました（ネットワークを確認してください）");
       setSending(false);
     }
   }
@@ -392,6 +411,17 @@ export function ReplyComposer({
           </div>
         </div>
 
+        {sendError && (
+          <div className="flex items-start gap-2 border-t border-red-500/30 bg-red-500/10 px-6 py-2 text-xs text-red-700 dark:text-red-400">
+            <span className="flex-1">送信できませんでした: {sendError}</span>
+            <button
+              onClick={() => setSendError(null)}
+              className="shrink-0 rounded px-1.5 underline-offset-2 hover:underline"
+            >
+              閉じる
+            </button>
+          </div>
+        )}
         {/* Review bar OR send controls */}
         {reviewing ? (
           <div className="flex items-center gap-2 border-t border-border bg-surface px-6 py-3">
