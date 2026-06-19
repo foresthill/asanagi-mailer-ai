@@ -21,6 +21,7 @@ import {
   formatAddressList,
   looksLikeAddressList,
   parseAddressList,
+  splitQuotedDraft,
   type ComposeInit,
 } from "./compose";
 
@@ -142,6 +143,14 @@ export function ReplyComposer({
   async function runSuggest(instruction: string, scope: "selection" | "whole") {
     if (!instruction.trim() || busy || reviewing) return;
     const sel = scope === "selection" && selectionText ? selectionText : null;
+    // 添削は「自分が書いた文章」だけが対象。引用文(>付きの元メール)は切り離し、
+    // AIには head（自分の本文）だけ渡して、返ってきたら引用文を末尾に戻す。
+    const { head, tail } = splitQuotedDraft(body, init.quote ?? "");
+    // 選択範囲が引用文の中なら、添削しない（自分の文章を選ぶよう促す）。
+    if (sel && tail && !head.includes(sel)) {
+      setNote("引用部分は添削できません（自分が書いた文章を選択してください）");
+      return;
+    }
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setBusy(true);
@@ -154,7 +163,7 @@ export function ReplyComposer({
         signal: ctrl.signal,
         body: JSON.stringify({
           email: init.source, // optional context (absent for new/forward)
-          draft: body,
+          draft: head,
           instruction,
           selection: sel ? { start: 0, end: 0, text: sel } : undefined,
           subject, // blank → the AI proposes one alongside the revision
@@ -162,7 +171,11 @@ export function ReplyComposer({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "提案の生成に失敗しました");
-      const revised: string = data.revised ?? body;
+      const revisedHead: string = data.revised ?? head;
+      // 引用文をそのまま末尾に再結合（AIは引用文に一切触れていない）。
+      const revised: string = tail
+        ? `${revisedHead.replace(/\s+$/, "")}\n\n${tail}`
+        : revisedHead;
       // Fill the subject only if the user still hasn't typed one meanwhile.
       const proposedSubject =
         typeof data.subject === "string" && data.subject && !subject.trim()
