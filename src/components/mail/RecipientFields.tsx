@@ -1,12 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
+import type { EmailAddress } from "@/lib/types";
+import { formatAddressList, parseAddressList } from "./compose";
 
 export interface RecipientValues {
   to: string;
   cc: string;
   bcc: string;
 }
+
+type FieldKey = keyof RecipientValues;
 
 /** Minimal contact shape for the autocomplete (from /api/contacts). */
 interface ContactHit {
@@ -15,18 +20,12 @@ interface ContactHit {
   self?: boolean;
 }
 
-/** Fragment being typed = text after the last comma/semicolon. */
-function currentFragment(value: string): { head: string; frag: string } {
-  const idx = Math.max(value.lastIndexOf(","), value.lastIndexOf("、"), value.lastIndexOf(";"));
-  return { head: idx >= 0 ? value.slice(0, idx + 1) : "", frag: value.slice(idx + 1).trim() };
-}
-
 /**
- * Gmail-style recipient rows: To always visible, Cc/Bcc revealed on demand
- * (auto-expanded when prefilled, e.g. reply-all). Long recipient lists WRAP
- * (auto-growing textarea) instead of scrolling horizontally. Values are
- * comma-separated; both `a@b.c` and `名前 <a@b.c>` forms are accepted
- * (compose.ts parses them at send time).
+ * Gmail-style recipient rows with draggable chips. To always visible, Cc/Bcc
+ * revealed on demand (auto-expanded when prefilled, e.g. reply-all). Each
+ * recipient is a chip you can DRAG between To/Cc/Bcc or remove with ×; typing
+ * in the inline input adds new ones (comma/Enter commits). Values stay
+ * comma-separated strings so compose.ts parses them unchanged at send time.
  *
  * Typing filters the auto-derived address book (連絡先) and suggests
  * completions: ↑↓ to move, Enter/Tab/click to insert. IME-safe.
@@ -43,8 +42,12 @@ export function RecipientFields({
   const [showCc, setShowCc] = useState(Boolean(values.cc));
   const [showBcc, setShowBcc] = useState(Boolean(values.bcc));
   const [contacts, setContacts] = useState<ContactHit[]>([]);
-  const [activeField, setActiveField] = useState<keyof RecipientValues | null>(null);
+  const [activeField, setActiveField] = useState<FieldKey | null>(null);
+  const [draft, setDraft] = useState("");
   const [highlight, setHighlight] = useState(0);
+  const [dropTarget, setDropTarget] = useState<FieldKey | null>(null);
+  // Source of an in-flight drag — dataTransfer alone isn't readable on dragover.
+  const dragFrom = useRef<{ field: FieldKey; index: number } | null>(null);
 
   useEffect(() => {
     // One cheap cache-backed fetch per composer; suggestions filter locally.
@@ -63,17 +66,62 @@ export function RecipientFields({
     };
   }, []);
 
-  // Grow the textarea to fit its content (1..6 lines).
-  const autoGrow = useCallback((el: HTMLTextAreaElement | null) => {
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
-  }, []);
+  const tokensOf = useCallback((key: FieldKey) => parseAddressList(values[key]), [values]);
 
-  const suggestionsFor = (key: keyof RecipientValues): ContactHit[] => {
-    const { frag } = currentFragment(values[key]);
-    if (frag.length < 1) return [];
-    const q = frag.toLowerCase();
+  const reveal = (key: FieldKey) => {
+    if (key === "cc") setShowCc(true);
+    if (key === "bcc") setShowBcc(true);
+  };
+
+  /** Append addresses to a field, de-duplicating by email. */
+  const addTo = (key: FieldKey, add: EmailAddress[]) => {
+    const cur = tokensOf(key);
+    const seen = new Set(cur.map((a) => a.email.toLowerCase()));
+    const merged = [...cur];
+    for (const a of add) {
+      const k = a.email.toLowerCase();
+      if (k && !seen.has(k)) {
+        seen.add(k);
+        merged.push(a);
+      }
+    }
+    onChange({ ...values, [key]: formatAddressList(merged) });
+  };
+
+  const removeAt = (key: FieldKey, index: number) => {
+    const list = tokensOf(key);
+    list.splice(index, 1);
+    onChange({ ...values, [key]: formatAddressList(list) });
+  };
+
+  /** Move one chip from one field to another in a single update (no clobber). */
+  const moveToken = (from: FieldKey, index: number, to: FieldKey) => {
+    if (from === to) return;
+    const src = tokensOf(from);
+    const moved = src[index];
+    if (!moved) return;
+    src.splice(index, 1);
+    const dst = tokensOf(to);
+    const exists = dst.some((a) => a.email.toLowerCase() === moved.email.toLowerCase());
+    onChange({
+      ...values,
+      [from]: formatAddressList(src),
+      [to]: exists ? formatAddressList(dst) : formatAddressList([...dst, moved]),
+    });
+    reveal(to);
+  };
+
+  /** Commit the typed text (minus any trailing separator) as new chips. */
+  const commitDraft = (key: FieldKey, text = draft) => {
+    const t = text.replace(/[,;、]+\s*$/, "").trim();
+    if (t) addTo(key, parseAddressList(t));
+    setDraft("");
+    setHighlight(0);
+  };
+
+  const suggestionsFor = (key: FieldKey): ContactHit[] => {
+    const q = draft.trim().toLowerCase();
+    if (q.length < 1) return [];
     const already = values[key].toLowerCase();
     return contacts
       .filter(
@@ -84,63 +132,131 @@ export function RecipientFields({
       .slice(0, 6);
   };
 
-  const insert = (key: keyof RecipientValues, c: ContactHit) => {
-    const { head } = currentFragment(values[key]);
-    const display = c.name ? `${c.name} <${c.email}>` : c.email;
-    const next = `${head}${head ? " " : ""}${display}, `;
-    onChange({ ...values, [key]: next });
+  const insertContact = (key: FieldKey, c: ContactHit) => {
+    addTo(key, [{ email: c.email, name: c.name }]);
+    setDraft("");
     setHighlight(0);
   };
 
-  const row = (
-    label: string,
-    key: keyof RecipientValues,
-    placeholder: string,
-    extra?: React.ReactNode,
-  ) => {
+  const row = (label: string, key: FieldKey, placeholder: string, extra?: React.ReactNode) => {
     const open = activeField === key;
     const hits = open ? suggestionsFor(key) : [];
+    const chips = tokensOf(key);
     return (
-      <div className="relative flex items-start gap-2 border-b border-border py-1.5">
-        <span className="w-8 shrink-0 pt-0.5 text-xs text-fg-subtle">{label}</span>
-        <textarea
-          ref={autoGrow}
-          value={values[key]}
-          disabled={disabled}
-          rows={1}
-          onChange={(e) => {
-            autoGrow(e.currentTarget);
-            onChange({ ...values, [key]: e.target.value });
-            setHighlight(0);
-          }}
-          onFocus={() => {
-            setActiveField(key);
-            setHighlight(0);
-          }}
-          onBlur={() => {
-            // Delay so a click on a suggestion (mousedown) lands first.
-            setTimeout(() => setActiveField((f) => (f === key ? null : f)), 150);
-          }}
-          onKeyDown={(e) => {
-            if (e.nativeEvent.isComposing || hits.length === 0) return;
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setHighlight((h) => Math.min(hits.length - 1, h + 1));
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setHighlight((h) => Math.max(0, h - 1));
-            } else if (e.key === "Enter" || e.key === "Tab") {
-              e.preventDefault();
-              insert(key, hits[Math.min(highlight, hits.length - 1)]);
-            } else if (e.key === "Escape") {
-              setActiveField(null);
-            }
-          }}
-          placeholder={placeholder}
-          autoComplete="off"
-          spellCheck={false}
-          className="min-w-0 flex-1 resize-none overflow-hidden bg-transparent font-mono text-sm leading-6 outline-none placeholder:text-fg-subtle disabled:opacity-50"
-        />
+      <div
+        className={`relative flex items-start gap-2 border-b py-1.5 transition-colors ${
+          dropTarget === key ? "border-accent bg-accent-soft/40" : "border-border"
+        }`}
+        onDragOver={(e) => {
+          if (!dragFrom.current) return;
+          e.preventDefault();
+          setDropTarget(key);
+        }}
+        onDragLeave={(e) => {
+          // Only clear when truly leaving the row (not entering a child).
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const src = dragFrom.current;
+          dragFrom.current = null;
+          setDropTarget(null);
+          if (src) moveToken(src.field, src.index, key);
+        }}
+      >
+        <span className="w-8 shrink-0 pt-1 text-xs text-fg-subtle">{label}</span>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          {chips.map((a, i) => (
+            <span
+              key={`${a.email}-${i}`}
+              draggable={!disabled}
+              onDragStart={(e) => {
+                dragFrom.current = { field: key, index: i };
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", a.email);
+              }}
+              onDragEnd={() => {
+                dragFrom.current = null;
+                setDropTarget(null);
+              }}
+              title={a.name ? `${a.name} <${a.email}>` : a.email}
+              className="inline-flex max-w-[220px] cursor-grab items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-xs active:cursor-grabbing"
+            >
+              <span className="truncate">{a.name ?? a.email}</span>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={() => removeAt(key, i)}
+                  className="grid size-3.5 shrink-0 place-items-center rounded-full text-fg-subtle hover:bg-surface-2 hover:text-high"
+                  aria-label="宛先を削除"
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </span>
+          ))}
+          <input
+            value={open ? draft : ""}
+            disabled={disabled}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (/[,;、]\s*$/.test(v)) commitDraft(key, v);
+              else {
+                setDraft(v);
+                setHighlight(0);
+              }
+            }}
+            onFocus={() => {
+              setActiveField(key);
+              setDraft("");
+              setHighlight(0);
+            }}
+            onBlur={() => {
+              // Delay so a click on a suggestion (mousedown) lands first.
+              setTimeout(() => {
+                setActiveField((f) => {
+                  if (f !== key) return f;
+                  commitDraft(key);
+                  return null;
+                });
+              }, 150);
+            }}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === "Backspace" && draft === "" && chips.length > 0) {
+                e.preventDefault();
+                removeAt(key, chips.length - 1);
+                return;
+              }
+              if (hits.length > 0) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setHighlight((h) => Math.min(hits.length - 1, h + 1));
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setHighlight((h) => Math.max(0, h - 1));
+                  return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  insertContact(key, hits[Math.min(highlight, hits.length - 1)]);
+                  return;
+                }
+              } else if ((e.key === "Enter" || e.key === "Tab") && draft.trim()) {
+                e.preventDefault();
+                commitDraft(key);
+                return;
+              }
+              if (e.key === "Escape") setActiveField(null);
+            }}
+            placeholder={chips.length === 0 ? placeholder : ""}
+            autoComplete="off"
+            spellCheck={false}
+            className="min-w-[8rem] flex-1 bg-transparent font-mono text-sm leading-6 outline-none placeholder:text-fg-subtle disabled:opacity-50"
+          />
+        </div>
         {extra}
         {hits.length > 0 && (
           <ul className="absolute left-10 right-0 top-full z-30 mt-0.5 overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow)]">
@@ -148,10 +264,10 @@ export function RecipientFields({
               <li key={c.email}>
                 <button
                   type="button"
-                  // mousedown beats the textarea blur, so the click registers.
+                  // mousedown beats the input blur, so the click registers.
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    insert(key, c);
+                    insertContact(key, c);
                   }}
                   onMouseEnter={() => setHighlight(i)}
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
@@ -185,8 +301,8 @@ export function RecipientFields({
       {row(
         "To",
         "to",
-        "to@example.com（カンマ区切り・名前 <addr> も可）",
-        <span className="flex shrink-0 items-center gap-1.5 pt-0.5 text-[11px]">
+        "to@example.com（カンマ/Enterで確定・チップはドラッグで移動）",
+        <span className="flex shrink-0 items-center gap-1.5 pt-1 text-[11px]">
           {!showCc && (
             <button
               type="button"
