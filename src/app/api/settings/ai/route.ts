@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAISettings, saveAISettings } from "@/lib/store";
-import { DEFAULT_MODELS, loadAIConfig } from "@/lib/ai/model";
+import { CHEAP_MODELS, DEFAULT_MODELS, loadAIConfig } from "@/lib/ai/model";
 import type { AIProvider, AISettings } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,12 +22,15 @@ async function safeView() {
   return {
     provider: s.provider ?? "auto",
     model: s.model ?? "",
+    judgmentModel: s.judgmentModel ?? "",
     piiMask: s.piiMask ?? true,
     keys,
     defaultModels: DEFAULT_MODELS,
+    cheapModels: CHEAP_MODELS,
     active: {
       provider: cfg.provider,
       model: cfg.model,
+      judgmentModel: cfg.judgmentModel,
       configured: cfg.configured,
       source: cfg.source,
     },
@@ -51,6 +54,7 @@ export async function POST(req: Request) {
     patch.provider = body.provider;
   }
   if (typeof body.model === "string") patch.model = body.model;
+  if (typeof body.judgmentModel === "string") patch.judgmentModel = body.judgmentModel;
   if (typeof body.piiMask === "boolean") patch.piiMask = body.piiMask;
   if (body.keys && typeof body.keys === "object") {
     const keys: Partial<Record<AIProvider, string>> = {};

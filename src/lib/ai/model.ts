@@ -29,9 +29,23 @@ export const DEFAULT_MODELS: Record<AIProvider, string> = {
   gateway: "anthropic/claude-sonnet-4.5",
 };
 
+/**
+ * Suggested cheap models for high-volume judgments (朝の一凪 / 重要度判定).
+ * Shown as a placeholder hint in 接続設定 — the user can edit/clear. Not
+ * applied unless explicitly set, so it never silently changes behavior.
+ */
+export const CHEAP_MODELS: Record<AIProvider, string> = {
+  anthropic: "claude-haiku-4-5-20251001",
+  openai: "gpt-4o-mini",
+  openrouter: "anthropic/claude-haiku-4.5",
+  gateway: "anthropic/claude-haiku-4.5",
+};
+
 export interface AIConfig {
   provider: AIProvider;
   model: string;
+  /** Model for 朝の一凪 / 重要度判定. Falls back to `model` when unset. */
+  judgmentModel: string;
   apiKey?: string;
   configured: boolean;
   /** Where the active key/provider came from, for UI transparency. */
@@ -79,13 +93,15 @@ export async function loadAIConfig(): Promise<AIConfig> {
 
   const provider = explicitSetting ?? explicitEnv ?? autoDetect();
   const model = s.model?.trim() || process.env.AI_MODEL || DEFAULT_MODELS[provider];
+  // Judgment model is opt-in; empty → same as the main model (no change).
+  const judgmentModel = s.judgmentModel?.trim() || model;
   const apiKey = mergedKey(provider);
   const configured =
     provider === "gateway" ? Boolean(apiKey || process.env.VERCEL_OIDC_TOKEN) : Boolean(apiKey);
   const source: "settings" | "env" =
     storedKey(provider) || explicitSetting || s.model?.trim() ? "settings" : "env";
 
-  return { provider, model, apiKey, configured, source, piiMask: s.piiMask ?? true };
+  return { provider, model, judgmentModel, apiKey, configured, source, piiMask: s.piiMask ?? true };
 }
 
 /** Build the language model for the given resolved config. */
