@@ -15,6 +15,10 @@ export type SweepAction = "keep" | "archive" | "trash";
 
 export interface SweepItem {
   id: string;
+  /** Display fields echoed back so the dialog never has to re-join by id. */
+  subject: string;
+  fromName?: string;
+  fromEmail: string;
   action: SweepAction;
   reason: string;
   source: "learned" | "heuristic" | "ai";
@@ -37,10 +41,16 @@ const schema = z.object({
  * 迷ったら keep（誤って人のメールを片付けない）。
  */
 /** Free keyword fallback row (no AI cost). */
+/** Display fields echoed to the dialog (real, unmasked — for the user's eyes). */
+function disp(e: Email) {
+  return { subject: e.subject, fromName: e.from.name, fromEmail: e.from.email };
+}
+
 function heuristicItem(e: Email): SweepItem {
   const imp = heuristicImportance(e);
   return {
     id: e.id,
+    ...disp(e),
     action: imp === "low" ? "archive" : "keep",
     reason: imp === "low" ? "簡易判定: 低" : "簡易判定",
     source: "heuristic",
@@ -63,9 +73,9 @@ export async function POST(req: Request) {
   for (const e of fresh.slice(0, 100)) {
     const learned = guessFromSignals(e.from.email, signals);
     if (learned === "low") {
-      items.push({ id: e.id, action: "archive", reason: "学習済み: 低", source: "learned" });
+      items.push({ id: e.id, ...disp(e), action: "archive", reason: "学習済み: 低", source: "learned" });
     } else if (learned) {
-      items.push({ id: e.id, action: "keep", reason: "学習済みの相手", source: "learned" });
+      items.push({ id: e.id, ...disp(e), action: "keep", reason: "学習済みの相手", source: "learned" });
     } else {
       undecided.push(e);
     }
@@ -108,6 +118,7 @@ export async function POST(req: Request) {
       const r = byIndex.get(i);
       items.push({
         id: e.id,
+        ...disp(e),
         action: r?.action ?? "keep", // 返答漏れは keep に倒す
         reason: masker.unmask(r?.reason ?? ""),
         source: "ai",
