@@ -104,7 +104,8 @@ export async function POST(req: Request) {
       ...lines,
     ].join("\n");
     const { object, usage } = await generateObject({
-      model: resolveModel(cfg),
+      // 朝の一凪は安価な判定用モデルで（未設定ならメインと同じ）。
+      model: resolveModel({ ...cfg, model: cfg.judgmentModel }),
       // Explicit output budget: without it some providers reserve the model max
       // (64k) and fail the affordability check when credits run low.
       maxOutputTokens: 4000,
@@ -112,7 +113,7 @@ export async function POST(req: Request) {
       system: SWEEP_SYSTEM,
       prompt,
     });
-    logAiUsage("sweep", cfg.model, usage?.inputTokens, usage?.outputTokens, {
+    logAiUsage("sweep", cfg.judgmentModel, usage?.inputTokens, usage?.outputTokens, {
       prompt: `[system]\n${SWEEP_SYSTEM}\n\n[prompt]\n${prompt}`,
       response: JSON.stringify(object.items, null, 2),
     });

@@ -166,6 +166,11 @@ export interface AISettings {
   piiMask?: boolean;
   /** Provider-specific model id. Empty → sensible per-provider default. */
   model?: string;
+  /**
+   * Cheaper model for the high-volume, low-stakes judgments (朝の一凪 /
+   * 重要度判定). Empty → use `model`. Reply drafting & 添削 always use `model`.
+   */
+  judgmentModel?: string;
   /** API keys keyed by provider. Stored locally only. */
   keys?: Partial<Record<AIProvider, string>>;
 }

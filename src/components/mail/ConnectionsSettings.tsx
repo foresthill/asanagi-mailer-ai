@@ -15,10 +15,18 @@ interface KeyStatus {
 interface View {
   provider: ProviderChoice;
   model: string;
+  judgmentModel: string;
   piiMask: boolean;
   keys: Record<AIProvider, KeyStatus>;
   defaultModels: Record<AIProvider, string>;
-  active: { provider: AIProvider; model: string; configured: boolean; source: "settings" | "env" };
+  cheapModels: Record<AIProvider, string>;
+  active: {
+    provider: AIProvider;
+    model: string;
+    judgmentModel: string;
+    configured: boolean;
+    source: "settings" | "env";
+  };
 }
 
 const PROVIDER_OPTIONS: { value: ProviderChoice; label: string; hint: string; needsKey: boolean }[] = [
@@ -51,6 +59,7 @@ export function ConnectionsSettings({
   const [view, setView] = useState<View | null>(null);
   const [provider, setProvider] = useState<ProviderChoice>("openrouter");
   const [model, setModel] = useState("");
+  const [judgmentModel, setJudgmentModel] = useState("");
   // Keys the user typed this session (per provider). Empty string = clear.
   const [keyInputs, setKeyInputs] = useState<Partial<Record<AIProvider, string>>>({});
   const [test, setTest] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -66,6 +75,7 @@ export function ConnectionsSettings({
       // key field is visible immediately; "auto" stays selectable explicitly.
       setProvider(data.provider && data.provider !== "auto" ? data.provider : "openrouter");
       setModel(data.model ?? "");
+      setJudgmentModel(data.judgmentModel ?? "");
       setKeyInputs({});
     } finally {
       setLoading(false);
@@ -92,7 +102,7 @@ export function ConnectionsSettings({
     const res = await fetch("/api/settings/ai", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ provider, model, keys }),
+      body: JSON.stringify({ provider, model, judgmentModel, keys }),
     });
     const data = (await res.json()) as View & { ok: boolean };
     setView(data);
@@ -132,6 +142,7 @@ export function ConnectionsSettings({
 
   const currentKeyStatus = keyProvider ? view?.keys[keyProvider] : undefined;
   const defaultModel = view && provider !== "auto" ? view.defaultModels[provider] : "";
+  const cheapModel = view && provider !== "auto" ? view.cheapModels[provider] : "";
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
@@ -237,6 +248,34 @@ export function ConnectionsSettings({
               </span>
             </label>
 
+            {/* Judgment model — cheap model for 朝の一凪 / 重要度判定 */}
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-fg-muted">
+                判定用モデル ID（朝の一凪・重要度判定／任意）
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  value={judgmentModel}
+                  onChange={(e) => setJudgmentModel(e.target.value)}
+                  placeholder={cheapModel ? `安価な例: ${cheapModel}` : "空欄ならメインと同じ"}
+                  className="flex-1 rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+                />
+                {cheapModel && (
+                  <button
+                    type="button"
+                    onClick={() => setJudgmentModel(cheapModel)}
+                    className="shrink-0 rounded-lg border border-border px-2.5 py-2 text-xs text-fg-muted hover:border-accent hover:text-accent"
+                  >
+                    安価モデルを使う
+                  </button>
+                )}
+              </div>
+              <span className="text-[11px] text-fg-subtle">
+                朝の一凪・重要度判定は本文を送らない軽い仕分けなので、安価なモデルでコストを大きく下げられます。
+                <strong>空欄ならメインと同じ</strong>。返信生成・添削は常にメインのモデルを使います。
+              </span>
+            </label>
+
             {/* Active status */}
             {view && (
               <div className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-muted">
@@ -245,6 +284,11 @@ export function ConnectionsSettings({
                   <span className="text-emerald-600">（接続可・{view.active.source}）</span>
                 ) : (
                   <span className="text-high">（キー未設定）</span>
+                )}
+                {view.active.judgmentModel !== view.active.model && (
+                  <span className="mt-0.5 block">
+                    判定用: <span className="font-mono">{view.active.judgmentModel}</span>
+                  </span>
                 )}
               </div>
             )}

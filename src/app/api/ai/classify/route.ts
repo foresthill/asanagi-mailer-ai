@@ -64,7 +64,8 @@ export async function POST(req: Request) {
     const profile = await getJudgmentProfile();
     const prompt = classifyContext(target, signals) + profileBlock(profile);
     const { object, usage } = await generateObject({
-      model: resolveModel(cfg),
+      // 重要度判定は安価な判定用モデルで（未設定ならメインと同じ）。
+      model: resolveModel({ ...cfg, model: cfg.judgmentModel }),
       // Explicit output budget: without it some providers reserve the model max
       // (64k) and fail the affordability check when credits run low.
       maxOutputTokens: 300,
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
       prompt,
     });
     record(email, object.importance, object.reason, "ai");
-    logAiUsage("classify", cfg.model, usage?.inputTokens, usage?.outputTokens, {
+    logAiUsage("classify", cfg.judgmentModel, usage?.inputTokens, usage?.outputTokens, {
       prompt: `[system]\n${CLASSIFY_SYSTEM}\n\n[prompt]\n${prompt}`,
       response: JSON.stringify(object, null, 2),
     });
