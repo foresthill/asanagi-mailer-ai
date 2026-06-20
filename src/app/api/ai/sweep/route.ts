@@ -97,6 +97,12 @@ export async function POST(req: Request) {
       const preview = (cfg.piiMask ? masker.mask(e.snippet) : e.snippet).slice(0, 140);
       return `${i}. From: ${from}\n   件名: ${subject}\n   冒頭: ${preview}`;
     });
+    const prompt = [
+      `以下の${undecided.length}通について、index ごとに action と reason を返してください。`,
+      profileBlock(await getJudgmentProfile()),
+      "",
+      ...lines,
+    ].join("\n");
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       // Explicit output budget: without it some providers reserve the model max
@@ -104,14 +110,12 @@ export async function POST(req: Request) {
       maxOutputTokens: 4000,
       schema,
       system: SWEEP_SYSTEM,
-      prompt: [
-        `以下の${undecided.length}通について、index ごとに action と reason を返してください。`,
-        profileBlock(await getJudgmentProfile()),
-        "",
-        ...lines,
-      ].join("\n"),
+      prompt,
     });
-    logAiUsage("sweep", cfg.model, usage?.inputTokens, usage?.outputTokens);
+    logAiUsage("sweep", cfg.model, usage?.inputTokens, usage?.outputTokens, {
+      prompt: `[system]\n${SWEEP_SYSTEM}\n\n[prompt]\n${prompt}`,
+      response: JSON.stringify(object.items, null, 2),
+    });
 
     const byIndex = new Map(object.items.map((r) => [r.index, r]));
     undecided.forEach((e, i) => {

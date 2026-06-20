@@ -57,6 +57,23 @@ export async function POST(req: Request) {
           ">>>",
         ].join("\n")
       : "下書き全体を対象に、指示に関係する箇所のみ最小限で修正してください。";
+    const prompt = [
+      "以下のメール下書きを、指示に従って修正してください。",
+      scope,
+      "",
+      `指示: ${instruction}`,
+      ...(needSubject
+        ? ["", "件名が未入力です。subject にこの下書きに合う簡潔な件名も提案してください。"]
+        : []),
+      ...(maskedEmail
+        ? ["", "--- 返信対象の元メール（文脈） ---", emailContext(maskedEmail)]
+        : []),
+      "",
+      "--- 現在の下書き（全文） ---",
+      maskedDraft,
+      "",
+      "revised には修正後の下書き全文のみを入れてください（前置き・説明・引用符なし）。",
+    ].join("\n");
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       // Explicit output budget: without it some providers reserve the model max
@@ -64,25 +81,12 @@ export async function POST(req: Request) {
       maxOutputTokens: 4000,
       schema,
       system: REFINE_SYSTEM,
-      prompt: [
-        "以下のメール下書きを、指示に従って修正してください。",
-        scope,
-        "",
-        `指示: ${instruction}`,
-        ...(needSubject
-          ? ["", "件名が未入力です。subject にこの下書きに合う簡潔な件名も提案してください。"]
-          : []),
-        ...(maskedEmail
-          ? ["", "--- 返信対象の元メール（文脈） ---", emailContext(maskedEmail)]
-          : []),
-        "",
-        "--- 現在の下書き（全文） ---",
-        maskedDraft,
-        "",
-        "revised には修正後の下書き全文のみを入れてください（前置き・説明・引用符なし）。",
-      ].join("\n"),
+      prompt,
     });
-    logAiUsage("suggest", cfg.model, usage?.inputTokens, usage?.outputTokens);
+    logAiUsage("suggest", cfg.model, usage?.inputTokens, usage?.outputTokens, {
+      prompt: `[system]\n${REFINE_SYSTEM}\n\n[prompt]\n${prompt}`,
+      response: JSON.stringify(object, null, 2),
+    });
     const out = object as { revised: string; subject?: string };
     return NextResponse.json({
       revised: masker.unmask(out.revised.trim()),

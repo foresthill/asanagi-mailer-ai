@@ -16,6 +16,7 @@ import {
   Users,
   ListChecks,
   FileText,
+  ScrollText,
 } from "lucide-react";
 import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -57,9 +58,9 @@ export function Sidebar({
   accounts: AccountInfo[];
   account: string; // "all" or an account key
   storage: StorageInfo | null;
-  view: "mail" | "contacts" | "triage";
+  view: "mail" | "contacts" | "triage" | "ailog";
   onSelect: (f: FolderView) => void;
-  onSelectView: (v: "mail" | "contacts" | "triage") => void;
+  onSelectView: (v: "mail" | "contacts" | "triage" | "ailog") => void;
   onSelectAccount: (key: string) => void;
   onOpenSettings: () => void;
   onOpenScheduled: () => void;
@@ -135,6 +136,19 @@ export function Sidebar({
         >
           <ListChecks className={cn("size-4", view === "triage" && "text-accent")} />
           <span className="flex-1 text-left">仕分けレビュー</span>
+        </button>
+        <button
+          onClick={() => onSelectView("ailog")}
+          title="AIに送った内容・返答・コストのログ"
+          className={cn(
+            "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+            view === "ailog"
+              ? "bg-accent-soft font-medium text-fg"
+              : "text-fg-muted hover:bg-surface hover:text-fg",
+          )}
+        >
+          <ScrollText className={cn("size-4", view === "ailog" && "text-accent")} />
+          <span className="flex-1 text-left">AIログ</span>
         </button>
       </nav>
 
