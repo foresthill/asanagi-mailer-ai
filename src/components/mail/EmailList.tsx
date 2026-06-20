@@ -10,6 +10,7 @@ import {
   Loader2,
   Inbox,
   Layers,
+  Paperclip,
   RefreshCw,
   Reply,
   Search,
@@ -480,6 +481,9 @@ function EmailListItem({
               )}
               {email.replied && (
                 <Reply className="size-3 text-accent" aria-label="返信済み" />
+              )}
+              {email.hasAttachment && (
+                <Paperclip className="size-3 text-fg-muted" aria-label="添付ファイルあり" />
               )}
               {relativeTime(email.date)}
             </span>

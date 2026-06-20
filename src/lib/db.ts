@@ -78,6 +78,12 @@ function getDb(): DatabaseSync {
   } catch {
     /* column already exists */
   }
+  // 📎 indicator: a boolean is enough (attachment bytes are never cached).
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN has_attachment INTEGER DEFAULT 0");
+  } catch {
+    /* column already exists */
+  }
   // AIログ: 実際に送った中身（マスク後＝端末から出た形）と返答を残す。
   try {
     db.exec("ALTER TABLE ai_usage ADD COLUMN prompt TEXT");
@@ -109,6 +115,7 @@ function rowToEmail(r: Record<string, unknown>): Email {
     state: String(r.state) as MailboxState,
     messageId: (r.message_id as string) || undefined,
     account: String(r.account),
+    hasAttachment: Boolean(r.has_attachment),
   };
 }
 
@@ -119,13 +126,15 @@ export function upsertEmails(account: string, emails: Email[]): void {
   const stmt = d.prepare(`
     INSERT OR REPLACE INTO messages
       (account, id, thread_id, from_name, from_email, to_json, cc_json, bcc_json,
-       subject, snippet, body, date, read, starred, state, message_id, fetched_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       subject, snippet, body, date, read, starred, state, message_id, fetched_at,
+       has_attachment)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const now = new Date().toISOString();
   d.exec("BEGIN");
   try {
     for (const e of emails) {
+      const hasAtt = e.hasAttachment ?? (e.attachments?.length ?? 0) > 0;
       stmt.run(
         account,
         e.id,
@@ -144,6 +153,7 @@ export function upsertEmails(account: string, emails: Email[]): void {
         e.state,
         e.messageId ?? null,
         now,
+        hasAtt ? 1 : 0,
       );
     }
     d.exec("COMMIT");
