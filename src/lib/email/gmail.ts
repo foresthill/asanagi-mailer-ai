@@ -70,6 +70,22 @@ function findPart(
 
 /** Attachments = parts with a filename and an attachmentId, walking nested
  *  multiparts. Inline calendar (.ics) is handled separately as an invite. */
+/**
+ * Real attachment vs embedded inline image. Inline parts (Content-Disposition:
+ * inline, or a Content-ID referenced from the HTML body — newsletter logos
+ * etc.) are NOT attachments and must not light up the 📎 indicator.
+ */
+function isRealAttachmentPart(part: gmail_v1.Schema$MessagePart): boolean {
+  const headers = part.headers ?? [];
+  const val = (name: string) =>
+    headers.find((h) => (h.name ?? "").toLowerCase() === name)?.value?.toLowerCase() ?? "";
+  const disp = val("content-disposition");
+  if (disp.startsWith("inline")) return false;
+  if (disp.startsWith("attachment")) return true;
+  // No explicit disposition: a Content-ID means it's embedded in the body.
+  return !val("content-id");
+}
+
 function collectAttachments(
   payload: gmail_v1.Schema$MessagePart | undefined,
   out: Attachment[] = [],
@@ -77,7 +93,12 @@ function collectAttachments(
   if (!payload) return out;
   const filename = payload.filename ?? "";
   const attachmentId = payload.body?.attachmentId;
-  if (filename && attachmentId && payload.mimeType !== "text/calendar") {
+  if (
+    filename &&
+    attachmentId &&
+    payload.mimeType !== "text/calendar" &&
+    isRealAttachmentPart(payload)
+  ) {
     out.push({
       id: attachmentId,
       filename: repairMojibake(filename),
@@ -147,6 +168,7 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
   const joinUrl = invite?.joinUrl ?? detectJoinUrl(body);
   const fixAddr = (a: EmailAddress): EmailAddress =>
     a.name ? { ...a, name: repairMojibake(a.name) } : a;
+  const attachments = collectAttachments(msg.payload);
   return {
     id: msg.id!,
     threadId: msg.threadId ?? msg.id!,
@@ -168,7 +190,8 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
     state,
     messageId: header(headers, "Message-ID"),
     invite: invite ?? (joinUrl ? { joinUrl } : undefined),
-    attachments: collectAttachments(msg.payload),
+    attachments,
+    hasAttachment: attachments.length > 0,
   };
 }
 

@@ -218,6 +218,7 @@ export class ImapProvider implements EmailProvider {
       messageId: env.messageId,
       invite: invite ?? (joinUrl ? { joinUrl } : undefined),
       attachments,
+      hasAttachment: (attachments?.length ?? 0) > 0,
     };
   }
 

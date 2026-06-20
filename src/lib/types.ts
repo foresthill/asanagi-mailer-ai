@@ -77,6 +77,12 @@ export interface Email {
   invite?: MeetingInvite;
   /** Attachments on this mail (metadata only — bytes fetched on demand). */
   attachments?: Attachment[];
+  /**
+   * Has at least one *real* attachment (inline images excluded). Persisted to
+   * the cache as a boolean so the list 📎 indicator works without the full
+   * attachment metadata (which the cache doesn't store).
+   */
+  hasAttachment?: boolean;
 }
 
 export interface DraftRequest {
