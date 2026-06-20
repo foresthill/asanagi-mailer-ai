@@ -10,6 +10,9 @@ type SweepAction = "keep" | "archive" | "trash";
 
 interface SweepItem {
   id: string;
+  subject?: string;
+  fromName?: string;
+  fromEmail?: string;
   action: SweepAction;
   reason: string;
   source: "learned" | "heuristic" | "ai";
@@ -154,7 +157,7 @@ export function SweepDialog({
       try {
         const signals = items
           .map((i) => {
-            const from = byId.get(i.id)?.from.email;
+            const from = i.fromEmail ?? byId.get(i.id)?.from.email;
             const action = actions[i.id] ?? i.action;
             return from
               ? { fromEmail: from, importance: action === "keep" ? "normal" : "low" }
@@ -276,6 +279,11 @@ export function SweepDialog({
               <div className="flex flex-col gap-0.5">
                 {ordered.map((i) => {
                   const mail = byId.get(i.id);
+                  // Prefer the fields the API echoed back; fall back to the
+                  // local list, then (last resort) nothing — never the raw id.
+                  const sender =
+                    i.fromName || i.fromEmail || (mail ? displayName(mail.from) : "");
+                  const subject = i.subject ?? mail?.subject ?? "";
                   const cur = actions[i.id] ?? i.action;
                   return (
                     <div
@@ -288,9 +296,9 @@ export function SweepDialog({
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline gap-2">
                           <span className="truncate text-xs font-medium">
-                            {mail ? displayName(mail.from) : i.id}
+                            {sender || "(差出人不明)"}
                           </span>
-                          <span className="truncate text-xs text-fg-muted">{mail?.subject}</span>
+                          <span className="truncate text-xs text-fg-muted">{subject}</span>
                         </span>
                         <span className="text-[10px] text-fg-subtle">{i.reason}</span>
                       </span>
