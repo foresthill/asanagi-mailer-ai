@@ -40,22 +40,40 @@ export async function GET() {
   // Best-effort cost estimate — tokens stay authoritative if pricing fails.
   let totalEstUsd: number | null = null;
   let byModel: (typeof stats.byModel[number] & { estUsd?: number })[] = stats.byModel;
+  let byKind: (typeof stats.byKind[number] & { estUsd?: number })[] = stats.byKind;
   try {
     const prices = await openRouterPrices();
+    const cost = (inTok: number, outTok: number, model: string) => {
+      const p = prices.get(model);
+      return p ? inTok * p.prompt + outTok * p.completion : null;
+    };
     let sum = 0;
     let any = false;
     byModel = stats.byModel.map((m) => {
-      const p = prices.get(m.model);
-      if (!p) return m;
-      const estUsd = m.inputTokens * p.prompt + m.outputTokens * p.completion;
+      const estUsd = cost(m.inputTokens, m.outputTokens, m.model);
+      if (estUsd == null) return m;
       sum += estUsd;
       any = true;
       return { ...m, estUsd };
     });
     if (any) totalEstUsd = sum;
+
+    // Per-kind USD: sum each (kind × model) priced separately, since pricing
+    // is per model. Lets the UI show e.g. "朝の一凪 ≈ $0.34".
+    const kindUsd = new Map<string, number>();
+    const kindPriced = new Set<string>();
+    for (const km of stats.byKindModel) {
+      const estUsd = cost(km.inputTokens, km.outputTokens, km.model);
+      if (estUsd == null) continue;
+      kindUsd.set(km.kind, (kindUsd.get(km.kind) ?? 0) + estUsd);
+      kindPriced.add(km.kind);
+    }
+    byKind = stats.byKind.map((k) =>
+      kindPriced.has(k.kind) ? { ...k, estUsd: kindUsd.get(k.kind) } : k,
+    );
   } catch {
     /* offline or API change — show tokens only */
   }
 
-  return NextResponse.json({ ...stats, byModel, totalEstUsd, pricingSource: "openrouter" });
+  return NextResponse.json({ ...stats, byModel, byKind, totalEstUsd, pricingSource: "openrouter" });
 }

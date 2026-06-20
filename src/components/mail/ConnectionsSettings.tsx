@@ -327,7 +327,7 @@ function AiUsageSection() {
     total: { calls: number; inputTokens: number; outputTokens: number };
     recent: { calls: number; inputTokens: number; outputTokens: number };
     byModel: { model: string; calls: number; inputTokens: number; outputTokens: number; estUsd?: number }[];
-    byKind: { kind: string; calls: number; inputTokens: number; outputTokens: number }[];
+    byKind: { kind: string; calls: number; inputTokens: number; outputTokens: number; estUsd?: number }[];
     totalEstUsd?: number | null;
   } | null>(null);
 
@@ -374,6 +374,7 @@ function AiUsageSection() {
             <span>{KIND_LABEL[k.kind] ?? k.kind}</span>
             <span className="tabular-nums">
               {fmt(k.calls)}回 / in {fmt(k.inputTokens)} / out {fmt(k.outputTokens)}
+              {typeof k.estUsd === "number" ? ` ≈ ${usd(k.estUsd)}` : ""}
             </span>
           </p>
         ))}

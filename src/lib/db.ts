@@ -524,6 +524,14 @@ export interface AiUsageStats {
   byModel: { model: string; calls: number; inputTokens: number; outputTokens: number }[];
   /** Breakdown by feature (all-time): reply / suggest / classify. */
   byKind: { kind: string; calls: number; inputTokens: number; outputTokens: number }[];
+  /** Per feature × model (all-time) — lets the USD estimate be split by kind. */
+  byKindModel: {
+    kind: string;
+    model: string;
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+  }[];
 }
 
 /** Record one AI call. Never throws — logging must not break the feature. */
@@ -578,10 +586,28 @@ export function aiUsageStats(): AiUsageStats {
       ...(col === "model" ? { model: r.k ?? "(不明)" } : { kind: r.k ?? "(不明)" }),
     }));
 
+  const byKindModel = (
+    d
+      .prepare(
+        `SELECT kind, model, COUNT(*) AS calls,
+                COALESCE(SUM(input_tokens), 0) AS input,
+                COALESCE(SUM(output_tokens), 0) AS output
+         FROM ai_usage GROUP BY kind, model ORDER BY input + output DESC`,
+      )
+      .all() as { kind: string | null; model: string | null; calls: number; input: number; output: number }[]
+  ).map((r) => ({
+    kind: r.kind ?? "(不明)",
+    model: r.model ?? "(不明)",
+    calls: Number(r.calls),
+    inputTokens: Number(r.input),
+    outputTokens: Number(r.output),
+  }));
+
   return {
     total: { calls: Number(total.calls), inputTokens: Number(total.input), outputTokens: Number(total.output) },
     recent: { calls: Number(recent.calls), inputTokens: Number(recent.input), outputTokens: Number(recent.output) },
     byModel: group("model") as AiUsageStats["byModel"],
     byKind: group("kind") as AiUsageStats["byKind"],
+    byKindModel,
   };
 }
