@@ -45,6 +45,13 @@ export function SweepDialog({
   const [error, setError] = useState<string | null>(null);
   /** AI判定が使えずキーワード判定にフォールバックした場合の注意書き。 */
   const [warning, setWarning] = useState<string | null>(null);
+  /** 朝の一凪の累計AIコスト（接続設定と同じ /api/ai/usage の sweep 分）。 */
+  const [sweepCost, setSweepCost] = useState<{
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    estUsd?: number;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -72,6 +79,16 @@ export function SweepDialog({
         setItems(list);
         setActions(Object.fromEntries(list.map((i) => [i.id, i.action])));
         if (data.warning) setWarning(data.warning as string);
+        // This run's usage is logged server-side during the POST above —
+        // fetch the cumulative 朝の一凪 cost so it's visible right here.
+        try {
+          const u = await fetch("/api/ai/usage");
+          const ud = await u.json();
+          const k = (ud.byKind ?? []).find((x: { kind: string }) => x.kind === "sweep");
+          if (active && k) setSweepCost(k);
+        } catch {
+          /* cost line is informational */
+        }
       } catch (e) {
         if (active) setError(e instanceof Error ? e.message : "判定に失敗しました");
       } finally {
@@ -96,6 +113,10 @@ export function SweepDialog({
   const archiveCount = items.filter((i) => actions[i.id] === "archive").length;
   const trashCount = items.filter((i) => actions[i.id] === "trash").length;
   const actionable = archiveCount + trashCount;
+  // Cost transparency: how many actually hit the AI this run vs were free.
+  const aiCount = items.filter((i) => i.source === "ai").length;
+  const freeCount = items.length - aiCount;
+  const usd = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`);
 
   /** 全行を一括で同じ処分に（ヘッダの一括ボタン）。 */
   const setAll = (action: SweepAction) =>
@@ -203,6 +224,19 @@ export function SweepDialog({
                   {warning}
                 </p>
               )}
+              {/* コスト透明性: 何通がAIに行ったか・本文は送っていないこと・累計額。 */}
+              <div className="mb-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[11px] leading-relaxed text-fg-muted">
+                今回 <strong className="text-fg">{aiCount}通</strong> をAIで判定（
+                <strong>差出人・件名・冒頭140字のみ／本文は送信していません</strong>・まとめて1回の呼び出し）。
+                {freeCount > 0 && ` 学習済み・簡易判定の${freeCount}通はAIを使っていません。`}
+                {sweepCost && (
+                  <>
+                    {" "}朝の一凪の累計: {sweepCost.calls.toLocaleString("ja-JP")}回
+                    {typeof sweepCost.estUsd === "number" ? `・約 ${usd(sweepCost.estUsd)}` : ""}
+                    <span className="text-fg-subtle">（詳細は 接続設定 → AI使用量）</span>
+                  </>
+                )}
+              </div>
               {/* 一括変更 */}
               <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-fg-subtle">
                 <span className="flex items-center gap-2">
