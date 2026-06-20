@@ -18,6 +18,7 @@ import { ScheduledPanel } from "./ScheduledPanel";
 import { DraftsPanel } from "./DraftsPanel";
 import { ContactsView } from "./ContactsView";
 import { TriageView } from "./TriageView";
+import { AiLogView } from "./AiLogView";
 import { SweepDialog } from "./SweepDialog";
 import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
@@ -44,7 +45,7 @@ function loadGroupAxis(): GroupAxis {
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<FolderView>("inbox");
   // "mail" = folders; "contacts" = auto-derived address book (mini-CRM).
-  const [view, setView] = useState<"mail" | "contacts" | "triage">("mail");
+  const [view, setView] = useState<"mail" | "contacts" | "triage" | "ailog">("mail");
   // "all" = unified inbox across accounts; otherwise a single account key.
   const [account, setAccount] = useState("all");
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
@@ -712,6 +713,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         />
       )}
       {view === "triage" && !compose && <TriageView />}
+      {view === "ailog" && !compose && <AiLogView />}
       {view === "mail" && !replying && (
         <EmailList
           folder={folder}

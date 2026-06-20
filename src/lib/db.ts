@@ -78,6 +78,17 @@ function getDb(): DatabaseSync {
   } catch {
     /* column already exists */
   }
+  // AIログ: 実際に送った中身（マスク後＝端末から出た形）と返答を残す。
+  try {
+    db.exec("ALTER TABLE ai_usage ADD COLUMN prompt TEXT");
+  } catch {
+    /* column already exists */
+  }
+  try {
+    db.exec("ALTER TABLE ai_usage ADD COLUMN response TEXT");
+  } catch {
+    /* column already exists */
+  }
   return db;
 }
 
@@ -534,22 +545,80 @@ export interface AiUsageStats {
   }[];
 }
 
+/** A single logged AI call (audit log — see AIログ view). */
+export interface AiLogEntry {
+  id: number;
+  kind: string;
+  model: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  createdAt: string;
+  /** What actually left the device (PII-masked prompt) and the reply. */
+  prompt: string | null;
+  response: string | null;
+}
+
+/** Keep the audit log bounded — newest N rows only. */
+const AI_LOG_MAX = 2000;
+/** Cap stored content so a huge sweep prompt can't bloat the DB. */
+const AI_LOG_CONTENT_CAP = 20000;
+
 /** Record one AI call. Never throws — logging must not break the feature. */
 export function logAiUsage(
   kind: string,
   model: string,
   inputTokens?: number,
   outputTokens?: number,
+  content?: { prompt?: string; response?: string },
 ): void {
   try {
-    getDb()
-      .prepare(
-        `INSERT INTO ai_usage (kind, model, input_tokens, output_tokens, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(kind, model, inputTokens ?? null, outputTokens ?? null, new Date().toISOString());
+    const clip = (s?: string) =>
+      s == null ? null : s.length > AI_LOG_CONTENT_CAP ? s.slice(0, AI_LOG_CONTENT_CAP) + "…(以下略)" : s;
+    const db = getDb();
+    db.prepare(
+      `INSERT INTO ai_usage (kind, model, input_tokens, output_tokens, created_at, prompt, response)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      kind,
+      model,
+      inputTokens ?? null,
+      outputTokens ?? null,
+      new Date().toISOString(),
+      clip(content?.prompt),
+      clip(content?.response),
+    );
+    // Prune anything older than the newest AI_LOG_MAX rows.
+    db.prepare(
+      `DELETE FROM ai_usage WHERE id NOT IN (
+         SELECT id FROM ai_usage ORDER BY id DESC LIMIT ?
+       )`,
+    ).run(AI_LOG_MAX);
   } catch {
     /* best-effort */
+  }
+}
+
+/** Recent AI calls, newest first (audit log). */
+export function aiLogEntries(limit = 100): AiLogEntry[] {
+  try {
+    const rows = getDb()
+      .prepare(
+        `SELECT id, kind, model, input_tokens, output_tokens, created_at, prompt, response
+         FROM ai_usage ORDER BY id DESC LIMIT ?`,
+      )
+      .all(limit) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: Number(r.id),
+      kind: String(r.kind ?? ""),
+      model: String(r.model ?? ""),
+      inputTokens: r.input_tokens == null ? null : Number(r.input_tokens),
+      outputTokens: r.output_tokens == null ? null : Number(r.output_tokens),
+      createdAt: String(r.created_at ?? ""),
+      prompt: r.prompt == null ? null : String(r.prompt),
+      response: r.response == null ? null : String(r.response),
+    }));
+  } catch {
+    return [];
   }
 }
 

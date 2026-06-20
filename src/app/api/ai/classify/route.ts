@@ -62,6 +62,7 @@ export async function POST(req: Request) {
     const target = cfg.piiMask ? masker.maskEmail(email) : email;
     // 嗜好メモ（ユーザー自筆の指示）はマスクせず素のまま注入する。
     const profile = await getJudgmentProfile();
+    const prompt = classifyContext(target, signals) + profileBlock(profile);
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       // Explicit output budget: without it some providers reserve the model max
@@ -69,10 +70,13 @@ export async function POST(req: Request) {
       maxOutputTokens: 300,
       schema,
       system: CLASSIFY_SYSTEM,
-      prompt: classifyContext(target, signals) + profileBlock(profile),
+      prompt,
     });
     record(email, object.importance, object.reason, "ai");
-    logAiUsage("classify", cfg.model, usage?.inputTokens, usage?.outputTokens);
+    logAiUsage("classify", cfg.model, usage?.inputTokens, usage?.outputTokens, {
+      prompt: `[system]\n${CLASSIFY_SYSTEM}\n\n[prompt]\n${prompt}`,
+      response: JSON.stringify(object, null, 2),
+    });
     return NextResponse.json({ ...object, reason: masker.unmask(object.reason), source: "ai" });
   } catch (err) {
     return NextResponse.json(

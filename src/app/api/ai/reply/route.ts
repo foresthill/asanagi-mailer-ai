@@ -37,6 +37,19 @@ export async function POST(req: Request) {
     const masker = new PiiMasker();
     const target = cfg.piiMask ? masker.maskEmail(email) : email;
     const maskedHistory = cfg.piiMask ? history?.map((m) => masker.maskEmail(m)) : history;
+    const prompt = [
+      "以下のメールに対する返信の下書きを作成してください。",
+      guidance ? `補足の指示: ${guidance}` : "",
+      // Conversation so far — agreed dates, open questions, tone.
+      ...(maskedHistory?.length
+        ? ["", "--- これまでのやりとり（古い順・抜粋） ---", historyContext(maskedHistory, email.id)]
+        : []),
+      "",
+      "--- 返信対象の受信メール ---",
+      emailContext(target),
+    ]
+      .filter(Boolean)
+      .join("\n");
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       // Explicit output budget: without it some providers reserve the model max
@@ -44,21 +57,12 @@ export async function POST(req: Request) {
       maxOutputTokens: 2000,
       schema: draftSchema,
       system: REPLY_SYSTEM,
-      prompt: [
-        "以下のメールに対する返信の下書きを作成してください。",
-        guidance ? `補足の指示: ${guidance}` : "",
-        // Conversation so far — agreed dates, open questions, tone.
-        ...(maskedHistory?.length
-          ? ["", "--- これまでのやりとり（古い順・抜粋） ---", historyContext(maskedHistory, email.id)]
-          : []),
-        "",
-        "--- 返信対象の受信メール ---",
-        emailContext(target),
-      ]
-        .filter(Boolean)
-        .join("\n"),
+      prompt,
     });
-    logAiUsage("reply", cfg.model, usage?.inputTokens, usage?.outputTokens);
+    logAiUsage("reply", cfg.model, usage?.inputTokens, usage?.outputTokens, {
+      prompt: `[system]\n${REPLY_SYSTEM}\n\n[prompt]\n${prompt}`,
+      response: JSON.stringify(object, null, 2),
+    });
     return NextResponse.json({
       draft: { subject: masker.unmask(object.subject), body: masker.unmask(object.body) },
       ai: true,
