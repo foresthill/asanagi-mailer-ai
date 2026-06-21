@@ -80,6 +80,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [counts, setCounts] = useState<Partial<Record<FolderView, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
   const [draftsCount, setDraftsCount] = useState(0);
+  // Email ids that have a private note (自分用メモ) — for the list 📝 badge.
+  const [noteIds, setNoteIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
 
@@ -99,6 +101,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       setDraftsCount((data.drafts ?? []).length);
     } catch {
       /* count badge is non-critical */
+    }
+  }, []);
+
+  const loadNoteIds = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notes");
+      const data = await res.json();
+      setNoteIds(new Set<string>(data.ids ?? []));
+    } catch {
+      /* note indicator is non-critical */
     }
   }, []);
 
@@ -157,6 +169,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async count fetch
     loadDraftsCount();
   }, [loadDraftsCount]);
+
+  useEffect(() => {
+    // Refresh on mount and whenever the open mail changes (so closing a mail
+    // where a note was just edited updates the list badge).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch
+    loadNoteIds();
+  }, [loadNoteIds, selectedId]);
 
   // 朝の一掃: 受信箱が読み込まれた直後に1日の最初だけポップアップ。
   // 判断済みを除いた「未さばき」が5通以上あるときだけ開く（空ポップアップや
@@ -724,6 +743,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           searching={searchResults !== null}
           grouping={grouping}
           groupAxis={groupAxis}
+          noteIds={noteIds}
           onChangeGroupAxis={changeGroupAxis}
           accountLabels={
             // Show the origin badge when rows can mix accounts:
@@ -774,6 +794,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onReply={openCompose}
           onToggleStar={() => selected && toggleStar(selected.id)}
           onImportanceFeedback={onImportanceFeedback}
+          onNoteSaved={loadNoteIds}
         />
       ) : null}
 
