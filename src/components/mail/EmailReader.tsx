@@ -22,6 +22,7 @@ import { LinkedText } from "./LinkedText";
 import { MeetingCard } from "./MeetingCard";
 import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
+import { PrivateNote } from "./PrivateNote";
 import type { ComposeAI, ComposeKind } from "./compose";
 
 const IMPORTANCE_LABEL: Record<Importance, string> = {
@@ -41,6 +42,7 @@ export function EmailReader({
   onReply,
   onToggleStar,
   onImportanceFeedback,
+  onNoteSaved,
 }: {
   email: Email | null;
   /** Conversation containing the email (oldest first); null while loading. */
@@ -53,6 +55,8 @@ export function EmailReader({
   onReply: (kind: ComposeKind, mode: ComposeAI) => void;
   onToggleStar: () => void;
   onImportanceFeedback: (importance: Importance) => void;
+  /** A private note was saved/cleared → refresh the list 📝 indicator. */
+  onNoteSaved?: () => void;
 }) {
   // Session-sticky preference: rich HTML (default) vs plain text.
   const [textMode, setTextMode] = useState(false);
@@ -173,6 +177,9 @@ export function EmailReader({
             classifying={classifying}
             onFeedback={onImportanceFeedback}
           />
+
+          {/* 自分用メモ（端末内のみ・AIに渡さない） */}
+          <PrivateNote emailId={email.id} onSaved={onNoteSaved} />
 
           {thread && thread.length > 1 ? (
             <ThreadView messages={thread} selectedId={email.id} />

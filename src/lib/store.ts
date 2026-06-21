@@ -168,6 +168,30 @@ export async function deleteDraft(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// 自分用メモ — メール1通ごとの私的メモ。端末内のみ・AIには一切渡さない。
+// ---------------------------------------------------------------------------
+const NOTES = "notes.json";
+type NoteMap = Record<string, { text: string; updatedAt: string }>;
+
+export async function getNote(id: string): Promise<string> {
+  const all = await readJson<NoteMap>(NOTES, {});
+  return all[id]?.text ?? "";
+}
+
+/** Set (or clear, when blank) the private note for one email id. */
+export async function setNote(id: string, text: string): Promise<void> {
+  const all = await readJson<NoteMap>(NOTES, {});
+  if (text.trim()) all[id] = { text: text.slice(0, 4000), updatedAt: new Date().toISOString() };
+  else delete all[id];
+  await writeJson(NOTES, all);
+}
+
+/** Ids of emails that have a note — for the list indicator. */
+export async function listNoteIds(): Promise<string[]> {
+  return Object.keys(await readJson<NoteMap>(NOTES, {}));
+}
+
+// ---------------------------------------------------------------------------
 // 嗜好プロファイル（AIへのメモ） — 自然文の判定ルール。判定プロンプトに注入。
 // docs/02 §5.4 / §6.2。ユーザーが直接編集できる learned instructions。
 // ---------------------------------------------------------------------------
