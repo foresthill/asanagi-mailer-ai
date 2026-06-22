@@ -11,7 +11,10 @@ import type { Email, EmailAddress, Importance, MailboxState } from "@/lib/types"
  *  - feeds the storage meter
  * Text only (no attachments) and pruned per account, so it stays small.
  */
-const DB_PATH = path.join(process.cwd(), ".data", "asanagi.db");
+// Desktop (Tauri) builds set ASANAGI_DATA_DIR to the OS app-data dir; dev/web
+// fall back to ./.data (current behavior unchanged).
+const DATA_DIR = process.env.ASANAGI_DATA_DIR || path.join(process.cwd(), ".data");
+const DB_PATH = path.join(DATA_DIR, "asanagi.db");
 
 /** Per-account retention: keep this many newest messages. */
 export const RETENTION_PER_ACCOUNT = 5000;
