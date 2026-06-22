@@ -129,13 +129,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         setCounts((c) => ({ ...c, [f]: list.filter((e) => !e.read || f !== "inbox").length }));
       };
       const base = `/api/emails?state=${f}&account=${encodeURIComponent(acct)}`;
+      // Parse defensively: a broken/empty response (e.g. dev server mid-rebuild)
+      // must never throw a runtime error or wipe the visible list.
+      const readJson = async (res: Response) =>
+        res.ok ? await res.json().catch(() => null) : null;
       try {
         // 1) Paint instantly from the local cache (no provider round-trip).
         try {
-          const cres = await fetch(`${base}&cached=1`);
-          const cdata = await cres.json();
+          const cdata = await readJson(await fetch(`${base}&cached=1`));
           if (token !== listReq.current) return;
-          if ((cdata.emails ?? []).length) {
+          if (cdata && (cdata.emails ?? []).length) {
             apply(cdata);
             setLoading(false); // content is on screen; revalidate quietly
           }
@@ -143,14 +146,17 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           /* cache is best-effort; fall through to live */
         }
         // 2) Revalidate live and replace when it lands.
-        const res = await fetch(base);
-        const data = await res.json();
+        const data = await readJson(await fetch(base));
         if (token !== listReq.current) return;
-        apply(data);
-        if (data.stale?.length) {
-          setToast(`オフライン表示: ${data.stale.join(", ")} はキャッシュから表示中`);
-          setTimeout(() => setToast(null), 4000);
+        if (data) {
+          apply(data);
+          if (data.stale?.length) {
+            setToast(`オフライン表示: ${data.stale.join(", ")} はキャッシュから表示中`);
+            setTimeout(() => setToast(null), 4000);
+          }
         }
+      } catch {
+        /* network/parse failure → keep what's shown; the next load retries */
       } finally {
         if (token === listReq.current) setLoading(false);
         loadStorage(); // cache just changed → refresh the meter

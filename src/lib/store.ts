@@ -15,7 +15,9 @@ import type {
  * (mailbox state, scheduled sends, learned importance signals).
  * Swap for a real DB (e.g. a Marketplace Postgres) in a later phase.
  */
-const DATA_DIR = path.join(process.cwd(), ".data");
+// Desktop (Tauri) builds set ASANAGI_DATA_DIR to the OS app-data dir; dev/web
+// fall back to ./.data (current behavior unchanged).
+const DATA_DIR = process.env.ASANAGI_DATA_DIR || path.join(process.cwd(), ".data");
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
   try {
