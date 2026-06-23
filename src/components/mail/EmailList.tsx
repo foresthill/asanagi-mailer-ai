@@ -249,6 +249,16 @@ export function EmailList({
               >
                 <Layers className="size-3.5" />
               </button>
+              {rows.length > 0 && (
+                <button
+                  onClick={onCheckAll}
+                  title="一括選択（すべて選択）— 残すものだけ外して、まとめてアーカイブ/ゴミ箱へ"
+                  className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-fg-subtle transition-colors hover:bg-surface-2 hover:text-accent"
+                >
+                  <span className="grid size-3.5 place-items-center rounded-[3px] border border-current" />
+                  選択
+                </button>
+              )}
             </>
           )}
           <span className="ml-auto text-xs text-fg-subtle">{rows.length}件</span>
