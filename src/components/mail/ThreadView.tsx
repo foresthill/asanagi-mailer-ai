@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, MessageCircle, Rows3 } from "lucide-react";
 import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,16 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
   const [open, setOpen] = useState<Set<string>>(
     () => new Set([selectedId, lastId].filter(Boolean) as string[]),
   );
+  // Long threads (10–20 messages) make the opened message (amber) require a lot
+  // of scrolling. On open, scroll that message into view automatically.
+  const currentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (view !== "cards") return; // chat mode scrolls itself
+    const t = setTimeout(() => {
+      currentRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 80); // let the reader's enter animation settle first
+    return () => clearTimeout(t);
+  }, [selectedId, messages.length, view]);
 
   const changeView = (v: "cards" | "chat") => {
     setView(v);
@@ -85,8 +95,9 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
         return (
           <div
             key={m.id}
+            ref={current ? currentRef : undefined}
             className={cn(
-              "rounded-xl border transition-colors",
+              "rounded-xl border transition-colors scroll-mt-4",
               current
                 ? "border-amber-300/70 bg-amber-50/60 dark:border-amber-300/30 dark:bg-amber-400/10"
                 : "border-border bg-surface",
