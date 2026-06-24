@@ -6,7 +6,7 @@ import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ConversationBubbles } from "./ConversationBubbles";
-import { LinkedText } from "./LinkedText";
+import { QuotedText } from "./QuotedText";
 
 /**
  * Thread rendering, oldest first, with two display modes:
@@ -34,7 +34,9 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
   useEffect(() => {
     if (view !== "cards") return; // chat mode scrolls itself
     const t = setTimeout(() => {
-      currentRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      // Land on the TOP of the opened message (not centered/bottom) so reading
+      // starts at its head.
+      currentRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
     }, 80); // let the reader's enter animation settle first
     return () => clearTimeout(t);
   }, [selectedId, messages.length, view]);
@@ -137,7 +139,7 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
             </button>
             {expanded && (
               <article className="whitespace-pre-wrap border-t border-border px-4 py-4 text-[15px] leading-7 text-fg/90">
-                <LinkedText text={m.body} />
+                <QuotedText text={m.body} />
               </article>
             )}
           </div>
