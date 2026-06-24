@@ -94,30 +94,7 @@ export function EmailReader({
           <ActionButton icon={RotateCcw} label="受信箱に戻す" onClick={onRestore} />
         )}
         <div className="ml-auto flex items-center gap-1.5">
-          <button
-            onClick={() => onReply("reply", "plain")}
-            title="自分で書く返信 (Shift+R)"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-          >
-            <Reply className="size-4" />
-            返信
-          </button>
-          <button
-            onClick={() => onReply("replyAll", "plain")}
-            title="全員に返信 — 差出人＋To＋CCを引継ぎ (A)"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-          >
-            <ReplyAll className="size-4" />
-            全員に返信
-          </button>
-          <button
-            onClick={() => onReply("forward", "plain")}
-            title="転送 (F)"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-          >
-            <Forward className="size-4" />
-            転送
-          </button>
+          <ReplyButton onReply={onReply} />
           <AiReplyButton onReply={onReply} />
         </div>
       </div>
@@ -239,6 +216,62 @@ function BodyModeButton({
 }
 
 /** Primary AI action with a small menu: AIで返信 (default) / AIで全員に返信. */
+/** Plain reply as a split button — 返信 primary, 全員に返信/転送 in a menu
+ *  (rarely used, so collapsed to avoid the action bar wrapping). */
+function ReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: ComposeAI) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <div className="flex items-center overflow-hidden rounded-lg border border-border bg-surface">
+        <button
+          onClick={() => onReply("reply", "plain")}
+          title="自分で書く返信 (Shift+R)"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+        >
+          <Reply className="size-4" />
+          返信
+        </button>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          title="全員に返信・転送"
+          className="grid h-full place-items-center border-l border-border px-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+        >
+          <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+        </button>
+      </div>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow)]">
+            <button
+              onClick={() => {
+                setOpen(false);
+                onReply("replyAll", "plain");
+              }}
+              title="全員に返信 — 差出人＋To＋CCを引継ぎ (A)"
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-accent-soft hover:text-accent"
+            >
+              <ReplyAll className="size-4" />
+              全員に返信
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onReply("forward", "plain");
+              }}
+              title="転送 (F)"
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-accent-soft hover:text-accent"
+            >
+              <Forward className="size-4" />
+              転送
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function AiReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: ComposeAI) => void }) {
   const [open, setOpen] = useState(false);
   return (
