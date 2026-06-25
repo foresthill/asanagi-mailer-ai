@@ -98,7 +98,7 @@ export interface Draft {
   body: string;
 }
 
-export type SendStatus = "scheduled" | "sent" | "failed" | "canceled";
+export type SendStatus = "scheduled" | "sending" | "sent" | "failed" | "canceled";
 
 export interface OutgoingMessage {
   to: EmailAddress[];

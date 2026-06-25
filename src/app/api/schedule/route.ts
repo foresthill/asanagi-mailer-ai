@@ -7,12 +7,35 @@ import { addScheduled, dueScheduled, listScheduled, updateScheduled } from "@/li
 import type { EmailProvider } from "@/lib/email";
 import type { OutgoingMessage, ScheduledSend } from "@/lib/types";
 
-/** Flush any sends whose time has arrived. Called on every poll (dev cron). */
-async function flushDue() {
+/**
+ * Flush any sends whose time has arrived. GET runs this on every poll, so it
+ * MUST be exactly-once: sending the same scheduled mail twice means a duplicate
+ * lands in a real recipient's inbox.
+ *
+ * Two guards work together:
+ *  1. In-process mutex — concurrent GETs (20s poll + re-renders) collapse onto a
+ *     single in-flight run instead of each starting their own send loop.
+ *  2. Claim-before-send — each item is persisted as "sending" BEFORE the network
+ *     send. `dueScheduled()` only returns "scheduled", so an item in flight (or
+ *     left "sending" by a crash) is never re-selected and never re-sent.
+ */
+let flushInFlight: Promise<number> | null = null;
+
+function flushDue(): Promise<number> {
+  flushInFlight ??= runFlush().finally(() => {
+    flushInFlight = null;
+  });
+  return flushInFlight;
+}
+
+async function runFlush(): Promise<number> {
   const due = await dueScheduled();
   if (!due.length) return 0;
   const sentVia = new Map<string, EmailProvider>();
   for (const item of due) {
+    // Claim first: leave the "scheduled" set before any network call so a
+    // later flush (or a crash mid-send) can never resend this item.
+    await updateScheduled(item.id, { status: "sending" });
     try {
       // Send from the account the item was scheduled for.
       const provider = item.account
