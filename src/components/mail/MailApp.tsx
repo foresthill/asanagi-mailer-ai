@@ -197,7 +197,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       try {
         const res = await fetch("/api/sweep/reviewed");
         const reviewed = new Set<string>((await res.json()).ids ?? []);
-        const pending = emails.filter((e) => !reviewed.has(e.id)).length;
+        // 朝の一凪と同じ時間窓（直近36h）の新着だけを「未さばき」として数える。
+        const recentCutoff = Date.now() - 36 * 3600_000;
+        const pending = emails.filter(
+          (e) => !reviewed.has(e.id) && +new Date(e.date) >= recentCutoff,
+        ).length;
         if (pending >= 5) setShowSweep(true);
       } catch {
         setShowSweep(true); // 取得失敗時は従来どおり開く

@@ -57,13 +57,23 @@ function heuristicItem(e: Email): SweepItem {
   };
 }
 
+/** 朝の一凪が見る時間窓。これより古い受信メールは対象外（＝毎回「残す」を
+ *  捌き直さなくて済む／AIコストも下がる）。古い分は受信箱の「選択」で一括処理。 */
+const SWEEP_WINDOW_MS = 36 * 3600 * 1000; // ≒「昨日〜今日」
+
 export async function POST(req: Request) {
   const { emails } = (await req.json()) as { emails: Email[] };
   if (!emails?.length) return NextResponse.json({ items: [] });
 
+  // 直近の新着だけを対象に（古い既読/保留メールを毎回蒸し返さない）。
+  const cutoff = Date.now() - SWEEP_WINDOW_MS;
+  const recent = emails.filter((e) => {
+    const t = +new Date(e.date);
+    return Number.isNaN(t) || t >= cutoff;
+  });
   // 判断済み（前回さばいた）メールは除外 — 再判定しない＝再提示しない＆コスト減。
   const swept = await getSweptIds();
-  const fresh = emails.filter((e) => !swept.has(e.id));
+  const fresh = recent.filter((e) => !swept.has(e.id));
   if (!fresh.length) return NextResponse.json({ items: [], allReviewed: true });
 
   const signals = await listSignals();
