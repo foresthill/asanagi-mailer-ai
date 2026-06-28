@@ -58,7 +58,11 @@ function SuggestionView({ node, editor, getPos }: NodeViewProps) {
     });
     const tr = editor.state.tr.replaceWith(pos, pos + node.nodeSize, nodes);
     editor.view.dispatch(tr);
-    editor.commands.focus();
+    // Put the cursor right after the applied text and DON'T scrollIntoView:
+    // a bare focus() scrolls to the (stale) selection, jumping the view to the
+    // bottom of the email. focus(pos) keeps it at the edit point, in place.
+    const endPos = pos + nodes.reduce((sum, nd) => sum + nd.nodeSize, 0);
+    editor.commands.focus(endPos, { scrollIntoView: false });
   }
 
   return (
