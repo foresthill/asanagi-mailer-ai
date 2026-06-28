@@ -197,6 +197,7 @@ export class MockProvider implements EmailProvider {
       read: true,
       state: "sent",
       messageId: `<${id}@mock.local>`,
+      hasAttachment: (message.attachments?.length ?? 0) > 0,
     });
     await save(all);
     return { messageId: `<${id}@mock.local>` };

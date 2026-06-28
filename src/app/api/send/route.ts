@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
 import { upsertEmails } from "@/lib/db";
+import { attachmentsWithinCap } from "@/lib/attachments";
 import type { OutgoingMessage } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -12,6 +13,12 @@ export async function POST(req: Request) {
 
   if (!message.to?.length || !message.subject) {
     return NextResponse.json({ error: "to と subject は必須です" }, { status: 400 });
+  }
+  if (!attachmentsWithinCap(message.attachments)) {
+    return NextResponse.json(
+      { error: "添付ファイルの合計サイズが上限(20MB)を超えています" },
+      { status: 413 },
+    );
   }
 
   try {

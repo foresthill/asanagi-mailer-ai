@@ -466,6 +466,13 @@ export class ImapProvider implements EmailProvider {
       bcc: message.bcc?.map((a) => a.email),
       subject: message.subject,
       text: message.body,
+      // MailComposer builds multipart/mixed natively from base64 attachments.
+      attachments: message.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        encoding: "base64" as const,
+        contentType: a.mimeType,
+      })),
       inReplyTo: message.inReplyTo,
       // Keep the conversation root first in References so every depth of the
       // thread resolves to the same root (threadId is that root Message-ID —

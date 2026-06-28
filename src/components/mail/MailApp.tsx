@@ -642,6 +642,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       inReplyTo: d.inReplyTo,
       threadId: d.threadId,
       draftId: d.id,
+      attachments: d.attachments,
     });
   };
 

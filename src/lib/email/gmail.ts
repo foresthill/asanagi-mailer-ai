@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { google, type gmail_v1 } from "googleapis";
 import type { Attachment, Email, EmailAddress, MailboxState, OutgoingMessage } from "@/lib/types";
 import type { EmailProvider } from "./provider";
@@ -342,11 +343,44 @@ export class GmailProvider implements EmailProvider {
       message.inReplyTo ? `In-Reply-To: ${message.inReplyTo}` : "",
       message.inReplyTo ? `References: ${message.inReplyTo}` : "",
       "MIME-Version: 1.0",
-      'Content-Type: text/plain; charset="UTF-8"',
-    ].filter(Boolean);
+    ];
 
-    // Headers and body MUST be separated by a blank line (RFC 5322).
-    const rfc822 = headers.join("\r\n") + "\r\n\r\n" + message.body;
+    const atts = message.attachments ?? [];
+    let rfc822: string;
+    if (atts.length === 0) {
+      // Plain text/plain message (unchanged path — keeps threading parity).
+      headers.push('Content-Type: text/plain; charset="UTF-8"');
+      // Headers and body MUST be separated by a blank line (RFC 5322).
+      rfc822 = headers.filter(Boolean).join("\r\n") + "\r\n\r\n" + message.body;
+    } else {
+      // multipart/mixed: text part + one part per attachment. base64 bodies are
+      // wrapped at 76 cols per RFC 2045.
+      const boundary = `=_asanagi_${randomUUID()}`;
+      const wrap = (b64: string) => b64.replace(/(.{76})/g, "$1\r\n");
+      const textPart = [
+        `--${boundary}`,
+        'Content-Type: text/plain; charset="UTF-8"',
+        "Content-Transfer-Encoding: base64",
+        "",
+        wrap(Buffer.from(message.body, "utf8").toString("base64")),
+      ].join("\r\n");
+      const fileParts = atts.map((a) =>
+        [
+          `--${boundary}`,
+          `Content-Type: ${a.mimeType}; name="${mimeWord(a.filename)}"`,
+          "Content-Transfer-Encoding: base64",
+          `Content-Disposition: attachment; filename="${mimeWord(a.filename)}"`,
+          "",
+          wrap(a.content),
+        ].join("\r\n"),
+      );
+      headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+      rfc822 =
+        headers.filter(Boolean).join("\r\n") +
+        "\r\n\r\n" +
+        [textPart, ...fileParts, `--${boundary}--`, ""].join("\r\n");
+    }
+
     const raw = Buffer.from(rfc822, "utf8")
       .toString("base64")
       .replace(/\+/g, "-")

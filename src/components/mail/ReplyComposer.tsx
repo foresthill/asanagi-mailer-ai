@@ -14,6 +14,10 @@ import {
   Save,
 } from "lucide-react";
 import { ScheduleDialog } from "./ScheduleDialog";
+import { AttachmentBar, fileToOutgoingAttachment } from "./AttachmentBar";
+import { ATTACHMENT_TOTAL_CAP, totalAttachmentBytes } from "@/lib/attachments";
+import { formatBytes } from "./StorageMeter";
+import type { OutgoingAttachment } from "@/lib/types";
 import { buildSegments, pendingCount } from "@/lib/diff";
 import { DraftEditor, type DraftEditorHandle } from "./tiptap/DraftEditor";
 import { RecipientFields, type RecipientValues } from "./RecipientFields";
@@ -87,6 +91,8 @@ export function ReplyComposer({
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [note, setNote] = useState<string | null>(null);
   const [selectionText, setSelectionText] = useState("");
+  const [attachments, setAttachments] = useState<OutgoingAttachment[]>(init.attachments ?? []);
+  const [dragging, setDragging] = useState(false);
   const editorRef = useRef<DraftEditorHandle>(null);
   // In-flight AI request — 中止 button aborts it (initial draft / suggest).
   const abortRef = useRef<AbortController | null>(null);
@@ -243,11 +249,31 @@ export function ReplyComposer({
       bcc: parseAddressList(recipients.bcc),
       subject,
       body,
+      attachments: attachments.length ? attachments : undefined,
       inReplyTo: sameAccount ? init.inReplyTo : undefined,
       threadId: sameAccount ? init.threadId : undefined,
       account, // chosen 送信元（既定は会話の元アカウント / 新規はアクティブ）
     };
   }
+
+  /** Add picked/dropped files as attachments, enforcing the total size cap. */
+  async function addFiles(files: FileList | File[]) {
+    setSendError(null);
+    try {
+      const added = await Promise.all(Array.from(files).map(fileToOutgoingAttachment));
+      const next = [...attachments, ...added];
+      if (totalAttachmentBytes(next) > ATTACHMENT_TOTAL_CAP) {
+        setSendError(`添付の合計が上限(${formatBytes(ATTACHMENT_TOTAL_CAP)})を超えます`);
+        return;
+      }
+      setAttachments(next);
+    } catch {
+      setSendError("ファイルの読み込みに失敗しました");
+    }
+  }
+
+  const removeAttachment = (i: number) =>
+    setAttachments((prev) => prev.filter((_, idx) => idx !== i));
 
   /** Remove the saved draft once it's been sent/scheduled (best-effort). */
   async function discardSavedDraft() {
@@ -395,7 +421,27 @@ export function ReplyComposer({
           </div>
         )}
 
-        <div className="flex flex-1 flex-col overflow-hidden px-6 py-4">
+        <div
+          className="relative flex flex-1 flex-col overflow-hidden px-6 py-4"
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!dragging) setDragging(true);
+          }}
+          onDragLeave={(e) => {
+            // Only clear when the pointer actually leaves the composer body.
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
+          }}
+        >
+          {dragging && (
+            <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-accent bg-accent-soft/80 text-sm font-medium text-accent">
+              ここにドロップして添付
+            </div>
+          )}
           <RecipientFields values={recipients} onChange={setRecipients} disabled={sending} />
           <input
             value={subject}
@@ -457,6 +503,13 @@ export function ReplyComposer({
               </div>
             )}
           </div>
+
+          <AttachmentBar
+            items={attachments}
+            onAdd={addFiles}
+            onRemove={removeAttachment}
+            disabled={sending}
+          />
         </div>
 
         {sendError && (
