@@ -100,6 +100,20 @@ export interface Draft {
 
 export type SendStatus = "scheduled" | "sending" | "sent" | "failed" | "canceled";
 
+/**
+ * An outgoing attachment carried with a send/draft/schedule. Bytes travel as
+ * base64 in the JSON body (local-first: drafts/schedules persist to `.data`),
+ * so total size is capped client- and server-side (see ATTACHMENT_TOTAL_CAP).
+ */
+export interface OutgoingAttachment {
+  filename: string;
+  mimeType: string;
+  /** base64-encoded file content (no data: prefix). */
+  content: string;
+  /** Size in bytes of the decoded content (for the UI + size guard). */
+  size: number;
+}
+
 export interface OutgoingMessage {
   to: EmailAddress[];
   cc?: EmailAddress[];
@@ -107,6 +121,8 @@ export interface OutgoingMessage {
   bcc?: EmailAddress[];
   subject: string;
   body: string;
+  /** Files to attach (base64). Omitted/empty = no attachments. */
+  attachments?: OutgoingAttachment[];
   /** messageId of the email being replied to, for threading. */
   inReplyTo?: string;
   /**

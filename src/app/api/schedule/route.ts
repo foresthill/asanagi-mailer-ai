@@ -4,6 +4,7 @@ import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
 import { upsertEmails } from "@/lib/db";
 import { addScheduled, dueScheduled, listScheduled, updateScheduled } from "@/lib/store";
+import { attachmentsWithinCap } from "@/lib/attachments";
 import type { EmailProvider } from "@/lib/email";
 import type { OutgoingMessage, ScheduledSend } from "@/lib/types";
 
@@ -77,6 +78,12 @@ export async function POST(req: Request) {
   };
   if (!message?.to?.length || !sendAt) {
     return NextResponse.json({ error: "message と sendAt は必須です" }, { status: 400 });
+  }
+  if (!attachmentsWithinCap(message.attachments)) {
+    return NextResponse.json(
+      { error: "添付ファイルの合計サイズが上限(20MB)を超えています" },
+      { status: 413 },
+    );
   }
 
   const item: ScheduledSend = {

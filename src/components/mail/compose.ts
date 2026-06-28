@@ -1,4 +1,4 @@
-import type { Email, EmailAddress } from "@/lib/types";
+import type { Email, EmailAddress, OutgoingAttachment } from "@/lib/types";
 import { displayName, fullTime } from "./helpers";
 
 /**
@@ -30,6 +30,8 @@ export interface ComposeInit {
   quote?: string;
   /** Set when editing a saved draft — save updates it, send deletes it. */
   draftId?: string;
+  /** Attachments restored when reopening a saved draft. */
+  attachments?: OutgoingAttachment[];
 }
 
 const KIND_LABEL: Record<ComposeKind, string> = {
