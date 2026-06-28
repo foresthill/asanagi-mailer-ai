@@ -118,9 +118,21 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
+    // Mirror GET: surface token expiry as 401 so the client shows the reauth
+    // prompt instead of a generic failure. Gmail throws `invalid_grant` once
+    // the OAuth test-mode refresh token expires (7 days) — reads still work
+    // from cache, but writes (setState/setRead/setStarred) fail here.
+    const reauth = isAuthError(err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "failed" },
-      { status: 500 },
+      {
+        error: reauth
+          ? "Gmailの認証が切れています（接続設定から再認証してください）"
+          : err instanceof Error
+            ? err.message
+            : "failed",
+        needsReauth: reauth,
+      },
+      { status: reauth ? 401 : 500 },
     );
   }
 }
