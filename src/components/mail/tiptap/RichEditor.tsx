@@ -26,6 +26,8 @@ import {
 export interface RichEditorHandle {
   getHtml: () => string;
   getText: () => string;
+  /** Replace the whole document (used when applying an AI whole-message edit). */
+  setHtml: (html: string) => void;
 }
 
 export interface RichEditorChange {
@@ -155,6 +157,11 @@ export const RichEditor = forwardRef<
   useImperativeHandle(ref, () => ({
     getHtml: () => editor?.getHTML() ?? "",
     getText: () => editor?.getText() ?? "",
+    setHtml: (html: string) => {
+      if (!editor) return;
+      editor.commands.setContent(html);
+      onChangeRef.current({ html: editor.getHTML(), text: editor.getText() });
+    },
   }));
 
   useEffect(() => {
