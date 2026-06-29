@@ -13,16 +13,18 @@ import {
   CheckCheck,
   Save,
   Code2,
+  Image as ImageIcon,
 } from "lucide-react";
 import { ScheduleDialog } from "./ScheduleDialog";
 import DOMPurify from "dompurify";
 import { AttachmentBar, fileToOutgoingAttachment } from "./AttachmentBar";
 import { ATTACHMENT_TOTAL_CAP, totalAttachmentBytes } from "@/lib/attachments";
-import { plainTextToHtml, wrapHtmlBody, quoteBlock } from "@/lib/html-mail";
+import { plainTextToHtml, wrapHtmlBody, quoteBlock, extractInlineImages } from "@/lib/html-mail";
 import { formatBytes } from "./StorageMeter";
 import type { OutgoingAttachment } from "@/lib/types";
 import { buildSegments, pendingCount } from "@/lib/diff";
 import { DraftEditor, type DraftEditorHandle } from "./tiptap/DraftEditor";
+import { RichEditor, type RichEditorHandle } from "./tiptap/RichEditor";
 import { RecipientFields, type RecipientValues } from "./RecipientFields";
 import {
   composeTitle,
@@ -98,6 +100,12 @@ export function ReplyComposer({
   const [dragging, setDragging] = useState(false);
   // HTML送信: default on when replying to an HTML mail or reopening an HTML draft.
   const [htmlSend, setHtmlSend] = useState<boolean>(Boolean(init.html || init.source?.html));
+  // リッチ編集モード: rich HTML editor with inline images (opt-in). 添削 stays in
+  // the plain editor; rich mode implies HTML send.
+  const [richMode, setRichMode] = useState(false);
+  const [richText, setRichText] = useState("");
+  const [richSeed, setRichSeed] = useState<string | null>(null);
+  const richEditorRef = useRef<RichEditorHandle>(null);
   const editorRef = useRef<DraftEditorHandle>(null);
   // In-flight AI request — 中止 button aborts it (initial draft / suggest).
   const abortRef = useRef<AbortController | null>(null);
@@ -176,7 +184,7 @@ export function ReplyComposer({
   }, []);
 
   async function runSuggest(instruction: string, scope: "selection" | "whole") {
-    if (!instruction.trim() || busy || reviewing) return;
+    if (!instruction.trim() || busy || reviewing || richMode) return;
     const sel = scope === "selection" && selectionText ? selectionText : null;
     // 添削は「自分が書いた文章」だけが対象。引用文(>付きの元メール)は切り離し、
     // AIには head（自分の本文）だけ渡して、返ってきたら引用文を末尾に戻す。
@@ -264,22 +272,53 @@ export function ReplyComposer({
     return wrapHtmlBody(quoteHtml ? `${headHtml}<br>${quoteHtml}` : headHtml);
   }
 
+  /** Enter/leave リッチ編集. Entering seeds the rich editor from the plain body;
+   *  leaving brings the text back (inline images are dropped). */
+  function toggleRichMode() {
+    if (!richMode) {
+      setRichSeed(wrapHtmlBody(plainTextToHtml(body)));
+      setHtmlSend(true);
+      setRichMode(true);
+    } else {
+      const text = richEditorRef.current?.getText() ?? richText;
+      setBody(text);
+      setInitialDraft(text);
+      setRichMode(false);
+    }
+  }
+
   /** Outgoing message built from the editable recipient fields. */
   function outgoing() {
     // Threading is account-specific: only carry it when sending from the
     // conversation's original account (switching account ⇒ fresh message).
     const sameAccount = account === init.account;
-    return {
+    const common = {
       to: parseAddressList(recipients.to),
       cc: parseAddressList(recipients.cc),
       bcc: parseAddressList(recipients.bcc),
       subject,
-      body,
-      html: buildHtml(),
-      attachments: attachments.length ? attachments : undefined,
       inReplyTo: sameAccount ? init.inReplyTo : undefined,
       threadId: sameAccount ? init.threadId : undefined,
       account, // chosen 送信元（既定は会話の元アカウント / 新規はアクティブ）
+    };
+    if (richMode) {
+      // Rich mode: html from the editor, inline images extracted to cid parts.
+      const rawHtml = richEditorRef.current?.getHtml() ?? richSeed ?? "";
+      const text = richEditorRef.current?.getText() ?? richText;
+      const { html: htmlWithCids, inline } = extractInlineImages(rawHtml);
+      const all = [...attachments, ...inline];
+      return {
+        ...common,
+        body: text,
+        html: wrapHtmlBody(htmlWithCids),
+        attachments: all.length ? all : undefined,
+      };
+    }
+    return {
+      ...common,
+      body,
+      html: buildHtml(),
+      attachments: attachments.length ? attachments : undefined,
     };
   }
 
@@ -386,12 +425,14 @@ export function ReplyComposer({
     }
   }
 
+  const effectiveBody = richMode ? richText : body;
+
   const canSend =
     !sending &&
     !generating &&
     !busy &&
     !reviewing &&
-    !!body &&
+    !!effectiveBody.trim() &&
     !!subject.trim() &&
     looksLikeAddressList(recipients.to);
 
@@ -402,7 +443,7 @@ export function ReplyComposer({
     !generating &&
     !busy &&
     !reviewing &&
-    (!!body.trim() || !!subject.trim() || !!recipients.to.trim());
+    (!!effectiveBody.trim() || !!subject.trim() || !!recipients.to.trim());
 
   return (
     <div className="flex flex-1 overflow-hidden bg-bg">
@@ -451,20 +492,23 @@ export function ReplyComposer({
         <div
           className="relative flex flex-1 flex-col overflow-hidden px-6 py-4"
           onDragOver={(e) => {
+            if (richMode) return; // rich editor handles image drops itself
             e.preventDefault();
             if (!dragging) setDragging(true);
           }}
           onDragLeave={(e) => {
+            if (richMode) return;
             // Only clear when the pointer actually leaves the composer body.
             if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false);
           }}
           onDrop={(e) => {
+            if (richMode) return;
             e.preventDefault();
             setDragging(false);
             if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
           }}
         >
-          {dragging && (
+          {dragging && !richMode && (
             <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-accent bg-accent-soft/80 text-sm font-medium text-accent">
               ここにドロップして添付
             </div>
@@ -477,8 +521,8 @@ export function ReplyComposer({
             className="mt-1.5 w-full border-b border-border bg-transparent pb-2 text-base font-medium outline-none placeholder:text-fg-subtle"
           />
 
-          {/* Selection action bar */}
-          {selectionText && !reviewing && !generating && (
+          {/* Selection action bar (plain editor only) */}
+          {selectionText && !reviewing && !generating && !richMode && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs animate-in">
               <Wand2 className="size-3.5 text-accent" />
               <span className="text-accent">選択範囲を修正:</span>
@@ -496,15 +540,23 @@ export function ReplyComposer({
           )}
 
           <div className="relative mt-3 flex-1 overflow-y-auto">
-            <DraftEditor
-              ref={editorRef}
-              loadText={initialDraft}
-              onChange={({ text, pending }) => {
-                setBody(text);
-                setPending(pending);
-              }}
-              onSelectionChange={setSelectionText}
-            />
+            {richMode ? (
+              <RichEditor
+                ref={richEditorRef}
+                loadHtml={richSeed}
+                onChange={({ text }) => setRichText(text)}
+              />
+            ) : (
+              <DraftEditor
+                ref={editorRef}
+                loadText={initialDraft}
+                onChange={({ text, pending }) => {
+                  setBody(text);
+                  setPending(pending);
+                }}
+                onSelectionChange={setSelectionText}
+              />
+            )}
             {generating && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg text-fg-subtle">
                 <Loader2 className="size-5 animate-spin text-accent" />
@@ -532,20 +584,41 @@ export function ReplyComposer({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 pt-2">
+            {!richMode && (
+              <button
+                type="button"
+                onClick={() => setHtmlSend((v) => !v)}
+                disabled={sending}
+                title="HTML形式で送信（書式・元メールのHTML引用を保持）。オフだとプレーンテキスト送信"
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50 ${
+                  htmlSend
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border text-fg-muted hover:border-accent hover:text-accent"
+                }`}
+              >
+                <Code2 className="size-3.5" />
+                HTML{htmlSend ? "送信オン" : "送信オフ"}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setHtmlSend((v) => !v)}
+              onClick={toggleRichMode}
               disabled={sending}
-              title="HTML形式で送信（書式・元メールのHTML引用を保持）。オフだとプレーンテキスト送信"
+              title="リッチ編集（画像の貼り付け・ドロップでインライン挿入。HTML送信）。AI添削はプレーン編集時のみ"
               className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50 ${
-                htmlSend
+                richMode
                   ? "border-accent bg-accent-soft text-accent"
                   : "border-border text-fg-muted hover:border-accent hover:text-accent"
               }`}
             >
-              <Code2 className="size-3.5" />
-              HTML{htmlSend ? "送信オン" : "送信オフ"}
+              <ImageIcon className="size-3.5" />
+              リッチ編集{richMode ? "オン" : "オフ"}
             </button>
+            {richMode && (
+              <span className="text-[11px] text-fg-subtle">
+                画像を貼り付け/ドロップで挿入・HTML送信。AI添削はプレーン編集に切替で使えます
+              </span>
+            )}
           </div>
           <AttachmentBar
             items={attachments}
@@ -671,7 +744,7 @@ export function ReplyComposer({
             <button
               key={p}
               onClick={() => runSuggest(p, "whole")}
-              disabled={busy || generating || reviewing}
+              disabled={busy || generating || reviewing || richMode}
               className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
             >
               {p}
@@ -697,14 +770,16 @@ export function ReplyComposer({
               }}
               rows={1}
               placeholder={
-                (selectionText ? "選択範囲への指示" : "全体への指示") + "（Shift+Enterで送信）"
+                richMode
+                  ? "AI添削はプレーン編集に切り替えると使えます"
+                  : (selectionText ? "選択範囲への指示" : "全体への指示") + "（Shift+Enterで送信）"
               }
-              disabled={reviewing}
+              disabled={reviewing || richMode}
               className="max-h-24 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-fg-subtle disabled:opacity-50"
             />
             <button
               onClick={() => runSuggest(input, selectionText ? "selection" : "whole")}
-              disabled={busy || generating || reviewing || !input.trim()}
+              disabled={busy || generating || reviewing || !input.trim() || richMode}
               className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-accent-fg transition-opacity disabled:opacity-40"
             >
               <ArrowUp className="size-4" />

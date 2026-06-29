@@ -28,6 +28,7 @@
     "@tiptap/extension-document": "^3.25.0",
     "@tiptap/extension-hard-break": "^3.25.0",
     "@tiptap/extension-history": "^3.25.0",
+    "@tiptap/extension-image": "3.25.0",
     "@tiptap/extension-paragraph": "^3.25.0",
     "@tiptap/extension-placeholder": "^3.25.0",
     "@tiptap/extension-text": "^3.25.0",

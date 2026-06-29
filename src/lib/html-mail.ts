@@ -39,3 +39,40 @@ export function wrapHtmlBody(inner: string): string {
 export function quoteBlock(innerHtml: string): string {
   return `<blockquote style="margin:0.8em 0 0 0;padding-left:1em;border-left:2px solid #ccc;color:#555">${innerHtml}</blockquote>`;
 }
+
+/** An inline image pulled out of an HTML body for cid embedding. */
+export interface InlineImage {
+  filename: string;
+  mimeType: string;
+  /** base64 content (no data: prefix). */
+  content: string;
+  size: number;
+  cid: string;
+}
+
+/**
+ * Replace `src="data:<mime>;base64,…"` image sources with `cid:` references and
+ * return the rewritten HTML plus the extracted images. Used at send time so the
+ * editor can hold base64 data URLs while the wire format uses multipart/related.
+ */
+export function extractInlineImages(html: string): { html: string; inline: InlineImage[] } {
+  const inline: InlineImage[] = [];
+  let n = 0;
+  const out = html.replace(
+    /src="data:([^;"]+);base64,([^"]+)"/g,
+    (_m, mime: string, b64: string) => {
+      n += 1;
+      const cid = `img${n}-${globalThis.crypto.randomUUID()}@asanagi`;
+      const ext = (mime.split("/")[1] || "png").replace(/[^a-z0-9]/gi, "");
+      inline.push({
+        filename: `image${n}.${ext}`,
+        mimeType: mime,
+        content: b64,
+        size: Math.floor((b64.length * 3) / 4),
+        cid,
+      });
+      return `src="cid:${cid}"`;
+    },
+  );
+  return { html: out, inline };
+}
