@@ -6,6 +6,7 @@ import Document from "@tiptap/extension-document";
 import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
 import HardBreak from "@tiptap/extension-hard-break";
+import History from "@tiptap/extension-history";
 import Placeholder from "@tiptap/extension-placeholder";
 import type { JSONContent } from "@tiptap/core";
 import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
@@ -62,6 +63,7 @@ export const DraftEditor = forwardRef<
       Paragraph,
       Text,
       LineBreak,
+      History,
       SuggestionNode,
       Placeholder.configure({ placeholder: placeholder ?? "本文" }),
     ],

@@ -619,9 +619,11 @@ export function ReplyComposer({
             </button>
           </div>
 
-          {/* Selection action bar (plain editor only) */}
+          {/* Selection action bar (plain editor only). Floated (absolute) so it
+              never reflows the editor — an in-flow bar shifted the editor down
+              mid-drag, making mouse/shift-click selection grab the wrong text. */}
           {selectionText && !reviewing && !generating && !richMode && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs animate-in">
+            <div className="absolute bottom-4 left-1/2 z-20 flex max-w-[calc(100%-3rem)] -translate-x-1/2 flex-wrap items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs shadow-lg animate-in">
               <Wand2 className="size-3.5 text-accent" />
               <span className="text-accent">選択範囲を修正:</span>
               {["丁寧に", "短く", "言い換え"].map((p) => (
