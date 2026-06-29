@@ -106,6 +106,8 @@ export function ReplyComposer({
   const [richMode, setRichMode] = useState(false);
   const [richText, setRichText] = useState("");
   const [richSeed, setRichSeed] = useState<string | null>(null);
+  // AI whole-message proposal for rich mode (preview → apply, no inline diff).
+  const [richProposal, setRichProposal] = useState<string | null>(null);
   const richEditorRef = useRef<RichEditorHandle>(null);
   const editorRef = useRef<DraftEditorHandle>(null);
   // In-flight AI request — 中止 button aborts it (initial draft / suggest).
@@ -184,8 +186,65 @@ export function ReplyComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Rich-mode 添削: whole-message only. Sends the plain-text projection to the
+   * AI and shows the revision as a proposal (preview → 適用). Applying replaces
+   * the body text (formatting/images are simplified — there's no inline diff
+   * for rich content).
+   */
+  async function runSuggestRich(instruction: string) {
+    const current = richEditorRef.current?.getText() ?? richText;
+    if (!current.trim()) {
+      setNote("本文がありません");
+      return;
+    }
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setBusy(true);
+    setNote(null);
+    setInput("");
+    try {
+      const res = await fetch("/api/ai/suggest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        signal: ctrl.signal,
+        body: JSON.stringify({ email: init.source, draft: current, instruction, subject }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "提案の生成に失敗しました");
+      const revised: string = data.revised ?? current;
+      if (typeof data.subject === "string" && data.subject && !subject.trim()) {
+        setSubject(data.subject);
+      }
+      const changed = revised.trim() !== current.trim();
+      setHistory((h) => [...h, { id: `t${h.length}`, instruction, scope: "whole", count: changed ? 1 : 0 }]);
+      if (!changed) setNote(data.ai === false ? "AIキー未設定のため変更なし" : "変更はありませんでした");
+      else setRichProposal(revised);
+    } catch (e) {
+      setNote(
+        (e as Error).name === "AbortError" ? "提案を中止しました" : "提案の生成に失敗しました",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Apply the rich-mode proposal: replace the body with the revised text. */
+  function applyRichProposal() {
+    if (richProposal == null) return;
+    const hasImg = (richEditorRef.current?.getHtml() ?? "").includes("<img");
+    if (hasImg && !window.confirm("画像と書式は簡素化されます。AIの提案を適用しますか？")) return;
+    richEditorRef.current?.setHtml(wrapHtmlBody(plainTextToHtml(richProposal)));
+    setRichText(richProposal);
+    setRichProposal(null);
+  }
+
   async function runSuggest(instruction: string, scope: "selection" | "whole") {
-    if (!instruction.trim() || busy || reviewing || richMode) return;
+    if (!instruction.trim() || busy || reviewing) return;
+    if (richMode) {
+      void runSuggestRich(instruction);
+      return;
+    }
     const sel = scope === "selection" && selectionText ? selectionText : null;
     // 添削は「自分が書いた文章」だけが対象。引用文(>付きの元メール)は切り離し、
     // AIには head（自分の本文）だけ渡して、返ってきたら引用文を末尾に戻す。
@@ -664,7 +723,7 @@ export function ReplyComposer({
                 <AttachmentChips items={attachments} onRemove={removeAttachment} disabled={sending} />
                 {richMode && (
                   <span className="text-[11px] text-fg-subtle">
-                    画像は貼り付け/ドロップで挿入・HTML送信。AI添削はプレーン編集に切替で使えます
+                    画像は貼り付け/ドロップで挿入・HTML送信。AI添削は全体提案（右で指示→適用）
                   </span>
                 )}
               </div>
@@ -692,7 +751,7 @@ export function ReplyComposer({
                 type="button"
                 onClick={toggleRichMode}
                 disabled={sending}
-                title="リッチ編集（画像の貼り付け・ドロップでインライン挿入・HTML送信）。AI添削はプレーン編集時のみ"
+                title="リッチ編集（画像の貼り付け・ドロップでインライン挿入・HTML送信）。AI添削は全体提案で対応"
                 className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs transition-colors disabled:opacity-50 ${
                   richMode
                     ? "border-accent bg-accent-soft text-accent"
@@ -752,9 +811,34 @@ export function ReplyComposer({
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          {richMode && richProposal != null && (
+            <div className="space-y-2 rounded-xl border border-accent/40 bg-accent-soft/40 p-3">
+              <p className="text-xs font-medium text-accent">AIの提案（全体）</p>
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-surface p-2.5 text-[13px] leading-6 text-fg/90">
+                {richProposal}
+              </pre>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={applyRichProposal}
+                  className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-fg"
+                >
+                  <CheckCheck className="size-3.5" />
+                  適用
+                </button>
+                <button
+                  onClick={() => setRichProposal(null)}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs text-fg-muted hover:bg-surface-2"
+                >
+                  却下
+                </button>
+                <span className="text-[10px] text-fg-subtle">適用で本文を差し替え（書式・画像は簡素化）</span>
+              </div>
+            </div>
+          )}
           <p className="rounded-xl bg-surface px-3 py-2.5 text-xs leading-relaxed text-fg-muted">
-            本文を範囲選択して「ここをこうして」と指示するか、下の入力で全体に指示できます。
-            提案は<strong>一箇所ずつ採用/却下</strong>できます。
+            {richMode
+              ? "リッチ編集中は下の入力で全体に指示できます（例: もっと丁寧に）。提案を確認して「適用」で本文に反映されます。"
+              : "本文を範囲選択して「ここをこうして」と指示するか、下の入力で全体に指示できます。提案は一箇所ずつ採用/却下できます。"}
           </p>
 
           {history.map((h) => (
@@ -786,7 +870,7 @@ export function ReplyComposer({
             <button
               key={p}
               onClick={() => runSuggest(p, "whole")}
-              disabled={busy || generating || reviewing || richMode}
+              disabled={busy || generating || reviewing}
               className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
             >
               {p}
@@ -813,15 +897,15 @@ export function ReplyComposer({
               rows={1}
               placeholder={
                 richMode
-                  ? "AI添削はプレーン編集に切り替えると使えます"
+                  ? "全体への指示（例: もっと丁寧に）→ 提案を確認して適用"
                   : (selectionText ? "選択範囲への指示" : "全体への指示") + "（Shift+Enterで送信）"
               }
-              disabled={reviewing || richMode}
+              disabled={reviewing}
               className="max-h-24 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-fg-subtle disabled:opacity-50"
             />
             <button
               onClick={() => runSuggest(input, selectionText ? "selection" : "whole")}
-              disabled={busy || generating || reviewing || !input.trim() || richMode}
+              disabled={busy || generating || reviewing || !input.trim()}
               className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-accent-fg transition-opacity disabled:opacity-40"
             >
               <ArrowUp className="size-4" />
