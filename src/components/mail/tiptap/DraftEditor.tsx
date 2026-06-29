@@ -8,6 +8,7 @@ import Text from "@tiptap/extension-text";
 import HardBreak from "@tiptap/extension-hard-break";
 import Placeholder from "@tiptap/extension-placeholder";
 import type { JSONContent } from "@tiptap/core";
+import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
 import type { Segment } from "@/lib/diff";
 import { SuggestionNode } from "./suggestionNode";
 import {
@@ -69,6 +70,23 @@ export const DraftEditor = forwardRef<
       attributes: {
         class:
           "min-h-full whitespace-pre-wrap text-[15px] leading-7 outline-none",
+      },
+      // The doc is a single paragraph, so the default paste (which builds
+      // multiple block nodes) is rejected and nothing appears. Flatten the
+      // clipboard's plain text into this paragraph: newlines → hardBreaks.
+      handlePaste(view, event) {
+        const text = event.clipboardData?.getData("text/plain");
+        if (!text) return false; // non-text (e.g. image) → default handling
+        event.preventDefault();
+        const { schema } = view.state;
+        const nodes: PMNode[] = [];
+        text.split(/\r?\n/).forEach((line, i) => {
+          if (i > 0) nodes.push(schema.nodes.hardBreak.create());
+          if (line) nodes.push(schema.text(line));
+        });
+        const slice = new Slice(Fragment.fromArray(nodes), 0, 0);
+        view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+        return true;
       },
     },
     onUpdate({ editor }) {
