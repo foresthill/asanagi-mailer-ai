@@ -92,6 +92,7 @@ export function ReplyComposer({
   const [sendError, setSendError] = useState<string | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [subjectBusy, setSubjectBusy] = useState(false);
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [note, setNote] = useState<string | null>(null);
@@ -270,6 +271,28 @@ export function ReplyComposer({
       }
     }
     return wrapHtmlBody(quoteHtml ? `${headHtml}<br>${quoteHtml}` : headHtml);
+  }
+
+  /** Generate a subject from the current body on demand (AI, PII-masked). */
+  async function generateSubject() {
+    const text = richMode ? (richEditorRef.current?.getText() ?? richText) : body;
+    if (!text.trim() || subjectBusy) return;
+    setSubjectBusy(true);
+    setSendError(null);
+    try {
+      const res = await fetch("/api/ai/subject", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.subject) setSubject(data.subject);
+      else setSendError(data.error ?? "件名の生成に失敗しました");
+    } catch {
+      setSendError("件名の生成に失敗しました");
+    } finally {
+      setSubjectBusy(false);
+    }
   }
 
   /** Enter/leave リッチ編集. Entering seeds the rich editor from the plain body;
@@ -514,12 +537,28 @@ export function ReplyComposer({
             </div>
           )}
           <RecipientFields values={recipients} onChange={setRecipients} disabled={sending} />
-          <input
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="件名"
-            className="mt-1.5 w-full border-b border-border bg-transparent pb-2 text-base font-medium outline-none placeholder:text-fg-subtle"
-          />
+          <div className="mt-1.5 flex items-center gap-2 border-b border-border pb-2">
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="件名（空でも送信できます）"
+              className="w-full bg-transparent text-base font-medium outline-none placeholder:text-fg-subtle"
+            />
+            <button
+              type="button"
+              onClick={generateSubject}
+              disabled={subjectBusy || sending}
+              title="本文からAIで件名を生成"
+              className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+            >
+              {subjectBusy ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Sparkles className="size-3" />
+              )}
+              件名AI
+            </button>
+          </div>
 
           {/* Selection action bar (plain editor only) */}
           {selectionText && !reviewing && !generating && !richMode && (
