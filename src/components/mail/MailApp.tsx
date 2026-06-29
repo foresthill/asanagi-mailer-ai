@@ -643,6 +643,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       threadId: d.threadId,
       draftId: d.id,
       attachments: d.attachments,
+      html: d.html,
     });
   };
 

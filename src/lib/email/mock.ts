@@ -193,6 +193,7 @@ export class MockProvider implements EmailProvider {
       subject: message.subject,
       snippet: message.body.slice(0, 140),
       body: message.body,
+      html: message.html,
       date: new Date().toISOString(),
       read: true,
       state: "sent",
