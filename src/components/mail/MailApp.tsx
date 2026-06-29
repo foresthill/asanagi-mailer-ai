@@ -219,6 +219,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // 重なりが開いたら History API で1件積み、popstate で最前面を閉じる。
   // （URLは変えない＝ルーティング不要）
   const backArmed = useRef(false);
+  // Folder navigation history (戻る returns to the previously-viewed folder).
+  const folderStack = useRef<FolderView[]>([]);
+  // True while we consume our own pushed entry via history.back() — keeps the
+  // popstate handler from also reverting a folder for our self-fired event.
+  const suppressPop = useRef(false);
   useEffect(() => {
     const open =
       compose !== null ||
@@ -233,12 +238,18 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     } else if (!open && backArmed.current) {
       // UI操作で全部閉じた → 積んだ履歴を1件消費して綺麗にする。
       backArmed.current = false;
+      suppressPop.current = true;
       history.back();
     }
   }, [compose, showSettings, showScheduled, showDrafts, showSweep, selectedId]);
 
   useEffect(() => {
     const onPop = () => {
+      // Ignore the popstate we triggered ourselves to clean up an overlay entry.
+      if (suppressPop.current) {
+        suppressPop.current = false;
+        return;
+      }
       backArmed.current = false;
       // 最前面のレイヤーを1枚だけ閉じる（残りは上のeffectが再度積み直す）。
       // 作成/返信はリーダーを覆い隠すので、戻るで一段＝一覧まで戻す（裏の
@@ -256,6 +267,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         setSelectedId(null);
         setSelected(null);
         setThread(null);
+      } else if (folderStack.current.length > 0) {
+        // No overlay open → 戻るで前のフォルダへ。
+        const prev = folderStack.current.pop()!;
+        setView("mail");
+        setFolder(prev);
+        setSearchQuery("");
+        setSearchResults(null);
       }
     };
     window.addEventListener("popstate", onPop);
@@ -291,6 +309,15 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   const changeFolder = (f: FolderView) => {
     if (!confirmDiscard()) return;
+    // Record a history entry so ブラウザの戻る returns to the current folder.
+    // Only when at the base level (no overlay) and the folder actually changes,
+    // to avoid desyncing with the overlay back-stack above.
+    const overlayOpen =
+      compose !== null || showSettings || showScheduled || showDrafts || showSweep || selectedId !== null;
+    if (!overlayOpen && view === "mail" && f !== folder) {
+      folderStack.current.push(folder);
+      history.pushState({ asanagiFolder: true }, "");
+    }
     setView("mail");
     setFolder(f);
     // Folder clicks must visibly switch even while showing search results.
