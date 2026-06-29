@@ -433,7 +433,7 @@ export function ReplyComposer({
     !busy &&
     !reviewing &&
     !!effectiveBody.trim() &&
-    !!subject.trim() &&
+    // 件名は空でも送信可（メールの標準）。宛先と本文があれば送れる。
     looksLikeAddressList(recipients.to);
 
   // Save is allowed with partial content (the whole point of a draft).

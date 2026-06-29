@@ -11,8 +11,9 @@ export const maxDuration = 30;
 export async function POST(req: Request) {
   const message = (await req.json()) as OutgoingMessage;
 
-  if (!message.to?.length || !message.subject) {
-    return NextResponse.json({ error: "to と subject は必須です" }, { status: 400 });
+  // 件名は空でも送信可（メールの標準）。宛先のみ必須。
+  if (!message.to?.length) {
+    return NextResponse.json({ error: "to は必須です" }, { status: 400 });
   }
   if (!attachmentsWithinCap(message.attachments)) {
     return NextResponse.json(
