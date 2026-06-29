@@ -35,6 +35,20 @@ export interface RichEditorChange {
   text: string;
 }
 
+/**
+ * Image files from a paste/drop DataTransfer. Pasted clipboard images (e.g.
+ * screenshots) usually arrive via `items`, not `files`, so check both.
+ */
+function imageFilesFrom(dt: DataTransfer | null): File[] {
+  if (!dt) return [];
+  const fromFiles = Array.from(dt.files ?? []).filter((f) => f.type.startsWith("image/"));
+  if (fromFiles.length) return fromFiles;
+  return Array.from(dt.items ?? [])
+    .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+    .map((it) => it.getAsFile())
+    .filter((f): f is File => f != null);
+}
+
 /** One toolbar toggle button. */
 function TBtn({
   on,
@@ -126,17 +140,18 @@ export const RichEditor = forwardRef<
           "min-h-full text-[15px] leading-7 outline-none [&_img]:my-1.5 [&_img]:max-w-full [&_img]:rounded-md [&_p]:min-h-[1.2em] [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_a]:text-accent [&_a]:underline",
       },
       handlePaste(_view, event) {
-        const files = Array.from(event.clipboardData?.files ?? []);
-        if (!files.some((f) => f.type.startsWith("image/"))) return false;
+        // Only intercept image pastes; text/HTML falls through to ProseMirror.
+        const imgs = imageFilesFrom(event.clipboardData);
+        if (!imgs.length) return false;
         event.preventDefault();
-        insertImageFiles(files);
+        insertImageFiles(imgs);
         return true;
       },
       handleDrop(_view, event) {
-        const files = Array.from((event as DragEvent).dataTransfer?.files ?? []);
-        if (!files.some((f) => f.type.startsWith("image/"))) return false;
+        const imgs = imageFilesFrom((event as DragEvent).dataTransfer);
+        if (!imgs.length) return false;
         event.preventDefault();
-        insertImageFiles(files);
+        insertImageFiles(imgs);
         return true;
       },
     },
