@@ -469,12 +469,14 @@ export class ImapProvider implements EmailProvider {
       // html present ⇒ MailComposer emits multipart/alternative (text+html),
       // and multipart/mixed when attachments are also present.
       html: message.html,
-      // MailComposer builds multipart/mixed natively from base64 attachments.
+      // MailComposer builds multipart/mixed natively from base64 attachments;
+      // a `cid` makes the part inline (multipart/related) for HTML images.
       attachments: message.attachments?.map((a) => ({
         filename: a.filename,
         content: a.content,
         encoding: "base64" as const,
         contentType: a.mimeType,
+        ...(a.cid ? { cid: a.cid, contentDisposition: "inline" as const } : {}),
       })),
       inReplyTo: message.inReplyTo,
       // Keep the conversation root first in References so every depth of the

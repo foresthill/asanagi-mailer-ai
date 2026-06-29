@@ -346,74 +346,49 @@ export class GmailProvider implements EmailProvider {
     ];
 
     const atts = message.attachments ?? [];
+    const inlineAtts = atts.filter((a) => a.cid); // → multipart/related (cid)
+    const regularAtts = atts.filter((a) => !a.cid); // → multipart/mixed
     const wrap = (b64: string) => b64.replace(/(.{76})/g, "$1\r\n");
     const b64 = (s: string) => wrap(Buffer.from(s, "utf8").toString("base64"));
 
-    // MIME leaves (each = part headers + blank + base64 body).
-    const textLeaf = [
-      'Content-Type: text/plain; charset="UTF-8"',
-      "Content-Transfer-Encoding: base64",
-      "",
-      b64(message.body),
-    ].join("\r\n");
-    const htmlLeaf = message.html
-      ? [
-          'Content-Type: text/html; charset="UTF-8"',
-          "Content-Transfer-Encoding: base64",
-          "",
-          b64(message.html),
-        ].join("\r\n")
-      : "";
-    const attLeaves = atts.map((a) =>
-      [
-        `Content-Type: ${a.mimeType}; name="${mimeWord(a.filename)}"`,
-        "Content-Transfer-Encoding: base64",
-        `Content-Disposition: attachment; filename="${mimeWord(a.filename)}"`,
-        "",
-        wrap(a.content),
-      ].join("\r\n"),
-    );
-
-    // text alternative (plain) + html alternative, as its own multipart entity.
-    const alternativeEntity = () => {
-      const b = `=_alt_${randomUUID()}`;
-      return {
-        ctype: `multipart/alternative; boundary="${b}"`,
-        body: [`--${b}`, textLeaf, `--${b}`, htmlLeaf, `--${b}--`, ""].join("\r\n"),
-      };
+    // Each helper returns a full MIME "part" (headers + blank line + body), so
+    // parts nest uniformly: a multipart's body is just other parts.
+    const leafText = () =>
+      `Content-Type: text/plain; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${b64(message.body)}`;
+    const leafHtml = () =>
+      `Content-Type: text/html; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${b64(message.html ?? "")}`;
+    const leafAtt = (a: (typeof atts)[number]) =>
+      `Content-Type: ${a.mimeType}; name="${mimeWord(a.filename)}"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename="${mimeWord(a.filename)}"\r\n\r\n${wrap(a.content)}`;
+    const leafInline = (a: (typeof atts)[number]) =>
+      `Content-Type: ${a.mimeType}\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <${a.cid}>\r\nContent-Disposition: inline; filename="${mimeWord(a.filename)}"\r\n\r\n${wrap(a.content)}`;
+    const multipart = (subtype: string, parts: string[]) => {
+      const b = `=_${subtype}_${randomUUID()}`;
+      return (
+        `Content-Type: multipart/${subtype}; boundary="${b}"\r\n\r\n` +
+        parts.flatMap((p) => [`--${b}`, p]).join("\r\n") +
+        `\r\n--${b}--\r\n`
+      );
     };
 
     let rfc822: string;
-    if (atts.length === 0 && !message.html) {
-      // (A) text/plain — unchanged simple path (keeps threading parity).
+    if (!message.html && atts.length === 0) {
+      // text/plain — unchanged simple path (keeps threading parity, raw body).
       headers.push('Content-Type: text/plain; charset="UTF-8"');
       rfc822 = headers.filter(Boolean).join("\r\n") + "\r\n\r\n" + message.body;
-    } else if (atts.length === 0 && message.html) {
-      // (B) multipart/alternative (text + html).
-      const alt = alternativeEntity();
-      headers.push(`Content-Type: ${alt.ctype}`);
-      rfc822 = headers.filter(Boolean).join("\r\n") + "\r\n\r\n" + alt.body;
     } else {
-      // (C) multipart/mixed [ text ] + attachments, or
-      // (D) multipart/mixed [ multipart/alternative ] + attachments.
-      const mix = `=_mix_${randomUUID()}`;
-      const firstPart = message.html
-        ? (() => {
-            const alt = alternativeEntity();
-            return [`Content-Type: ${alt.ctype}`, "", alt.body].join("\r\n");
-          })()
-        : textLeaf;
-      headers.push(`Content-Type: multipart/mixed; boundary="${mix}"`);
-      rfc822 =
-        headers.filter(Boolean).join("\r\n") +
-        "\r\n\r\n" +
-        [
-          `--${mix}`,
-          firstPart,
-          ...attLeaves.flatMap((leaf) => [`--${mix}`, leaf]),
-          `--${mix}--`,
-          "",
-        ].join("\r\n");
+      // Build bottom-up: [related(html, inline imgs)] → alternative(text, html)
+      // → mixed(body, regular attachments). Each layer is added only if needed.
+      const htmlNode = message.html
+        ? inlineAtts.length
+          ? multipart("related", [leafHtml(), ...inlineAtts.map(leafInline)])
+          : leafHtml()
+        : null;
+      let bodyNode = htmlNode ? multipart("alternative", [leafText(), htmlNode]) : leafText();
+      if (regularAtts.length) {
+        bodyNode = multipart("mixed", [bodyNode, ...regularAtts.map(leafAtt)]);
+      }
+      // bodyNode already starts with its own Content-Type header.
+      rfc822 = headers.filter(Boolean).join("\r\n") + "\r\n" + bodyNode;
     }
 
     const raw = Buffer.from(rfc822, "utf8")

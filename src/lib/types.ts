@@ -112,6 +112,12 @@ export interface OutgoingAttachment {
   content: string;
   /** Size in bytes of the decoded content (for the UI + size guard). */
   size: number;
+  /**
+   * Content-ID for an inline image referenced from the HTML body as
+   * `cid:<cid>`. When set, the part is sent inline (multipart/related,
+   * Content-Disposition: inline) rather than as a downloadable attachment.
+   */
+  cid?: string;
 }
 
 export interface OutgoingMessage {
