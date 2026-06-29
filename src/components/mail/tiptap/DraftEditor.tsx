@@ -71,22 +71,20 @@ export const DraftEditor = forwardRef<
         class:
           "min-h-full whitespace-pre-wrap text-[15px] leading-7 outline-none",
       },
-      // The doc is a single paragraph, so the default paste (which builds
-      // multiple block nodes) is rejected and nothing appears. Flatten the
-      // clipboard's plain text into this paragraph: newlines → hardBreaks.
-      handlePaste(view, event) {
-        const text = event.clipboardData?.getData("text/plain");
-        if (!text) return false; // non-text (e.g. image) → default handling
-        event.preventDefault();
+      // The doc is a single paragraph, so default paste (which builds multiple
+      // block nodes) is rejected and nothing appears. Flatten ANY pasted slice
+      // — whether ProseMirror parsed it from text/plain, text/html, or RTF
+      // (clipboard managers like Maccy/Clippy often restore HTML/RTF without a
+      // clean text/plain) — into this paragraph: block breaks & hardBreaks → \n.
+      transformPasted(slice, view) {
+        const text = slice.content.textBetween(0, slice.content.size, "\n", "\n");
         const { schema } = view.state;
         const nodes: PMNode[] = [];
         text.split(/\r?\n/).forEach((line, i) => {
           if (i > 0) nodes.push(schema.nodes.hardBreak.create());
           if (line) nodes.push(schema.text(line));
         });
-        const slice = new Slice(Fragment.fromArray(nodes), 0, 0);
-        view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
-        return true;
+        return new Slice(Fragment.fromArray(nodes), 0, 0);
       },
     },
     onUpdate({ editor }) {
