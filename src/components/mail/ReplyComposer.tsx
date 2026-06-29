@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { ScheduleDialog } from "./ScheduleDialog";
 import DOMPurify from "dompurify";
-import { AttachmentBar, fileToOutgoingAttachment } from "./AttachmentBar";
+import { AttachmentButton, AttachmentChips, fileToOutgoingAttachment } from "./AttachmentBar";
 import { ATTACHMENT_TOTAL_CAP, totalAttachmentBytes } from "@/lib/attachments";
 import { plainTextToHtml, wrapHtmlBody, quoteBlock, extractInlineImages } from "@/lib/html-mail";
 import { formatBytes } from "./StorageMeter";
@@ -621,50 +621,6 @@ export function ReplyComposer({
               </div>
             )}
           </div>
-
-          <div className="flex flex-wrap items-center gap-2 pt-2">
-            {!richMode && (
-              <button
-                type="button"
-                onClick={() => setHtmlSend((v) => !v)}
-                disabled={sending}
-                title="HTML形式で送信（書式・元メールのHTML引用を保持）。オフだとプレーンテキスト送信"
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50 ${
-                  htmlSend
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-border text-fg-muted hover:border-accent hover:text-accent"
-                }`}
-              >
-                <Code2 className="size-3.5" />
-                HTML{htmlSend ? "送信オン" : "送信オフ"}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={toggleRichMode}
-              disabled={sending}
-              title="リッチ編集（画像の貼り付け・ドロップでインライン挿入。HTML送信）。AI添削はプレーン編集時のみ"
-              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50 ${
-                richMode
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-fg-muted hover:border-accent hover:text-accent"
-              }`}
-            >
-              <ImageIcon className="size-3.5" />
-              リッチ編集{richMode ? "オン" : "オフ"}
-            </button>
-            {richMode && (
-              <span className="text-[11px] text-fg-subtle">
-                画像を貼り付け/ドロップで挿入・HTML送信。AI添削はプレーン編集に切替で使えます
-              </span>
-            )}
-          </div>
-          <AttachmentBar
-            items={attachments}
-            onAdd={addFiles}
-            onRemove={removeAttachment}
-            disabled={sending}
-          />
         </div>
 
         {sendError && (
@@ -702,38 +658,85 @@ export function ReplyComposer({
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2 border-t border-border bg-surface px-6 py-3">
-            <button
-              onClick={sendNow}
-              disabled={!canSend}
-              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
-            >
-              {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-              今すぐ送信
-            </button>
-            <button
-              onClick={() => setShowSchedule(true)}
-              disabled={!canSend}
-              className="flex items-center gap-2 rounded-lg border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
-            >
-              <Clock className="size-4" />
-              予約送信
-            </button>
-            <button
-              onClick={saveDraft}
-              disabled={!canSaveDraft}
-              title="送らずに下書きとして保存（端末内のみ）"
-              className="ml-auto flex items-center gap-2 rounded-lg border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
-            >
-              {savingDraft ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              下書き保存
-            </button>
-            <button
-              onClick={onClose}
-              className="rounded-lg px-3 py-2 text-sm text-fg-muted hover:bg-surface-2"
-            >
-              破棄
-            </button>
+          <div className="border-t border-border bg-surface">
+            {(attachments.length > 0 || richMode) && (
+              <div className="flex flex-wrap items-center gap-2 px-6 pt-2.5">
+                <AttachmentChips items={attachments} onRemove={removeAttachment} disabled={sending} />
+                {richMode && (
+                  <span className="text-[11px] text-fg-subtle">
+                    画像は貼り付け/ドロップで挿入・HTML送信。AI添削はプレーン編集に切替で使えます
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2 px-6 py-3">
+              {/* Compose options (absorbed from the floating row) */}
+              <AttachmentButton onAdd={addFiles} disabled={sending} />
+              {!richMode && (
+                <button
+                  type="button"
+                  onClick={() => setHtmlSend((v) => !v)}
+                  disabled={sending}
+                  title="HTML形式で送信（書式・元メールのHTML引用を保持）。オフだとプレーンテキスト送信"
+                  className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs transition-colors disabled:opacity-50 ${
+                    htmlSend
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-border text-fg-muted hover:border-accent hover:text-accent"
+                  }`}
+                >
+                  <Code2 className="size-3.5" />
+                  HTML{htmlSend ? "オン" : "オフ"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={toggleRichMode}
+                disabled={sending}
+                title="リッチ編集（画像の貼り付け・ドロップでインライン挿入・HTML送信）。AI添削はプレーン編集時のみ"
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs transition-colors disabled:opacity-50 ${
+                  richMode
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border text-fg-muted hover:border-accent hover:text-accent"
+                }`}
+              >
+                <ImageIcon className="size-3.5" />
+                リッチ{richMode ? "オン" : "オフ"}
+              </button>
+
+              <div className="mx-1 h-6 w-px bg-border" />
+
+              <button
+                onClick={sendNow}
+                disabled={!canSend}
+                className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
+              >
+                {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                今すぐ送信
+              </button>
+              <button
+                onClick={() => setShowSchedule(true)}
+                disabled={!canSend}
+                className="flex items-center gap-2 rounded-lg border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                <Clock className="size-4" />
+                予約送信
+              </button>
+              <button
+                onClick={saveDraft}
+                disabled={!canSaveDraft}
+                title="送らずに下書きとして保存（端末内のみ）"
+                className="ml-auto flex items-center gap-2 rounded-lg border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                {savingDraft ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                下書き保存
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded-lg px-3 py-2 text-sm text-fg-muted hover:bg-surface-2"
+              >
+                破棄
+              </button>
+            </div>
           </div>
         )}
       </div>

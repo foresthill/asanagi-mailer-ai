@@ -24,32 +24,23 @@ export function fileToOutgoingAttachment(file: File): Promise<OutgoingAttachment
   });
 }
 
-/**
- * Attachment chips + "添付" button for the composer. Purely presentational:
- * the parent owns the attachment list and the size-cap enforcement (so the
- * file picker and drag&drop share one add path).
- */
-export function AttachmentBar({
-  items,
+/** Compact "添付" button (+ hidden file input) for the composer action bar. */
+export function AttachmentButton({
   onAdd,
-  onRemove,
   disabled,
 }: {
-  items: OutgoingAttachment[];
   onAdd: (files: FileList | File[]) => void;
-  onRemove: (index: number) => void;
   disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-
   return (
-    <div className="flex flex-wrap items-center gap-2 pt-2">
+    <>
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={disabled}
-        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
-        title="ファイルを添付（ドラッグ&ドロップも可）"
+        title="ファイルを添付（本文へドラッグ&ドロップも可）"
+        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-2 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
       >
         <Paperclip className="size-3.5" />
         添付
@@ -64,6 +55,23 @@ export function AttachmentBar({
           e.target.value = ""; // allow re-selecting the same file
         }}
       />
+    </>
+  );
+}
+
+/** Chips for the currently-attached files (rendered only when there are any). */
+export function AttachmentChips({
+  items,
+  onRemove,
+  disabled,
+}: {
+  items: OutgoingAttachment[];
+  onRemove: (index: number) => void;
+  disabled?: boolean;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
       {items.map((a, i) => (
         <span
           key={`${a.filename}-${i}`}
