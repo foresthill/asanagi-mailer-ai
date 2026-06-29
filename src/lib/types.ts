@@ -121,6 +121,12 @@ export interface OutgoingMessage {
   bcc?: EmailAddress[];
   subject: string;
   body: string;
+  /**
+   * Optional HTML alternative. When present, providers send multipart/alternative
+   * (text=body, html=this). Built at send time from the plain body + the
+   * original's quoted HTML (replies) — body stays the plain-text fallback.
+   */
+  html?: string;
   /** Files to attach (base64). Omitted/empty = no attachments. */
   attachments?: OutgoingAttachment[];
   /** messageId of the email being replied to, for threading. */

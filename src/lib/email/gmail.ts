@@ -346,39 +346,74 @@ export class GmailProvider implements EmailProvider {
     ];
 
     const atts = message.attachments ?? [];
-    let rfc822: string;
-    if (atts.length === 0) {
-      // Plain text/plain message (unchanged path — keeps threading parity).
-      headers.push('Content-Type: text/plain; charset="UTF-8"');
-      // Headers and body MUST be separated by a blank line (RFC 5322).
-      rfc822 = headers.filter(Boolean).join("\r\n") + "\r\n\r\n" + message.body;
-    } else {
-      // multipart/mixed: text part + one part per attachment. base64 bodies are
-      // wrapped at 76 cols per RFC 2045.
-      const boundary = `=_asanagi_${randomUUID()}`;
-      const wrap = (b64: string) => b64.replace(/(.{76})/g, "$1\r\n");
-      const textPart = [
-        `--${boundary}`,
-        'Content-Type: text/plain; charset="UTF-8"',
-        "Content-Transfer-Encoding: base64",
-        "",
-        wrap(Buffer.from(message.body, "utf8").toString("base64")),
-      ].join("\r\n");
-      const fileParts = atts.map((a) =>
-        [
-          `--${boundary}`,
-          `Content-Type: ${a.mimeType}; name="${mimeWord(a.filename)}"`,
+    const wrap = (b64: string) => b64.replace(/(.{76})/g, "$1\r\n");
+    const b64 = (s: string) => wrap(Buffer.from(s, "utf8").toString("base64"));
+
+    // MIME leaves (each = part headers + blank + base64 body).
+    const textLeaf = [
+      'Content-Type: text/plain; charset="UTF-8"',
+      "Content-Transfer-Encoding: base64",
+      "",
+      b64(message.body),
+    ].join("\r\n");
+    const htmlLeaf = message.html
+      ? [
+          'Content-Type: text/html; charset="UTF-8"',
           "Content-Transfer-Encoding: base64",
-          `Content-Disposition: attachment; filename="${mimeWord(a.filename)}"`,
           "",
-          wrap(a.content),
-        ].join("\r\n"),
-      );
-      headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+          b64(message.html),
+        ].join("\r\n")
+      : "";
+    const attLeaves = atts.map((a) =>
+      [
+        `Content-Type: ${a.mimeType}; name="${mimeWord(a.filename)}"`,
+        "Content-Transfer-Encoding: base64",
+        `Content-Disposition: attachment; filename="${mimeWord(a.filename)}"`,
+        "",
+        wrap(a.content),
+      ].join("\r\n"),
+    );
+
+    // text alternative (plain) + html alternative, as its own multipart entity.
+    const alternativeEntity = () => {
+      const b = `=_alt_${randomUUID()}`;
+      return {
+        ctype: `multipart/alternative; boundary="${b}"`,
+        body: [`--${b}`, textLeaf, `--${b}`, htmlLeaf, `--${b}--`, ""].join("\r\n"),
+      };
+    };
+
+    let rfc822: string;
+    if (atts.length === 0 && !message.html) {
+      // (A) text/plain — unchanged simple path (keeps threading parity).
+      headers.push('Content-Type: text/plain; charset="UTF-8"');
+      rfc822 = headers.filter(Boolean).join("\r\n") + "\r\n\r\n" + message.body;
+    } else if (atts.length === 0 && message.html) {
+      // (B) multipart/alternative (text + html).
+      const alt = alternativeEntity();
+      headers.push(`Content-Type: ${alt.ctype}`);
+      rfc822 = headers.filter(Boolean).join("\r\n") + "\r\n\r\n" + alt.body;
+    } else {
+      // (C) multipart/mixed [ text ] + attachments, or
+      // (D) multipart/mixed [ multipart/alternative ] + attachments.
+      const mix = `=_mix_${randomUUID()}`;
+      const firstPart = message.html
+        ? (() => {
+            const alt = alternativeEntity();
+            return [`Content-Type: ${alt.ctype}`, "", alt.body].join("\r\n");
+          })()
+        : textLeaf;
+      headers.push(`Content-Type: multipart/mixed; boundary="${mix}"`);
       rfc822 =
         headers.filter(Boolean).join("\r\n") +
         "\r\n\r\n" +
-        [textPart, ...fileParts, `--${boundary}--`, ""].join("\r\n");
+        [
+          `--${mix}`,
+          firstPart,
+          ...attLeaves.flatMap((leaf) => [`--${mix}`, leaf]),
+          `--${mix}--`,
+          "",
+        ].join("\r\n");
     }
 
     const raw = Buffer.from(rfc822, "utf8")

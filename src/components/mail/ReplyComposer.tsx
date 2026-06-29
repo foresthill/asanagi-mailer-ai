@@ -12,10 +12,13 @@ import {
   Wand2,
   CheckCheck,
   Save,
+  Code2,
 } from "lucide-react";
 import { ScheduleDialog } from "./ScheduleDialog";
+import DOMPurify from "dompurify";
 import { AttachmentBar, fileToOutgoingAttachment } from "./AttachmentBar";
 import { ATTACHMENT_TOTAL_CAP, totalAttachmentBytes } from "@/lib/attachments";
+import { plainTextToHtml, wrapHtmlBody, quoteBlock } from "@/lib/html-mail";
 import { formatBytes } from "./StorageMeter";
 import type { OutgoingAttachment } from "@/lib/types";
 import { buildSegments, pendingCount } from "@/lib/diff";
@@ -93,6 +96,8 @@ export function ReplyComposer({
   const [selectionText, setSelectionText] = useState("");
   const [attachments, setAttachments] = useState<OutgoingAttachment[]>(init.attachments ?? []);
   const [dragging, setDragging] = useState(false);
+  // HTML送信: default on when replying to an HTML mail or reopening an HTML draft.
+  const [htmlSend, setHtmlSend] = useState<boolean>(Boolean(init.html || init.source?.html));
   const editorRef = useRef<DraftEditorHandle>(null);
   // In-flight AI request — 中止 button aborts it (initial draft / suggest).
   const abortRef = useRef<AbortController | null>(null);
@@ -238,6 +243,27 @@ export function ReplyComposer({
     }
   }
 
+  /**
+   * Build the HTML alternative from the current plain body (§A: plain authoring
+   * → HTML on send). New text is escaped+linkified; for replies the original's
+   * real HTML is preserved in a <blockquote> (sanitized), else the plain quote
+   * is escaped. Returns undefined when HTML送信 is off.
+   */
+  function buildHtml(): string | undefined {
+    if (!htmlSend) return undefined;
+    const { head, tail } = splitQuotedDraft(body, init.quote ?? "");
+    const headHtml = plainTextToHtml(head || body);
+    let quoteHtml = "";
+    if (init.quote) {
+      if (init.source?.html) {
+        quoteHtml = quoteBlock(DOMPurify.sanitize(init.source.html));
+      } else if (tail) {
+        quoteHtml = quoteBlock(plainTextToHtml(tail));
+      }
+    }
+    return wrapHtmlBody(quoteHtml ? `${headHtml}<br>${quoteHtml}` : headHtml);
+  }
+
   /** Outgoing message built from the editable recipient fields. */
   function outgoing() {
     // Threading is account-specific: only carry it when sending from the
@@ -249,6 +275,7 @@ export function ReplyComposer({
       bcc: parseAddressList(recipients.bcc),
       subject,
       body,
+      html: buildHtml(),
       attachments: attachments.length ? attachments : undefined,
       inReplyTo: sameAccount ? init.inReplyTo : undefined,
       threadId: sameAccount ? init.threadId : undefined,
@@ -504,6 +531,22 @@ export function ReplyComposer({
             )}
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setHtmlSend((v) => !v)}
+              disabled={sending}
+              title="HTML形式で送信（書式・元メールのHTML引用を保持）。オフだとプレーンテキスト送信"
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50 ${
+                htmlSend
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border text-fg-muted hover:border-accent hover:text-accent"
+              }`}
+            >
+              <Code2 className="size-3.5" />
+              HTML{htmlSend ? "送信オン" : "送信オフ"}
+            </button>
+          </div>
           <AttachmentBar
             items={attachments}
             onAdd={addFiles}

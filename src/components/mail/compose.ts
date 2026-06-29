@@ -32,6 +32,8 @@ export interface ComposeInit {
   draftId?: string;
   /** Attachments restored when reopening a saved draft. */
   attachments?: OutgoingAttachment[];
+  /** Set when a reopened draft was composed in HTML mode (defaults the toggle). */
+  html?: string;
 }
 
 const KIND_LABEL: Record<ComposeKind, string> = {

@@ -466,6 +466,9 @@ export class ImapProvider implements EmailProvider {
       bcc: message.bcc?.map((a) => a.email),
       subject: message.subject,
       text: message.body,
+      // html present ⇒ MailComposer emits multipart/alternative (text+html),
+      // and multipart/mixed when attachments are also present.
+      html: message.html,
       // MailComposer builds multipart/mixed natively from base64 attachments.
       attachments: message.attachments?.map((a) => ({
         filename: a.filename,
