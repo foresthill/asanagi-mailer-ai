@@ -123,67 +123,69 @@ export function EmailReader({
         fullscreen ? "fixed inset-0 z-50" : "flex-1",
       )}
     >
-      {/* Action bar */}
-      <div className="flex items-center gap-1 border-b border-border bg-surface px-5 py-2.5">
-        <button
-          onClick={onToggleStar}
+      {/* Action bar — concept: one accent primary (返信), quiet icon-only
+          secondaries grouped by meaning (①仕分け ｜ ②表示 … 右 ③返信). */}
+      <div className="flex items-center gap-0.5 border-b border-border bg-surface px-4 py-2">
+        {/* ① 仕分け */}
+        <IconBtn
+          icon={Star}
           title={email.starred ? "スターを外す (S)" : "スターを付ける (S)"}
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-fg-muted transition-colors hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
-        >
-          <Star className={cn("size-4", email.starred && "fill-amber-400 text-amber-400")} />
-          <span className="hidden lg:inline">{email.starred ? "スター解除" : "スター"}</span>
-        </button>
+          onClick={onToggleStar}
+          active={email.starred}
+          tone="star"
+        />
         {folder !== "archived" && folder !== "sent" && (
-          <ActionButton icon={Archive} label="アーカイブ" onClick={onArchive} />
+          <IconBtn icon={Archive} title="アーカイブ" onClick={onArchive} />
         )}
         {folder !== "trashed" ? (
-          <ActionButton icon={Trash2} label="ゴミ箱" danger onClick={onTrash} />
+          <IconBtn icon={Trash2} title="ゴミ箱" onClick={onTrash} tone="danger" />
         ) : (
-          <ActionButton icon={RotateCcw} label="受信箱に戻す" onClick={onRestore} />
+          <IconBtn icon={RotateCcw} title="受信箱に戻す" onClick={onRestore} />
         )}
-        <button
+
+        <Divider />
+
+        {/* ② 表示 */}
+        <IconBtn
+          icon={copied ? Check : Copy}
+          title={copied ? "コピーしました" : "本文をコピー（引用部分は除く）"}
           onClick={copyBody}
-          title="本文をコピー（引用部分は除く）"
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-        >
-          {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
-          <span className="hidden lg:inline">{copied ? "コピーしました" : "本文コピー"}</span>
-        </button>
-        {/* 表示: 文字サイズ拡大＋全画面（画面共有向け） */}
-        <div className="ml-auto flex items-center gap-1">
-          <div className="mr-1 flex items-center gap-0.5 rounded-lg border border-border px-1 py-0.5">
-            <button
-              onClick={zoomOut}
-              disabled={zoom <= 0.8}
-              title="文字を小さく"
-              className="grid size-6 place-items-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40"
-            >
-              <ZoomOut className="size-3.5" />
-            </button>
-            <button
-              onClick={() => setZoom(1)}
-              title="文字サイズをリセット"
-              className="min-w-[2.5rem] rounded px-1 text-center text-[11px] tabular-nums text-fg-muted hover:bg-surface-2 hover:text-fg"
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-            <button
-              onClick={zoomIn}
-              disabled={zoom >= 2.5}
-              title="文字を大きく"
-              className="grid size-6 place-items-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40"
-            >
-              <ZoomIn className="size-3.5" />
-            </button>
-          </div>
+          tone={copied ? "ok" : undefined}
+        />
+        <div className="ml-0.5 flex items-center gap-0.5 rounded-lg border border-border px-1 py-0.5">
           <button
-            onClick={() => setFullscreen((v) => !v)}
-            title={fullscreen ? "全画面を解除 (Esc)" : "全画面表示（画面共有向け）"}
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+            onClick={zoomOut}
+            disabled={zoom <= 0.8}
+            title="文字を小さく"
+            className="grid size-6 place-items-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40"
           >
-            {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-            <span className="hidden lg:inline">{fullscreen ? "解除" : "全画面"}</span>
+            <ZoomOut className="size-3.5" />
           </button>
+          <button
+            onClick={() => setZoom(1)}
+            title="文字サイズをリセット"
+            className="min-w-[2.5rem] rounded px-1 text-center text-[11px] tabular-nums text-fg-muted hover:bg-surface-2 hover:text-fg"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            onClick={zoomIn}
+            disabled={zoom >= 2.5}
+            title="文字を大きく"
+            className="grid size-6 place-items-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+          >
+            <ZoomIn className="size-3.5" />
+          </button>
+        </div>
+        <IconBtn
+          icon={fullscreen ? Minimize2 : Maximize2}
+          title={fullscreen ? "全画面を解除 (Esc)" : "全画面表示（画面共有向け）"}
+          onClick={() => setFullscreen((v) => !v)}
+          active={fullscreen}
+        />
+
+        {/* ③ 返信（主役） */}
+        <div className="ml-auto flex items-center gap-1.5">
           <ReplyButton onReply={replyAndExitFullscreen} />
           <AiReplyButton onReply={replyAndExitFullscreen} />
         </div>
@@ -477,28 +479,54 @@ function FeedbackChip({ label, onClick }: { label: string; onClick: () => void }
   );
 }
 
-function ActionButton({
+/** Thin separator between toolbar clusters. */
+function Divider() {
+  return <span className="mx-1 h-5 w-px shrink-0 bg-border" />;
+}
+
+/**
+ * Quiet, icon-only toolbar button (label lives in the tooltip). Uniform size
+ * keeps the action bar calm; `tone` carries the few colored states.
+ */
+function IconBtn({
   icon: Icon,
-  label,
+  title,
   onClick,
-  danger,
+  active,
+  tone,
+  disabled,
 }: {
   icon: typeof Archive;
-  label: string;
+  title: string;
   onClick: () => void;
-  danger?: boolean;
+  active?: boolean;
+  tone?: "danger" | "star" | "ok";
+  disabled?: boolean;
 }) {
+  const hover =
+    tone === "danger"
+      ? "hover:bg-high-soft hover:text-high"
+      : tone === "star"
+        ? "hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
+        : "hover:bg-surface-2 hover:text-fg";
   return (
     <button
       onClick={onClick}
-      title={label}
+      disabled={disabled}
+      title={title}
       className={cn(
-        "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-fg-muted transition-colors",
-        danger ? "hover:bg-high-soft hover:text-high" : "hover:bg-surface-2 hover:text-fg",
+        "grid size-8 shrink-0 place-items-center rounded-lg transition-colors disabled:opacity-40",
+        hover,
+        active && tone !== "star" ? "bg-surface-2 text-fg" : "text-fg-muted",
       )}
     >
-      <Icon className="size-4" />
-      <span className="hidden lg:inline">{label}</span>
+      <Icon
+        className={cn(
+          "size-4",
+          tone === "star" && active && "fill-amber-400 text-amber-400",
+          tone === "ok" && "text-emerald-600",
+        )}
+      />
     </button>
   );
 }
