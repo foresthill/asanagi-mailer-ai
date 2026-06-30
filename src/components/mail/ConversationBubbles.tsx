@@ -56,6 +56,15 @@ export function ConversationBubbles({
   /** The message opened from the list — gets a subtle amber ring. */
   selectedId?: string;
 }) {
+  // Per-message: show the full recipient list (vs truncated to one line).
+  const [recipOpen, setRecipOpen] = useState<Set<string>>(new Set());
+  const toggleRecip = (id: string) =>
+    setRecipOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   return (
     <div className="flex flex-col gap-2.5">
       {messages.map((m, i) => {
@@ -79,7 +88,11 @@ export function ConversationBubbles({
               )}
               {own && m.to.length > 0 && (
                 <span
-                  className="mb-0.5 max-w-[78%] truncate px-1 text-[11px] text-fg-subtle"
+                  onClick={() => toggleRecip(m.id)}
+                  className={cn(
+                    "mb-0.5 max-w-[78%] cursor-pointer px-1 text-[11px] text-fg-subtle hover:text-fg",
+                    recipOpen.has(m.id) ? "whitespace-normal break-words" : "truncate",
+                  )}
                   title={[
                     `To: ${m.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`,
                     m.cc?.length
