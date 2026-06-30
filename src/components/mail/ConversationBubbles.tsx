@@ -77,6 +77,22 @@ export function ConversationBubbles({
                   {displayName(m.from)}
                 </span>
               )}
+              {own && m.to.length > 0 && (
+                <span
+                  className="mb-0.5 max-w-[78%] truncate px-1 text-[11px] text-fg-subtle"
+                  title={[
+                    `To: ${m.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`,
+                    m.cc?.length
+                      ? `Cc: ${m.cc.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join("\n")}
+                >
+                  宛先: {m.to.map((a) => a.name || a.email).join("、")}
+                  {m.cc?.length ? `（CC: ${m.cc.map((a) => a.name || a.email).join("、")}）` : ""}
+                </span>
+              )}
               <div className={cn("flex max-w-[78%] items-end gap-1.5", own && "flex-row-reverse")}>
                 <Bubble own={own} body={m.body || m.snippet} current={m.id === selectedId} />
                 <span className="shrink-0 pb-0.5 text-[10px] text-fg-subtle">{timeOf(m.date)}</span>
