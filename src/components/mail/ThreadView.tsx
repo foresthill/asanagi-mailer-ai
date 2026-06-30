@@ -22,6 +22,19 @@ function loadViewPref(): "cards" | "chat" {
   return localStorage.getItem(VIEW_PREF_KEY) === "chat" ? "chat" : "cards";
 }
 
+/** Full To/Cc/Bcc with addresses, for the recipient line's hover tooltip. */
+function recipientTitle(m: Email): string {
+  const fmt = (list?: { name?: string; email: string }[]) =>
+    (list ?? []).map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ");
+  return [
+    `To: ${fmt(m.to)}`,
+    m.cc?.length ? `Cc: ${fmt(m.cc)}` : "",
+    m.bcc?.length ? `Bcc: ${fmt(m.bcc)}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function ThreadView({ messages, selectedId }: { messages: Email[]; selectedId: string }) {
   const lastId = messages[messages.length - 1]?.id;
   const [view, setView] = useState<"cards" | "chat">(loadViewPref);
@@ -125,6 +138,12 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
                     </span>
                   )}
                 </span>
+                {m.to.length > 0 && (
+                  <p className="truncate text-xs text-fg-subtle" title={recipientTitle(m)}>
+                    宛先: {m.to.map((a) => a.name || a.email).join("、")}
+                    {m.cc?.length ? `（CC: ${m.cc.map((a) => a.name || a.email).join("、")}）` : ""}
+                  </p>
+                )}
                 {!expanded && (
                   <p className="truncate text-xs text-fg-subtle">{m.snippet}</p>
                 )}
