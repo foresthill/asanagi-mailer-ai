@@ -41,6 +41,15 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
   const [open, setOpen] = useState<Set<string>>(
     () => new Set([selectedId, lastId].filter(Boolean) as string[]),
   );
+  // Per-message: show the full recipient list (vs truncated to one line).
+  const [recipOpen, setRecipOpen] = useState<Set<string>>(new Set());
+  const toggleRecip = (id: string) =>
+    setRecipOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   // Long threads (10–20 messages) make the opened message (amber) require a lot
   // of scrolling. On open, scroll that message into view automatically.
   const currentRef = useRef<HTMLDivElement>(null);
@@ -139,10 +148,20 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
                   )}
                 </span>
                 {m.to.length > 0 && (
-                  <p className="truncate text-xs text-fg-subtle" title={recipientTitle(m)}>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation(); // don't also collapse the card
+                      toggleRecip(m.id);
+                    }}
+                    title={recipientTitle(m)}
+                    className={cn(
+                      "block cursor-pointer text-xs text-fg-subtle hover:text-fg",
+                      recipOpen.has(m.id) ? "whitespace-normal break-words" : "truncate",
+                    )}
+                  >
                     宛先: {m.to.map((a) => a.name || a.email).join("、")}
                     {m.cc?.length ? `（CC: ${m.cc.map((a) => a.name || a.email).join("、")}）` : ""}
-                  </p>
+                  </span>
                 )}
                 {!expanded && (
                   <p className="truncate text-xs text-fg-subtle">{m.snippet}</p>
