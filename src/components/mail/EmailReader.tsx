@@ -17,12 +17,14 @@ import {
   Minimize2,
   ZoomIn,
   ZoomOut,
+  Copy,
+  Check,
 } from "lucide-react";
 import type { Email, FolderView, Importance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ThreadView } from "./ThreadView";
-import { QuotedText } from "./QuotedText";
+import { QuotedText, splitQuotedReply } from "./QuotedText";
 import { MeetingCard } from "./MeetingCard";
 import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
@@ -69,6 +71,7 @@ export function EmailReader({
   const [zoom, setZoom] = useState(1);
   const zoomOut = () => setZoom((z) => Math.max(0.8, Math.round((z - 0.1) * 10) / 10));
   const zoomIn = () => setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10));
+  const [copied, setCopied] = useState(false);
 
   // Esc で全画面を解除。
   useEffect(() => {
@@ -98,6 +101,19 @@ export function EmailReader({
     onReply(kind, mode);
   };
 
+  // Copy the new body text only — the quoted reply history is excluded.
+  const copyBody = async () => {
+    const { head } = splitQuotedReply(email.body);
+    const text = head.trim() || email.body;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable — ignore */
+    }
+  };
+
   const name = displayName(email.from);
 
   return (
@@ -125,6 +141,14 @@ export function EmailReader({
         ) : (
           <ActionButton icon={RotateCcw} label="受信箱に戻す" onClick={onRestore} />
         )}
+        <button
+          onClick={copyBody}
+          title="本文をコピー（引用部分は除く）"
+          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+        >
+          {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+          <span className="hidden lg:inline">{copied ? "コピーしました" : "本文コピー"}</span>
+        </button>
         {/* 表示: 文字サイズ拡大＋全画面（画面共有向け） */}
         <div className="ml-auto flex items-center gap-1">
           <div className="mr-1 flex items-center gap-0.5 rounded-lg border border-border px-1 py-0.5">
