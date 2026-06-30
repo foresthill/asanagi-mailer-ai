@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, MessageCircle, Rows3 } from "lucide-react";
-import type { Email } from "@/lib/types";
+import { ChevronDown, Loader2, MessageCircle, Rows3 } from "lucide-react";
+import type { Email, Attachment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ConversationBubbles } from "./ConversationBubbles";
 import { QuotedText } from "./QuotedText";
+import { AttachmentList } from "./AttachmentList";
 
 /**
  * Thread rendering, oldest first, with two display modes:
@@ -50,6 +51,36 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
       else next.add(id);
       return next;
     });
+
+  // Thread messages come from the cache without attachment metadata (only a
+  // hasAttachment flag), so fetch a message's attachments on demand when it is
+  // expanded — lets you dig up files from older messages without leaving the
+  // thread. Deduped via a ref so each message is fetched at most once.
+  const [attMap, setAttMap] = useState<Record<string, Attachment[]>>({});
+  const [attLoading, setAttLoading] = useState<Set<string>>(new Set());
+  const attFetched = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const m of messages) {
+      // The opened message's attachments already show in the reader header.
+      if (!open.has(m.id) || !m.hasAttachment || m.id === selectedId) continue;
+      if (attFetched.current.has(m.id)) continue;
+      attFetched.current.add(m.id);
+      setAttLoading((s) => new Set(s).add(m.id));
+      fetch(`/api/emails/${encodeURIComponent(m.id)}`)
+        .then((r) => r.json())
+        .then((d) => setAttMap((prev) => ({ ...prev, [m.id]: d?.email?.attachments ?? [] })))
+        .catch(() => {
+          /* best-effort — leave as not-loaded */
+        })
+        .finally(() =>
+          setAttLoading((s) => {
+            const n = new Set(s);
+            n.delete(m.id);
+            return n;
+          }),
+        );
+    }
+  }, [open, messages, selectedId]);
   // Long threads (10–20 messages) make the opened message (amber) require a lot
   // of scrolling. On open, scroll that message into view automatically.
   const currentRef = useRef<HTMLDivElement>(null);
@@ -176,9 +207,22 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
               />
             </button>
             {expanded && (
-              <article className="whitespace-pre-wrap border-t border-border px-4 py-4 text-[15px] leading-7 text-fg/90">
-                <QuotedText text={m.body} />
-              </article>
+              <div className="border-t border-border px-4 py-4">
+                {m.hasAttachment && m.id !== selectedId && (
+                  <>
+                    {attMap[m.id]?.length ? (
+                      <AttachmentList emailId={m.id} attachments={attMap[m.id]} />
+                    ) : attLoading.has(m.id) ? (
+                      <p className="mb-2 flex items-center gap-1.5 text-xs text-fg-subtle">
+                        <Loader2 className="size-3.5 animate-spin" /> 添付を読み込み中…
+                      </p>
+                    ) : null}
+                  </>
+                )}
+                <article className="whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
+                  <QuotedText text={m.body} />
+                </article>
+              </div>
             )}
           </div>
         );
