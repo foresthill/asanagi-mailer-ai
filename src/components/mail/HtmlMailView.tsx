@@ -11,7 +11,7 @@ import { ImageOff, Image as ImageIcon } from "lucide-react";
  *  - remote images are BLOCKED by default (tracking-pixel privacy, local-first)
  *    and loaded only when the user opts in per email
  */
-export function HtmlMailView({ html }: { html: string }) {
+export function HtmlMailView({ html, fontScale = 1 }: { html: string; fontScale?: number }) {
   const [showImages, setShowImages] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -46,14 +46,14 @@ export function HtmlMailView({ html }: { html: string }) {
       srcDoc: `<!doctype html><html><head><meta charset="utf-8"><base target="_blank">
 <style>
   body { margin: 0; padding: 4px 2px; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
-         font-size: 15px; line-height: 1.7; color: #2b2a28; word-break: break-word; }
+         font-size: ${Math.round(15 * fontScale)}px; line-height: 1.7; color: #2b2a28; word-break: break-word; }
   img { max-width: 100%; height: auto; }
   table { max-width: 100%; }
   a { color: #5a52c7; }
   blockquote { border-left: 2px solid #ddd; margin-left: 0; padding-left: 1em; color: #666; }
 </style></head><body>${body}</body></html>`,
     };
-  }, [html, showImages]);
+  }, [html, showImages, fontScale]);
 
   // Sized to content. sandbox has NO allow-scripts, so allow-same-origin is
   // safe here and lets us measure the document height.

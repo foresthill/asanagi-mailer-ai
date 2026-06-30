@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Archive,
   Trash2,
@@ -13,6 +13,10 @@ import {
   Forward,
   ChevronDown,
   Star,
+  Maximize2,
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import type { Email, FolderView, Importance } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -60,6 +64,22 @@ export function EmailReader({
 }) {
   // Session-sticky preference: rich HTML (default) vs plain text.
   const [textMode, setTextMode] = useState(false);
+  // 全画面（画面共有向け）＋本文の文字サイズ拡大。
+  const [fullscreen, setFullscreen] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const zoomOut = () => setZoom((z) => Math.max(0.8, Math.round((z - 0.1) * 10) / 10));
+  const zoomIn = () => setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10));
+
+  // Esc で全画面を解除。
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFullscreen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen]);
+
   if (!email) {
     return (
       <div className="grid flex-1 place-items-center bg-bg">
@@ -71,10 +91,22 @@ export function EmailReader({
     );
   }
 
+  // Reply opens the composer (rendered outside this overlay), so leave
+  // fullscreen first or it would be hidden behind the fixed reader.
+  const replyAndExitFullscreen = (kind: ComposeKind, mode: ComposeAI) => {
+    setFullscreen(false);
+    onReply(kind, mode);
+  };
+
   const name = displayName(email.from);
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-bg">
+    <div
+      className={cn(
+        "flex flex-col overflow-hidden bg-bg",
+        fullscreen ? "fixed inset-0 z-50" : "flex-1",
+      )}
+    >
       {/* Action bar */}
       <div className="flex items-center gap-1 border-b border-border bg-surface px-5 py-2.5">
         <button
@@ -93,15 +125,49 @@ export function EmailReader({
         ) : (
           <ActionButton icon={RotateCcw} label="受信箱に戻す" onClick={onRestore} />
         )}
-        <div className="ml-auto flex items-center gap-1.5">
-          <ReplyButton onReply={onReply} />
-          <AiReplyButton onReply={onReply} />
+        {/* 表示: 文字サイズ拡大＋全画面（画面共有向け） */}
+        <div className="ml-auto flex items-center gap-1">
+          <div className="mr-1 flex items-center gap-0.5 rounded-lg border border-border px-1 py-0.5">
+            <button
+              onClick={zoomOut}
+              disabled={zoom <= 0.8}
+              title="文字を小さく"
+              className="grid size-6 place-items-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+            >
+              <ZoomOut className="size-3.5" />
+            </button>
+            <button
+              onClick={() => setZoom(1)}
+              title="文字サイズをリセット"
+              className="min-w-[2.5rem] rounded px-1 text-center text-[11px] tabular-nums text-fg-muted hover:bg-surface-2 hover:text-fg"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              onClick={zoomIn}
+              disabled={zoom >= 2.5}
+              title="文字を大きく"
+              className="grid size-6 place-items-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+            >
+              <ZoomIn className="size-3.5" />
+            </button>
+          </div>
+          <button
+            onClick={() => setFullscreen((v) => !v)}
+            title={fullscreen ? "全画面を解除 (Esc)" : "全画面表示（画面共有向け）"}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+          >
+            {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            <span className="hidden lg:inline">{fullscreen ? "解除" : "全画面"}</span>
+          </button>
+          <ReplyButton onReply={replyAndExitFullscreen} />
+          <AiReplyButton onReply={replyAndExitFullscreen} />
         </div>
       </div>
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-8 py-7">
-        <div className="mx-auto max-w-2xl animate-in">
+        <div className={cn("mx-auto animate-in", fullscreen ? "max-w-5xl" : "max-w-2xl")}>
           <h2 className="text-xl font-semibold leading-snug tracking-tight">{email.subject}</h2>
 
           <div className="mt-4 flex items-center gap-3">
@@ -177,9 +243,12 @@ export function EmailReader({
                 </div>
               )}
               {email.html && !textMode ? (
-                <HtmlMailView html={email.html} />
+                <HtmlMailView html={email.html} fontScale={zoom} />
               ) : (
-                <article className="mt-6 whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
+                <article
+                  className="mt-6 whitespace-pre-wrap leading-7 text-fg/90"
+                  style={{ fontSize: `${Math.round(15 * zoom)}px` }}
+                >
                   <QuotedText text={email.body} />
                 </article>
               )}
