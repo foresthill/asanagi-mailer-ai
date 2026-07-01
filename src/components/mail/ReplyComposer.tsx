@@ -14,6 +14,8 @@ import {
   Save,
   Code2,
   Image as ImageIcon,
+  Minimize2,
+  Maximize2,
 } from "lucide-react";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { SendConfirmDialog } from "./SendConfirmDialog";
@@ -54,6 +56,9 @@ export function ReplyComposer({
   onClose,
   onNeedsReauth,
   onSavedDraft,
+  minimized,
+  onMinimize,
+  onRestore,
 }: {
   /** Prepared initial state (kind/mode/recipients/subject/body) — compose.ts. */
   init: ComposeInit;
@@ -66,6 +71,10 @@ export function ReplyComposer({
   onNeedsReauth: () => void;
   /** Draft saved locally → parent closes the composer and refreshes the count. */
   onSavedDraft: () => void;
+  /** Minimized to a bottom-right dock (kept mounted so the draft is preserved). */
+  minimized?: boolean;
+  onMinimize?: () => void;
+  onRestore?: () => void;
 }) {
   // Which account to send from. Defaults to the conversation's account (reply)
   // or the active account (new mail); user can switch when 2+ are configured.
@@ -563,9 +572,38 @@ export function ReplyComposer({
     (!!effectiveBody.trim() || !!subject.trim() || !!recipients.to.trim());
 
   return (
-    <div className="flex flex-1 overflow-hidden bg-bg">
-      {/* Draft editor */}
-      <div className="flex flex-1 flex-col">
+    <div
+      className={
+        minimized
+          ? "fixed bottom-4 right-4 z-40 flex w-[26rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow)]"
+          : "flex flex-1 overflow-hidden bg-bg"
+      }
+    >
+      {minimized && (
+        <div className="flex items-center gap-2 px-4 py-2.5">
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {subject.trim() || composeTitle(init)}
+          </span>
+          <button
+            onClick={onRestore}
+            title="元に戻す"
+            className="grid size-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
+          >
+            <Maximize2 className="size-4" />
+          </button>
+          <button
+            onClick={onClose}
+            title="破棄して閉じる"
+            className="grid size-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+      {/* Kept mounted even when minimized (hidden) so the draft is never lost. */}
+      <div className={minimized ? "hidden" : "flex flex-1 overflow-hidden"}>
+        {/* Draft editor */}
+        <div className="flex flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-border bg-surface px-5 py-3">
           <h2 className="shrink-0 text-sm font-semibold">{composeTitle(init)}</h2>
           {accounts.length > 0 && (
@@ -593,12 +631,23 @@ export function ReplyComposer({
               )}
             </span>
           )}
-          <button
-            onClick={onClose}
-            className="ml-auto grid size-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
-          >
-            <X className="size-4" />
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {onMinimize && (
+              <button
+                onClick={onMinimize}
+                title="最小化（メールを見ながら作成）"
+                className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
+              >
+                <Minimize2 className="size-4" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
         </div>
         {accountChanged && (
           <div className="border-b border-border bg-amber-500/10 px-5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
@@ -952,6 +1001,7 @@ export function ReplyComposer({
             </button>
           </div>
         </div>
+      </div>
       </div>
 
       {showSchedule && (

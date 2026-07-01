@@ -75,7 +75,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const threadToken = useRef(0);
   // null = not composing; otherwise the prepared compose state.
   const [compose, setCompose] = useState<ComposeInit | null>(null);
+  // Minimized-to-dock: keeps the composer mounted (draft preserved) while the
+  // reader shows behind, so you can read a mail while composing.
+  const [composeMinimized, setComposeMinimized] = useState(false);
   const replying = compose !== null;
+  // Open a composer full (never inherit a stale minimized dock). All open paths
+  // go through this so the reset lives in one place.
+  const startCompose = (init: ComposeInit) => {
+    setComposeMinimized(false);
+    setCompose(init);
+  };
   const [classifying, setClassifying] = useState(false);
   const [counts, setCounts] = useState<Partial<Record<FolderView, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -630,7 +639,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       if (kind === "new" && account !== "all") init.account = account;
       // Conversation so far → AI drafting context (agreed dates, open points).
       if (kind !== "new" && thread && thread.length > 1) init.history = thread;
-      setCompose(init);
+      startCompose(init);
     },
     [selected, accounts, account, thread, compose],
   );
@@ -658,7 +667,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // Resume editing a saved draft in the composer.
   const openDraft = (d: SavedDraft) => {
     setShowDrafts(false);
-    setCompose({
+    startCompose({
       kind: "new",
       mode: "plain",
       to: d.to ?? [],
@@ -755,10 +764,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         onOpenSweep={() => setShowSweep(true)}
         onCompose={() => openCompose("new", "plain")}
       />
-      {view === "contacts" && !compose && (
+      {view === "contacts" && (!compose || composeMinimized) && (
         <ContactsView
           onComposeTo={(to: EmailAddress) =>
-            setCompose({
+            startCompose({
               kind: "new",
               mode: "plain",
               to: [to],
@@ -770,8 +779,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           }
         />
       )}
-      {view === "triage" && !compose && <TriageView />}
-      {view === "ailog" && !compose && <AiLogView />}
+      {view === "triage" && (!compose || composeMinimized) && <TriageView />}
+      {view === "ailog" && (!compose || composeMinimized) && <AiLogView />}
       {view === "mail" && !replying && (
         <EmailList
           folder={folder}
@@ -809,19 +818,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onRefresh={() => loadList(folder, account)}
         />
       )}
-      {compose ? (
-        <ReplyComposer
-          // Restart the composer whenever the kind/mode/source changes.
-          key={`${compose.kind}-${compose.mode}-${compose.source?.id ?? "new"}-${compose.to[0]?.email ?? ""}`}
-          init={compose}
-          accounts={accounts}
-          aiConfigured={aiOk}
-          onSent={onSent}
-          onClose={() => setCompose(null)}
-          onNeedsReauth={() => setShowSettings(true)}
-          onSavedDraft={onSavedDraft}
-        />
-      ) : view === "mail" ? (
+      {/* Reader: shown when not composing, or behind the minimized dock. */}
+      {view === "mail" && (!compose || composeMinimized) && (
         <EmailReader
           email={selected}
           thread={thread}
@@ -836,7 +834,24 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onNoteSaved={loadNoteIds}
           onOpenMessage={selectEmail}
         />
-      ) : null}
+      )}
+      {/* Composer: stays mounted while minimized so the draft is preserved. */}
+      {compose && (
+        <ReplyComposer
+          // Restart the composer whenever the kind/mode/source changes.
+          key={`${compose.kind}-${compose.mode}-${compose.source?.id ?? "new"}-${compose.to[0]?.email ?? ""}`}
+          init={compose}
+          accounts={accounts}
+          aiConfigured={aiOk}
+          onSent={onSent}
+          onClose={() => setCompose(null)}
+          onNeedsReauth={() => setShowSettings(true)}
+          onSavedDraft={onSavedDraft}
+          minimized={composeMinimized}
+          onMinimize={() => setComposeMinimized(true)}
+          onRestore={() => setComposeMinimized(false)}
+        />
+      )}
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 animate-slide-up rounded-full bg-fg px-4 py-2 text-sm text-bg shadow-[var(--shadow)]">
