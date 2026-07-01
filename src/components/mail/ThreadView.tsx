@@ -42,16 +42,6 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
   const [open, setOpen] = useState<Set<string>>(
     () => new Set([selectedId, lastId].filter(Boolean) as string[]),
   );
-  // Per-message: show the full recipient list (vs truncated to one line).
-  const [recipOpen, setRecipOpen] = useState<Set<string>>(new Set());
-  const toggleRecip = (id: string) =>
-    setRecipOpen((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
   // Thread messages come from the cache without attachment metadata (only a
   // hasAttachment flag), so fetch a message's attachments on demand when it is
   // expanded — lets you dig up files from older messages without leaving the
@@ -180,14 +170,11 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
                 </span>
                 {m.to.length > 0 && (
                   <span
-                    onClick={(e) => {
-                      e.stopPropagation(); // don't also collapse the card
-                      toggleRecip(m.id);
-                    }}
                     title={recipientTitle(m)}
                     className={cn(
-                      "block cursor-pointer text-xs text-fg-subtle hover:text-fg",
-                      recipOpen.has(m.id) ? "whitespace-normal break-words" : "truncate",
+                      "block text-xs text-fg-subtle",
+                      // Open the card → recipients expand with the body (one click).
+                      expanded ? "whitespace-normal break-words" : "truncate",
                     )}
                   >
                     宛先: {m.to.map((a) => a.name || a.email).join("、")}
