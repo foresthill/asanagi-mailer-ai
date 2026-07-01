@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, ChevronDown, Loader2, MessageCircle, Rows3 } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Loader2, MessageCircle, Paperclip, Rows3 } from "lucide-react";
 import type { Email, Attachment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ConversationBubbles } from "./ConversationBubbles";
 import { QuotedText } from "./QuotedText";
 import { AttachmentList } from "./AttachmentList";
+import { HtmlMailView } from "./HtmlMailView";
 
 /**
  * Thread rendering, oldest first, with two display modes:
@@ -55,31 +56,39 @@ export function ThreadView({
   // hasAttachment flag), so fetch a message's attachments on demand when it is
   // expanded — lets you dig up files from older messages without leaving the
   // thread. Deduped via a ref so each message is fetched at most once.
-  const [attMap, setAttMap] = useState<Record<string, Attachment[]>>({});
-  const [attLoading, setAttLoading] = useState<Set<string>>(new Set());
-  const attFetched = useRef<Set<string>>(new Set());
+  // On expand, fetch the full message (html with inline images resolved +
+  // attachment metadata) so cards render the same rich HTML as the single-mail
+  // reader — quotes indent, inline images show, and attachments are reachable.
+  const [fullMap, setFullMap] = useState<Record<string, { html?: string; attachments: Attachment[] }>>(
+    {},
+  );
+  const [loading, setLoading] = useState<Set<string>>(new Set());
+  const fetchedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     for (const m of messages) {
-      // The opened message's attachments already show in the reader header.
-      if (!open.has(m.id) || !m.hasAttachment || m.id === selectedId) continue;
-      if (attFetched.current.has(m.id)) continue;
-      attFetched.current.add(m.id);
-      setAttLoading((s) => new Set(s).add(m.id));
+      if (!open.has(m.id) || fetchedRef.current.has(m.id)) continue;
+      fetchedRef.current.add(m.id);
+      setLoading((s) => new Set(s).add(m.id));
       fetch(`/api/emails/${encodeURIComponent(m.id)}`)
         .then((r) => r.json())
-        .then((d) => setAttMap((prev) => ({ ...prev, [m.id]: d?.email?.attachments ?? [] })))
+        .then((d) =>
+          setFullMap((prev) => ({
+            ...prev,
+            [m.id]: { html: d?.email?.html, attachments: d?.email?.attachments ?? [] },
+          })),
+        )
         .catch(() => {
-          /* best-effort — leave as not-loaded */
+          /* best-effort — fall back to the cached plain-text body */
         })
         .finally(() =>
-          setAttLoading((s) => {
+          setLoading((s) => {
             const n = new Set(s);
             n.delete(m.id);
             return n;
           }),
         );
     }
-  }, [open, messages, selectedId]);
+  }, [open, messages]);
   // Long threads (10–20 messages) make the opened message (amber) require a lot
   // of scrolling. On open, scroll that message into view automatically.
   const currentRef = useRef<HTMLDivElement>(null);
@@ -194,6 +203,9 @@ export function ThreadView({
                   <p className="truncate text-xs text-fg-subtle">{m.snippet}</p>
                 )}
               </div>
+              {m.hasAttachment && (
+                <Paperclip className="size-3.5 shrink-0 text-fg-subtle" aria-label="添付あり" />
+              )}
               <span className="shrink-0 text-xs text-fg-subtle">{fullTime(m.date)}</span>
               <ChevronDown
                 className={cn(
@@ -216,20 +228,24 @@ export function ThreadView({
                     </button>
                   </div>
                 )}
-                {m.hasAttachment && m.id !== selectedId && (
-                  <>
-                    {attMap[m.id]?.length ? (
-                      <AttachmentList emailId={m.id} attachments={attMap[m.id]} />
-                    ) : attLoading.has(m.id) ? (
-                      <p className="mb-2 flex items-center gap-1.5 text-xs text-fg-subtle">
-                        <Loader2 className="size-3.5 animate-spin" /> 添付を読み込み中…
-                      </p>
-                    ) : null}
-                  </>
+                {/* This message's own attachments (the anchor's show at the top
+                    of the reader; other messages' show here). */}
+                {m.hasAttachment && m.id !== selectedId && fullMap[m.id]?.attachments?.length ? (
+                  <AttachmentList emailId={m.id} attachments={fullMap[m.id].attachments} />
+                ) : null}
+                {/* Body: rich HTML (indented quotes + inline images) once loaded;
+                    plain text fallback while fetching or when there's no HTML. */}
+                {fullMap[m.id]?.html ? (
+                  <HtmlMailView html={fullMap[m.id].html!} />
+                ) : loading.has(m.id) && !m.body ? (
+                  <p className="flex items-center gap-1.5 text-xs text-fg-subtle">
+                    <Loader2 className="size-3.5 animate-spin" /> 読み込み中…
+                  </p>
+                ) : (
+                  <article className="whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
+                    <QuotedText text={m.body} />
+                  </article>
                 )}
-                <article className="whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
-                  <QuotedText text={m.body} />
-                </article>
               </div>
             )}
           </div>
