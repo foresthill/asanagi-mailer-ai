@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { ScheduleDialog } from "./ScheduleDialog";
+import { SendConfirmDialog } from "./SendConfirmDialog";
 import DOMPurify from "dompurify";
 import { AttachmentButton, AttachmentChips, fileToOutgoingAttachment } from "./AttachmentBar";
 import { ATTACHMENT_TOTAL_CAP, totalAttachmentBytes } from "@/lib/attachments";
@@ -92,6 +93,15 @@ export function ReplyComposer({
   const [sendError, setSendError] = useState<string | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [confirm, setConfirm] = useState<{
+    from: string;
+    to: string;
+    cc?: string;
+    bcc?: string;
+    subject: string;
+    attachmentCount: number;
+    warnings: string[];
+  } | null>(null);
   const [subjectBusy, setSubjectBusy] = useState(false);
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -455,6 +465,31 @@ export function ReplyComposer({
     }
   }
 
+  /** Build the pre-send summary + warnings and open the confirm dialog. */
+  function openConfirm() {
+    const msg = outgoing(); // reads editor refs — fine in an event handler
+    // Only inspect the user's own writing (head), not the quoted history —
+    // otherwise every reply quoting a mail about 添付 would false-warn.
+    const head = splitQuotedDraft(msg.body, init.quote ?? "").head;
+    const attachmentCount = msg.attachments?.length ?? 0;
+    const warnings: string[] = [];
+    if (!subject.trim()) warnings.push("件名が空です");
+    if (/添付|attach/i.test(head) && attachmentCount === 0) {
+      warnings.push("本文に「添付」とありますが、添付ファイルがありません");
+    }
+    setConfirm({
+      from: fromAccount?.address
+        ? `${fromAccount.label}：${fromAccount.address}`
+        : (fromAccount?.label ?? account ?? ""),
+      to: recipients.to,
+      cc: recipients.cc,
+      bcc: recipients.bcc,
+      subject,
+      attachmentCount,
+      warnings,
+    });
+  }
+
   async function sendNow() {
     setSending(true);
     setSendError(null);
@@ -766,7 +801,7 @@ export function ReplyComposer({
 
               {/* ② 主役: 送信 */}
               <button
-                onClick={sendNow}
+                onClick={openConfirm}
                 disabled={!canSend}
                 className="flex shrink-0 items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
               >
@@ -921,6 +956,17 @@ export function ReplyComposer({
 
       {showSchedule && (
         <ScheduleDialog onSchedule={schedule} onClose={() => setShowSchedule(false)} />
+      )}
+      {confirm && (
+        <SendConfirmDialog
+          {...confirm}
+          sending={sending}
+          onConfirm={() => {
+            setConfirm(null);
+            void sendNow();
+          }}
+          onClose={() => setConfirm(null)}
+        />
       )}
     </div>
   );
