@@ -834,6 +834,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onToggleStar={() => selected && toggleStar(selected.id)}
           onImportanceFeedback={onImportanceFeedback}
           onNoteSaved={loadNoteIds}
+          onOpenMessage={selectEmail}
         />
       ) : null}
 

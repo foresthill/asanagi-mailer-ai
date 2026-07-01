@@ -730,46 +730,45 @@ export function ReplyComposer({
                 )}
               </div>
             )}
-            <div className="flex flex-wrap items-center gap-2 px-6 py-3">
-              {/* Compose options (absorbed from the floating row) */}
+            <div className="flex flex-nowrap items-center gap-1.5 px-6 py-3">
+              {/* ① 作成オプション（脇役はアイコンのみ・状態は色で） */}
               <AttachmentButton onAdd={addFiles} disabled={sending} />
               {!richMode && (
                 <button
                   type="button"
                   onClick={() => setHtmlSend((v) => !v)}
                   disabled={sending}
-                  title="HTML形式で送信（書式・元メールのHTML引用を保持）。オフだとプレーンテキスト送信"
-                  className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs transition-colors disabled:opacity-50 ${
+                  title={`HTML形式で送信（書式・元メールのHTML引用を保持）: ${htmlSend ? "オン" : "オフ"}`}
+                  className={`grid size-9 shrink-0 place-items-center rounded-lg border transition-colors disabled:opacity-50 ${
                     htmlSend
                       ? "border-accent bg-accent-soft text-accent"
                       : "border-border text-fg-muted hover:border-accent hover:text-accent"
                   }`}
                 >
-                  <Code2 className="size-3.5" />
-                  HTML{htmlSend ? "オン" : "オフ"}
+                  <Code2 className="size-4" />
                 </button>
               )}
               <button
                 type="button"
                 onClick={toggleRichMode}
                 disabled={sending}
-                title="リッチ編集（画像の貼り付け・ドロップでインライン挿入・HTML送信）。AI添削は全体提案で対応"
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs transition-colors disabled:opacity-50 ${
+                title={`リッチ編集（画像の貼り付け・ドロップで挿入・HTML送信）: ${richMode ? "オン" : "オフ"}`}
+                className={`grid size-9 shrink-0 place-items-center rounded-lg border transition-colors disabled:opacity-50 ${
                   richMode
                     ? "border-accent bg-accent-soft text-accent"
                     : "border-border text-fg-muted hover:border-accent hover:text-accent"
                 }`}
               >
-                <ImageIcon className="size-3.5" />
-                リッチ{richMode ? "オン" : "オフ"}
+                <ImageIcon className="size-4" />
               </button>
 
               <div className="mx-1 h-6 w-px bg-border" />
 
+              {/* ② 主役: 送信 */}
               <button
                 onClick={sendNow}
                 disabled={!canSend}
-                className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
+                className="flex shrink-0 items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
               >
                 {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                 今すぐ送信
@@ -777,25 +776,29 @@ export function ReplyComposer({
               <button
                 onClick={() => setShowSchedule(true)}
                 disabled={!canSend}
-                className="flex items-center gap-2 rounded-lg border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+                title="予約送信"
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
               >
                 <Clock className="size-4" />
-                予約送信
+                予約
               </button>
+
+              {/* ③ 下書き / 破棄（右寄せ） */}
               <button
                 onClick={saveDraft}
                 disabled={!canSaveDraft}
                 title="送らずに下書きとして保存（端末内のみ）"
-                className="ml-auto flex items-center gap-2 rounded-lg border border-border px-3.5 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+                className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
               >
                 {savingDraft ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                 下書き保存
               </button>
               <button
                 onClick={onClose}
-                className="rounded-lg px-3 py-2 text-sm text-fg-muted hover:bg-surface-2"
+                title="破棄"
+                className="grid size-9 shrink-0 place-items-center rounded-lg text-fg-muted transition-colors hover:bg-surface-2 hover:text-high"
               >
-                破棄
+                <X className="size-4" />
               </button>
             </div>
           </div>

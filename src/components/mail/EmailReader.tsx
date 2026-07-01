@@ -49,6 +49,7 @@ export function EmailReader({
   onToggleStar,
   onImportanceFeedback,
   onNoteSaved,
+  onOpenMessage,
 }: {
   email: Email | null;
   /** Conversation containing the email (oldest first); null while loading. */
@@ -63,6 +64,8 @@ export function EmailReader({
   onImportanceFeedback: (importance: Importance) => void;
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
   onNoteSaved?: () => void;
+  /** Re-anchor the reader to a thread message (open it as the current email). */
+  onOpenMessage?: (id: string) => void;
 }) {
   // Session-sticky preference: rich HTML (default) vs plain text.
   const [textMode, setTextMode] = useState(false);
@@ -251,7 +254,7 @@ export function EmailReader({
           <PrivateNote emailId={email.id} onSaved={onNoteSaved} />
 
           {thread && thread.length > 1 ? (
-            <ThreadView messages={thread} selectedId={email.id} />
+            <ThreadView messages={thread} selectedId={email.id} onOpen={onOpenMessage} />
           ) : (
             <>
               {email.html && (
