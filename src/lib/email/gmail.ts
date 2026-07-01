@@ -111,6 +111,25 @@ function collectAttachments(
   return out;
 }
 
+/** Inline images (Content-ID parts referenced from the HTML via `cid:`). */
+function collectInlineImages(
+  payload: gmail_v1.Schema$MessagePart | undefined,
+  out: { cid: string; attachmentId: string; mimeType: string }[] = [],
+): { cid: string; attachmentId: string; mimeType: string }[] {
+  if (!payload) return out;
+  const cid = header(payload.headers ?? undefined, "Content-ID");
+  const attachmentId = payload.body?.attachmentId;
+  if (cid && attachmentId && (payload.mimeType ?? "").startsWith("image/")) {
+    out.push({
+      cid: cid.replace(/^<|>$/g, "").trim(),
+      attachmentId,
+      mimeType: payload.mimeType!,
+    });
+  }
+  for (const p of payload.parts ?? []) collectInlineImages(p, out);
+  return out;
+}
+
 function decodeBody(payload?: gmail_v1.Schema$MessagePart): string {
   const plain = findPart(payload, "text/plain");
   if (plain) return plain;
@@ -237,7 +256,45 @@ export class GmailProvider implements EmailProvider {
 
   async get(id: string): Promise<Email | null> {
     const res = await this.gmail.users.messages.get({ userId: "me", id, format: "full" });
-    return res.data ? toEmail(res.data) : null;
+    if (!res.data) return null;
+    const email = toEmail(res.data);
+    // Embed inline images (cid:) as data URLs so they render in the reader —
+    // an iframe can't resolve cid: on its own. Only when the HTML uses them.
+    if (email.html?.includes("cid:")) {
+      email.html = await this.embedInlineImages(id, res.data.payload ?? undefined, email.html);
+    }
+    return email;
+  }
+
+  /** Replace `cid:` image references in HTML with base64 data URLs. */
+  private async embedInlineImages(
+    messageId: string,
+    payload: gmail_v1.Schema$MessagePart | undefined,
+    html: string,
+  ): Promise<string> {
+    const refs = collectInlineImages(payload).filter((p) => html.includes(`cid:${p.cid}`));
+    if (!refs.length) return html;
+    const resolved = await Promise.all(
+      refs.map(async (p) => {
+        try {
+          const r = await this.gmail.users.messages.attachments.get({
+            userId: "me",
+            messageId,
+            id: p.attachmentId,
+          });
+          let b64 = (r.data.data ?? "").replace(/-/g, "+").replace(/_/g, "/");
+          while (b64.length % 4) b64 += "=";
+          return { cid: p.cid, url: `data:${p.mimeType};base64,${b64}` };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    let out = html;
+    for (const r of resolved) {
+      if (r) out = out.split(`cid:${r.cid}`).join(r.url);
+    }
+    return out;
   }
 
   /** On-demand attachment bytes — never cached locally. */

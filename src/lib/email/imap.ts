@@ -67,6 +67,23 @@ function addr(a?: { name?: string; address?: string }): EmailAddress {
   return { name: a?.name ? repairMojibake(a.name) : undefined, email: a?.address ?? "" };
 }
 
+/** Replace `cid:` image refs in HTML with data URLs from inline attachments. */
+function embedInlineCids(
+  html: string,
+  attachments: { cid?: string; content?: Buffer; contentType?: string }[],
+): string {
+  let out = html;
+  for (const a of attachments) {
+    if (!a.cid || !a.content || !(a.contentType ?? "").startsWith("image/")) continue;
+    const cid = a.cid.replace(/^<|>$/g, "").trim();
+    if (!out.includes(`cid:${cid}`)) continue;
+    out = out
+      .split(`cid:${cid}`)
+      .join(`data:${a.contentType};base64,${a.content.toString("base64")}`);
+  }
+  return out;
+}
+
 /** Message-IDs come with or without angle brackets depending on the source
  *  (envelope vs parsed References) — normalize so thread ids compare equal. */
 function normId(s?: string | null): string | undefined {
@@ -239,7 +256,11 @@ export class ImapProvider implements EmailProvider {
     if (!source) return { text: "" };
     try {
       const parsed = await simpleParser(source, { skipImageLinks: true });
-      const html = parsed.html || undefined;
+      // Inline images (cid:) → data URLs so they render (bytes are already in
+      // parsed.attachments; an iframe can't resolve cid: on its own).
+      const html = parsed.html
+        ? embedInlineCids(parsed.html, parsed.attachments ?? [])
+        : undefined;
       // Conversation root: References lists ancestors oldest-first.
       const refs = parsed.references;
       const refRoot = normId(Array.isArray(refs) ? refs[0] : refs);
