@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,16 @@ export function ConversationBubbles({
   /** The message opened from the list — gets a subtle amber ring. */
   selectedId?: string;
 }) {
+  // Land on the opened message (like card mode) — chat threads render oldest
+  // first, so without this a long conversation opens at the top, not the
+  // relevant/latest message.
+  const selectedRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      selectedRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [selectedId, messages.length]);
   // Per-message: show the full recipient list (vs truncated to one line).
   const [recipOpen, setRecipOpen] = useState<Set<string>>(new Set());
   const toggleRecip = (id: string) =>
@@ -72,7 +82,11 @@ export function ConversationBubbles({
         const day = dayKey(m.date);
         const divider = i === 0 || day !== dayKey(messages[i - 1].date);
         return (
-          <div key={m.id} className="flex flex-col gap-2.5">
+          <div
+            key={m.id}
+            ref={m.id === selectedId ? selectedRef : undefined}
+            className="flex scroll-mt-4 flex-col gap-2.5"
+          >
             {divider && (
               <div className="my-1 flex items-center gap-3">
                 <span className="h-px flex-1 bg-border" />
