@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Loader2, MessageCircle, Rows3 } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Loader2, MessageCircle, Rows3 } from "lucide-react";
 import type { Email, Attachment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
@@ -36,7 +36,16 @@ function recipientTitle(m: Email): string {
     .join("\n");
 }
 
-export function ThreadView({ messages, selectedId }: { messages: Email[]; selectedId: string }) {
+export function ThreadView({
+  messages,
+  selectedId,
+  onOpen,
+}: {
+  messages: Email[];
+  selectedId: string;
+  /** Re-anchor the reader to this message (open it as the current email). */
+  onOpen?: (id: string) => void;
+}) {
   const lastId = messages[messages.length - 1]?.id;
   const [view, setView] = useState<"cards" | "chat">(loadViewPref);
   const [open, setOpen] = useState<Set<string>>(
@@ -195,6 +204,18 @@ export function ThreadView({ messages, selectedId }: { messages: Email[]; select
             </button>
             {expanded && (
               <div className="border-t border-border px-4 py-4">
+                {onOpen && m.id !== selectedId && (
+                  <div className="mb-2 flex justify-end">
+                    <button
+                      onClick={() => onOpen(m.id)}
+                      title="このメールをリーダーで開く（返信・重要学習などに使えます）"
+                      className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                    >
+                      このメールを開く
+                      <ArrowUpRight className="size-3" />
+                    </button>
+                  </div>
+                )}
                 {m.hasAttachment && m.id !== selectedId && (
                   <>
                     {attMap[m.id]?.length ? (

@@ -40,10 +40,9 @@ export function AttachmentButton({
         onClick={() => inputRef.current?.click()}
         disabled={disabled}
         title="ファイルを添付（本文へドラッグ&ドロップも可）"
-        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-2 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+        className="grid size-9 shrink-0 place-items-center rounded-lg border border-border text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
       >
-        <Paperclip className="size-3.5" />
-        添付
+        <Paperclip className="size-4" />
       </button>
       <input
         ref={inputRef}
