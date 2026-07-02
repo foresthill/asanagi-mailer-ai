@@ -312,17 +312,27 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   // Never destroy an in-progress draft silently (実害が大きい). Any action
   // that would close the composer asks first.
+  // A minimized composer stays docked across navigation, so browsing away never
+  // loses the draft — no discard prompt, and don't close the composer.
   const confirmDiscard = () =>
     compose === null ||
+    composeMinimized ||
     window.confirm("作成中のメールを破棄しますか？（まだ送信されていません）");
+  const closeComposeUnlessDocked = () => {
+    if (!composeMinimized) setCompose(null);
+  };
 
   const changeFolder = (f: FolderView) => {
     if (!confirmDiscard()) return;
     // Record a history entry so ブラウザの戻る returns to the current folder.
-    // Only when at the base level (no overlay) and the folder actually changes,
-    // to avoid desyncing with the overlay back-stack above.
+    // A minimized (docked) composer doesn't count as an overlay here.
     const overlayOpen =
-      compose !== null || showSettings || showScheduled || showDrafts || showSweep || selectedId !== null;
+      (compose !== null && !composeMinimized) ||
+      showSettings ||
+      showScheduled ||
+      showDrafts ||
+      showSweep ||
+      selectedId !== null;
     if (!overlayOpen && view === "mail" && f !== folder) {
       folderStack.current.push(folder);
       history.pushState({ asanagiFolder: true }, "");
@@ -335,7 +345,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setSelectedId(null);
     setSelected(null);
     setThread(null);
-    setCompose(null);
+    closeComposeUnlessDocked();
     setChecked(new Set());
   };
 
@@ -347,7 +357,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setSelectedId(null);
     setSelected(null);
     setThread(null);
-    setCompose(null);
+    closeComposeUnlessDocked();
     setChecked(new Set());
   };
 
@@ -451,14 +461,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   const selectEmail = useCallback(
     async (id: string) => {
-      // Opening another mail would close the composer — ask before losing it.
+      // A docked (minimized) composer stays open while you read other mail;
+      // otherwise opening a mail would close the composer, so ask first.
       if (
         compose !== null &&
+        !composeMinimized &&
         !window.confirm("作成中のメールを破棄しますか？（まだ送信されていません）")
       )
         return;
       setSelectedId(id);
-      setCompose(null);
+      if (!composeMinimized) setCompose(null);
       setEmails((list) => list.map((e) => (e.id === id ? { ...e, read: true } : e)));
       const res = await fetch(`/api/emails/${encodeURIComponent(id)}`);
       const data = await res.json().catch(() => ({}));
@@ -473,7 +485,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         if (data.needsReauth) setShowSettings(true); // 再認証へ誘導
       }
     },
-    [classify, loadThread, compose],
+    [classify, loadThread, compose, composeMinimized],
   );
 
   // Thread-unit by default: a conversation row carries every member id, so
@@ -781,7 +793,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       )}
       {view === "triage" && (!compose || composeMinimized) && <TriageView />}
       {view === "ailog" && (!compose || composeMinimized) && <AiLogView />}
-      {view === "mail" && !replying && (
+      {view === "mail" && (!replying || composeMinimized) && (
         <EmailList
           folder={folder}
           rows={rows}
