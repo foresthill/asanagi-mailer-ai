@@ -270,15 +270,20 @@ export class ImapProvider implements EmailProvider {
       );
       const ics = icsPart ? icsPart.content.toString("utf8") : undefined;
       // Real attachments: id = index in parsed.attachments (download re-parses
-      // and picks the same index). Inline images and the invite are excluded.
+      // and picks the same index). Excluded: the invite, cid-embedded inline
+      // parts (logos referenced from the HTML → mailparser sets related=true),
+      // and inline IMAGES. NOT excluded: real files marked "inline" — some
+      // senders (and password-removal relays) tag zip/pdf attachments as
+      // Content-Disposition: inline, and dropping those loses real attachments.
       const attachments: Attachment[] = (parsed.attachments ?? [])
         .map((a, index) => ({ a, index }))
         .filter(
           ({ a }) =>
             a.contentType !== "text/calendar" &&
             !a.filename?.toLowerCase().endsWith(".ics") &&
-            a.contentDisposition !== "inline" &&
-            !!a.filename,
+            !!a.filename &&
+            !a.related &&
+            !(a.contentDisposition === "inline" && (a.contentType ?? "").startsWith("image/")),
         )
         .map(({ a, index }) => ({
           id: String(index),
