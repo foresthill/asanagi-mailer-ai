@@ -104,10 +104,17 @@ export function EmailReader({
     onReply(kind, mode);
   };
 
-  // Copy the new body text only — the quoted reply history is excluded.
+  // Copy the new body text only — the quoted reply history is excluded, any
+  // leftover CSS/style block is dropped, and long blank runs collapse to one
+  // blank line (HTML mail otherwise pastes with big gaps).
   const copyBody = async () => {
     const { head } = splitQuotedReply(email.body);
-    const text = head.trim() || email.body;
+    const text = (head.trim() || email.body)
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/\r\n?/g, "\n")
+      .replace(/[ \t 　]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);

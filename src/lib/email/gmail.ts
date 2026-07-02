@@ -146,10 +146,15 @@ function decodeHtml(payload?: gmail_v1.Schema$MessagePart): string | undefined {
 function stripHtml(html: string): string {
   return decodeEntities(
     html
+      // Drop <style>/<script> CONTENT — else the raw CSS/JS leaks into the text.
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
       .replace(/<[^>]+>/g, ""),
   )
-    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\r\n?/g, "\n") // normalize CRLF → LF (else blank runs slip past)
+    .replace(/[ \t 　]+\n/g, "\n") // trailing whitespace per line
+    .replace(/\n{3,}/g, "\n\n") // collapse long blank runs
     .trim();
 }
 
