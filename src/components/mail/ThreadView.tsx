@@ -271,8 +271,11 @@ export function ThreadView({
                   </div>
                 )}
                 {/* This message's own attachments (the anchor's show at the top
-                    of the reader; other messages' show here). */}
-                {m.hasAttachment && m.id !== selectedId && fullMap[m.id]?.attachments?.length ? (
+                    of the reader; other messages' show here). Gate on the
+                    actually-fetched list, not the cached hasAttachment flag —
+                    the flag can be stale (e.g. an inline-tagged file cached
+                    before detection improved), which would hide real files. */}
+                {m.id !== selectedId && fullMap[m.id]?.attachments?.length ? (
                   <AttachmentList emailId={m.id} attachments={fullMap[m.id].attachments} />
                 ) : null}
                 {/* Body: rich HTML (indented quotes + inline images) once loaded;

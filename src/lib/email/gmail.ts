@@ -81,10 +81,17 @@ function isRealAttachmentPart(part: gmail_v1.Schema$MessagePart): boolean {
   const val = (name: string) =>
     headers.find((h) => (h.name ?? "").toLowerCase() === name)?.value?.toLowerCase() ?? "";
   const disp = val("content-disposition");
-  if (disp.startsWith("inline")) return false;
+  const hasCid = !!val("content-id");
+  const isImage = (part.mimeType ?? "").startsWith("image/");
   if (disp.startsWith("attachment")) return true;
+  if (disp.startsWith("inline")) {
+    // Embedded body content (cid-referenced parts, inline images) is NOT an
+    // attachment. But some senders mark real files (zip/pdf) as inline —
+    // keep those. (Aligned with the IMAP path; not reproduced on real Gmail.)
+    return !hasCid && !isImage;
+  }
   // No explicit disposition: a Content-ID means it's embedded in the body.
-  return !val("content-id");
+  return !hasCid;
 }
 
 function collectAttachments(
