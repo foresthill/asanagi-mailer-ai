@@ -290,9 +290,14 @@ export class ImapProvider implements EmailProvider {
       if (html) {
         const stripped = decodeEntities(
           html
+            // Drop <style>/<script> CONTENT so raw CSS/JS never leaks into text.
+            .replace(/<style[\s\S]*?<\/style>/gi, "")
+            .replace(/<script[\s\S]*?<\/script>/gi, "")
             .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
             .replace(/<[^>]+>/g, ""),
         )
+          .replace(/\r\n?/g, "\n")
+          .replace(/[ \t 　]+\n/g, "\n")
           .replace(/\n{3,}/g, "\n\n")
           .trim();
         return { text: stripped, html, refRoot, ics, attachments };
