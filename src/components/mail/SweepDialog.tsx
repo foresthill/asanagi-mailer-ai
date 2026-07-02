@@ -295,10 +295,22 @@ export function SweepDialog({
                     >
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline gap-2">
-                          <span className="truncate text-xs font-medium">
+                          <span className="shrink-0 truncate text-xs font-medium">
                             {sender || "(差出人不明)"}
                           </span>
-                          <span className="truncate text-xs text-fg-muted">{subject}</span>
+                          <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">
+                            {subject}
+                          </span>
+                          {mail?.date && (
+                            <span className="shrink-0 text-[10px] tabular-nums text-fg-subtle">
+                              {new Date(mail.date).toLocaleString("ja-JP", {
+                                month: "numeric",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          )}
                         </span>
                         <span className="text-[10px] text-fg-subtle">{i.reason}</span>
                       </span>
