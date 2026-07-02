@@ -20,9 +20,12 @@ function fmtSize(bytes?: number): string {
 export function AttachmentList({
   emailId,
   attachments,
+  bare,
 }: {
   emailId: string;
   attachments: Attachment[];
+  /** Drop the outer card (margin/border/bg) — for use inside a popover. */
+  bare?: boolean;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -49,7 +52,7 @@ export function AttachmentList({
   }
 
   return (
-    <div className="mt-5 rounded-xl border border-border bg-surface px-3.5 py-2.5">
+    <div className={bare ? "" : "mt-5 rounded-xl border border-border bg-surface px-3.5 py-2.5"}>
       <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-fg-muted">
         <Paperclip className="size-3.5" />
         添付ファイル {attachments.length}件
