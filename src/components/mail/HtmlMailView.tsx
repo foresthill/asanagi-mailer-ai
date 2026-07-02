@@ -11,7 +11,17 @@ import { ImageOff, Image as ImageIcon } from "lucide-react";
  *  - remote images are BLOCKED by default (tracking-pixel privacy, local-first)
  *    and loaded only when the user opts in per email
  */
-export function HtmlMailView({ html, fontScale = 1 }: { html: string; fontScale?: number }) {
+export function HtmlMailView({
+  html,
+  fontScale = 1,
+  embedded = false,
+}: {
+  html: string;
+  fontScale?: number;
+  /** Inside a thread card: drop the frame (border/rounded/top margin) so the
+   *  card's own padding is the only padding — no "box inside a box". */
+  embedded?: boolean;
+}) {
   const [showImages, setShowImages] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -64,7 +74,7 @@ export function HtmlMailView({ html, fontScale = 1 }: { html: string; fontScale?
   };
 
   return (
-    <div className="mt-6">
+    <div className={embedded ? "" : "mt-6"}>
       {blockedImages > 0 && (
         <div className="mb-2 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-[11px] text-fg-muted">
           {showImages ? (
@@ -98,7 +108,9 @@ export function HtmlMailView({ html, fontScale = 1 }: { html: string; fontScale?
         onLoad={fit}
         sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         title="メール本文"
-        className="w-full rounded-lg border border-border bg-white"
+        className={
+          embedded ? "w-full bg-white" : "w-full rounded-lg border border-border bg-white"
+        }
         style={{ height: 400 }}
       />
     </div>

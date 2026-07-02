@@ -257,7 +257,7 @@ export function ThreadView({
               </button>
             </div>
             {expanded && (
-              <div className="border-t border-border px-4 py-4">
+              <div className="rounded-b-xl border-t border-border bg-surface px-4 py-4">
                 {onOpen && m.id !== selectedId && (
                   <div className="mb-2 flex justify-end">
                     <button
@@ -278,7 +278,7 @@ export function ThreadView({
                 {/* Body: rich HTML (indented quotes + inline images) once loaded;
                     plain text fallback while fetching or when there's no HTML. */}
                 {fullMap[m.id]?.html ? (
-                  <HtmlMailView html={fullMap[m.id].html!} />
+                  <HtmlMailView html={fullMap[m.id].html!} embedded />
                 ) : loading.has(m.id) && !m.body ? (
                   <p className="flex items-center gap-1.5 text-xs text-fg-subtle">
                     <Loader2 className="size-3.5 animate-spin" /> 読み込み中…
