@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUpRight, ChevronDown, Loader2, MessageCircle, Paperclip, Rows3 } from "lucide-react";
 import type { Email, Attachment } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -64,31 +64,34 @@ export function ThreadView({
   );
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const fetchedRef = useRef<Set<string>>(new Set());
+  // 📎 popover: which message's attachment bubble is open.
+  const [attPopover, setAttPopover] = useState<string | null>(null);
+  const loadFull = useCallback((id: string) => {
+    if (fetchedRef.current.has(id)) return;
+    fetchedRef.current.add(id);
+    setLoading((s) => new Set(s).add(id));
+    fetch(`/api/emails/${encodeURIComponent(id)}`)
+      .then((r) => r.json())
+      .then((d) =>
+        setFullMap((prev) => ({
+          ...prev,
+          [id]: { html: d?.email?.html, attachments: d?.email?.attachments ?? [] },
+        })),
+      )
+      .catch(() => {
+        /* best-effort — fall back to the cached plain-text body */
+      })
+      .finally(() =>
+        setLoading((s) => {
+          const n = new Set(s);
+          n.delete(id);
+          return n;
+        }),
+      );
+  }, []);
   useEffect(() => {
-    for (const m of messages) {
-      if (!open.has(m.id) || fetchedRef.current.has(m.id)) continue;
-      fetchedRef.current.add(m.id);
-      setLoading((s) => new Set(s).add(m.id));
-      fetch(`/api/emails/${encodeURIComponent(m.id)}`)
-        .then((r) => r.json())
-        .then((d) =>
-          setFullMap((prev) => ({
-            ...prev,
-            [m.id]: { html: d?.email?.html, attachments: d?.email?.attachments ?? [] },
-          })),
-        )
-        .catch(() => {
-          /* best-effort — fall back to the cached plain-text body */
-        })
-        .finally(() =>
-          setLoading((s) => {
-            const n = new Set(s);
-            n.delete(m.id);
-            return n;
-          }),
-        );
-    }
-  }, [open, messages]);
+    for (const m of messages) if (open.has(m.id)) loadFull(m.id);
+  }, [open, messages, loadFull]);
   // Long threads (10–20 messages) make the opened message (amber) require a lot
   // of scrolling. On open, scroll that message into view automatically.
   const currentRef = useRef<HTMLDivElement>(null);
@@ -167,53 +170,92 @@ export function ThreadView({
               expanded || current ? "" : "hover:border-accent/40",
             )}
           >
-            <button
-              onClick={() => toggle(m.id)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left"
-            >
-              <div
-                className="grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold text-white"
-                style={{ background: avatarColor(name) }}
+            <div className="flex w-full items-center gap-2 px-4 py-3">
+              <button
+                onClick={() => toggle(m.id)}
+                className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
-                {initials(m.from)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">{name}</span>
-                  {m.state === "sent" && (
-                    <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                      自分
+                <div
+                  className="grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold text-white"
+                  style={{ background: avatarColor(name) }}
+                >
+                  {initials(m.from)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">{name}</span>
+                    {m.state === "sent" && (
+                      <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                        自分
+                      </span>
+                    )}
+                  </span>
+                  {m.to.length > 0 && (
+                    <span
+                      title={recipientTitle(m)}
+                      className={cn(
+                        "block text-xs text-fg-subtle",
+                        // Open the card → recipients expand with the body (one click).
+                        expanded ? "whitespace-normal break-words" : "truncate",
+                      )}
+                    >
+                      宛先: {m.to.map((a) => a.name || a.email).join("、")}
+                      {m.cc?.length ? `（CC: ${m.cc.map((a) => a.name || a.email).join("、")}）` : ""}
                     </span>
                   )}
-                </span>
-                {m.to.length > 0 && (
-                  <span
-                    title={recipientTitle(m)}
+                  {!expanded && (
+                    <p className="truncate text-xs text-fg-subtle">{m.snippet}</p>
+                  )}
+                </div>
+              </button>
+              {/* 📎 → download bubble right here (no scrolling up to the top). */}
+              {m.hasAttachment && (
+                <div className="relative shrink-0">
+                  <button
+                    onClick={() => {
+                      loadFull(m.id);
+                      setAttPopover((p) => (p === m.id ? null : m.id));
+                    }}
+                    title="添付ファイル"
+                    aria-label="添付ファイルを表示"
                     className={cn(
-                      "block text-xs text-fg-subtle",
-                      // Open the card → recipients expand with the body (one click).
-                      expanded ? "whitespace-normal break-words" : "truncate",
+                      "grid size-7 place-items-center rounded-md transition-colors",
+                      attPopover === m.id
+                        ? "bg-accent-soft text-accent"
+                        : "text-fg-subtle hover:bg-surface-2 hover:text-fg",
                     )}
                   >
-                    宛先: {m.to.map((a) => a.name || a.email).join("、")}
-                    {m.cc?.length ? `（CC: ${m.cc.map((a) => a.name || a.email).join("、")}）` : ""}
-                  </span>
-                )}
-                {!expanded && (
-                  <p className="truncate text-xs text-fg-subtle">{m.snippet}</p>
-                )}
-              </div>
-              {m.hasAttachment && (
-                <Paperclip className="size-3.5 shrink-0 text-fg-subtle" aria-label="添付あり" />
+                    <Paperclip className="size-4" />
+                  </button>
+                  {attPopover === m.id && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setAttPopover(null)} />
+                      <div className="absolute right-0 top-full z-30 mt-1 w-72 max-w-[80vw] rounded-lg border border-border bg-surface p-2 shadow-[var(--shadow)]">
+                        {fullMap[m.id]?.attachments?.length ? (
+                          <AttachmentList emailId={m.id} attachments={fullMap[m.id].attachments} bare />
+                        ) : (
+                          <p className="flex items-center gap-1.5 px-1 py-1.5 text-xs text-fg-subtle">
+                            <Loader2 className="size-3.5 animate-spin" /> 添付を読み込み中…
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
-              <span className="shrink-0 text-xs text-fg-subtle">{fullTime(m.date)}</span>
-              <ChevronDown
-                className={cn(
-                  "size-4 shrink-0 text-fg-subtle transition-transform",
-                  expanded && "rotate-180",
-                )}
-              />
-            </button>
+              <button
+                onClick={() => toggle(m.id)}
+                className="flex shrink-0 items-center gap-1"
+              >
+                <span className="text-xs text-fg-subtle">{fullTime(m.date)}</span>
+                <ChevronDown
+                  className={cn(
+                    "size-4 text-fg-subtle transition-transform",
+                    expanded && "rotate-180",
+                  )}
+                />
+              </button>
+            </div>
             {expanded && (
               <div className="border-t border-border px-4 py-4">
                 {onOpen && m.id !== selectedId && (
