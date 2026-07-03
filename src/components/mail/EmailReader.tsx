@@ -210,7 +210,7 @@ export function EmailReader({
           <div className="mt-4 flex items-center gap-3">
             <div
               className="grid size-10 place-items-center rounded-full text-sm font-semibold text-white"
-              style={{ background: avatarColor(name) }}
+              style={{ background: avatarColor(email.from.email) }}
             >
               {initials(email.from)}
             </div>

@@ -187,7 +187,7 @@ export function ThreadView({
               >
                 <div
                   className="grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold text-white"
-                  style={{ background: avatarColor(name) }}
+                  style={{ background: avatarColor(m.from.email) }}
                 >
                   {initials(m.from)}
                 </div>
