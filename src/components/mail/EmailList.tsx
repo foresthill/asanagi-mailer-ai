@@ -451,7 +451,7 @@ function EmailListItem({
               "grid size-9 place-items-center rounded-full text-xs font-semibold text-white transition-opacity",
               showCheckbox ? "opacity-0" : "group-hover:opacity-0",
             )}
-            style={{ background: avatarColor(participants) }}
+            style={{ background: avatarColor(face.email) }}
           >
             {initials(face)}
           </span>
