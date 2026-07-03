@@ -102,7 +102,9 @@ export async function POST(req: Request) {
     // One batched call for everything unknown — from/subject/preview only.
     const masker = new PiiMasker();
     const lines = undecided.map((e, i) => {
-      const from = `${e.from.name ?? ""} <${e.from.email}>`.trim();
+      // Keep the display name (helps the keep/trash call) but mask the address.
+      const fromEmail = cfg.piiMask ? masker.mask(e.from.email) : e.from.email;
+      const from = `${e.from.name ?? ""} <${fromEmail}>`.trim();
       const subject = cfg.piiMask ? masker.mask(e.subject) : e.subject;
       const preview = (cfg.piiMask ? masker.mask(e.snippet) : e.snippet).slice(0, 140);
       return `${i}. From: ${from}\n   件名: ${subject}\n   冒頭: ${preview}`;

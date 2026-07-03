@@ -1,4 +1,4 @@
-import type { Email } from "@/lib/types";
+import type { Email, EmailAddress } from "@/lib/types";
 
 /**
  * Phase A PII masking (docs/00 Phase 2 の前倒し): 構造化PIIを正規表現で
@@ -110,12 +110,33 @@ export class PiiMasker {
     return this.map.size;
   }
 
-  /** Masked copy of an email for AI prompts. From/To のヘッダ行は重要度
-   *  判定・宛名生成の品質に必要なため残し、本文・件名・抜粋のみマスク
-   *  （引用内のアドレスや電話番号はマスクされる）。 */
+  /** Reversibly tokenize a bare domain (no `@`, so the email regex misses it)
+   *  as `[DOMAIN_n]`. Same domain → same token (shared seen/map). Used for the
+   *  learned-signal block so company domains don't leak to the AI provider. */
+  maskDomain(domain: string): string {
+    if (!domain) return domain;
+    const cached = this.seen.get(domain);
+    if (cached) return cached;
+    const n = (this.counters.get("DOMAIN") ?? 0) + 1;
+    this.counters.set("DOMAIN", n);
+    const token = `[DOMAIN_${n}]`;
+    this.map.set(token, domain);
+    this.seen.set(domain, token);
+    return token;
+  }
+
+  /** Masked copy of an email for AI prompts. The display NAME is kept (needed
+   *  for greeting/宛名 quality), but From/To/Cc/Bcc email ADDRESSES are masked
+   *  (the domain identifies the company = confidential) along with subject,
+   *  snippet and body. Same address → same token as its occurrences in the body. */
   maskEmail(email: Email): Email {
+    const addr = <T extends EmailAddress>(a: T): T => ({ ...a, email: this.mask(a.email) });
     return {
       ...email,
+      from: addr(email.from),
+      to: email.to.map(addr),
+      cc: email.cc?.map(addr),
+      bcc: email.bcc?.map(addr),
       subject: this.mask(email.subject),
       snippet: this.mask(email.snippet),
       body: this.mask(email.body),
