@@ -94,10 +94,14 @@ function isRealAttachmentPart(part: gmail_v1.Schema$MessagePart): boolean {
   return !hasCid;
 }
 
-function collectAttachments(
+/** Real attachment parts, in document order, each with its Gmail attachmentId.
+ *  NOTE: Gmail's attachmentId is NOT stable across separate messages.get calls
+ *  for the same message, so it must never be persisted or round-tripped through
+ *  the client as an identifier. We only use it within the same fetch. */
+function collectAttachmentParts(
   payload: gmail_v1.Schema$MessagePart | undefined,
-  out: Attachment[] = [],
-): Attachment[] {
+  out: { attachmentId: string; filename: string; mimeType: string; size?: number }[] = [],
+): { attachmentId: string; filename: string; mimeType: string; size?: number }[] {
   if (!payload) return out;
   const filename = payload.filename ?? "";
   const attachmentId = payload.body?.attachmentId;
@@ -108,14 +112,25 @@ function collectAttachments(
     isRealAttachmentPart(payload)
   ) {
     out.push({
-      id: attachmentId,
+      attachmentId,
       filename: repairMojibake(filename),
       mimeType: payload.mimeType ?? "application/octet-stream",
       size: payload.body?.size ?? undefined,
     });
   }
-  for (const p of payload.parts ?? []) collectAttachments(p, out);
+  for (const p of payload.parts ?? []) collectAttachmentParts(p, out);
   return out;
+}
+
+/** Public attachment metadata. id = ordinal index (stable across fetches),
+ *  since Gmail's attachmentId is not — download re-fetches and picks by index. */
+function collectAttachments(payload: gmail_v1.Schema$MessagePart | undefined): Attachment[] {
+  return collectAttachmentParts(payload).map((p, i) => ({
+    id: String(i),
+    filename: p.filename,
+    mimeType: p.mimeType,
+    size: p.size,
+  }));
 }
 
 /** Inline images (Content-ID parts referenced from the HTML via `cid:`). */
@@ -309,26 +324,28 @@ export class GmailProvider implements EmailProvider {
     return out;
   }
 
-  /** On-demand attachment bytes — never cached locally. */
+  /** On-demand attachment bytes — never cached locally. `attachmentId` here is
+   *  our stable ordinal (index), NOT Gmail's volatile attachmentId: we re-fetch
+   *  the message, pick the same part by index, and use THAT fetch's fresh
+   *  Gmail attachmentId to pull the bytes (Gmail's id changes per get()). */
   async getAttachment(messageId: string, attachmentId: string) {
-    // Metadata (filename/mime) lives in the message structure; bytes come
-    // from the dedicated attachments endpoint (keeps the message lean).
     const msg = await this.gmail.users.messages.get({
       userId: "me",
       id: messageId,
       format: "full",
     });
-    const meta = collectAttachments(msg.data.payload).find((a) => a.id === attachmentId);
-    if (!meta) return null;
+    const parts = collectAttachmentParts(msg.data.payload);
+    const part = parts[Number(attachmentId)];
+    if (!part) return null;
     const res = await this.gmail.users.messages.attachments.get({
       userId: "me",
       messageId,
-      id: attachmentId,
+      id: part.attachmentId,
     });
     const data = res.data.data ?? "";
     return {
-      filename: meta.filename,
-      mimeType: meta.mimeType,
+      filename: part.filename,
+      mimeType: part.mimeType,
       content: Buffer.from(data, "base64url"),
     };
   }
