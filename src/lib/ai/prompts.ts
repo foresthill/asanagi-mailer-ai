@@ -1,4 +1,5 @@
 import type { Email, ImportanceSignal } from "@/lib/types";
+import type { PiiMasker } from "./pii";
 
 function formatAddr(a: { name?: string; email: string }): string {
   return a.name ? `${a.name} <${a.email}>` : a.email;
@@ -82,11 +83,21 @@ export const CLASSIFY_SYSTEM = `あなたはユーザーの受信メールの重
 - 差出人との関係、緊急性、アクション要否、締切の有無。
 - 下記「学習済みシグナル」はユーザーが過去に示した好みです。強く尊重してください。`;
 
-export function classifyContext(email: Email, signals: ImportanceSignal[]): string {
+export function classifyContext(
+  email: Email,
+  signals: ImportanceSignal[],
+  masker?: PiiMasker,
+): string {
+  // Signal patterns are the user's learned contacts: sender addresses and
+  // company domains. Mask them (consistently with the target) so this whole
+  // preference list doesn't leak to the AI provider. sender→[EMAIL_n] via the
+  // email regex; domain has no `@`, so use maskDomain→[DOMAIN_n].
+  const maskPattern = (s: ImportanceSignal) =>
+    !masker ? s.pattern : s.kind === "domain" ? masker.maskDomain(s.pattern) : masker.mask(s.pattern);
   const learned =
     signals.length > 0
       ? signals
-          .map((s) => `- ${s.kind}:"${s.pattern}" → ${s.importance} (確信度 ${s.weight})`)
+          .map((s) => `- ${s.kind}:"${maskPattern(s)}" → ${s.importance} (確信度 ${s.weight})`)
           .join("\n")
       : "（まだ学習データはありません）";
 

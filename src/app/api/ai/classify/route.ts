@@ -62,7 +62,8 @@ export async function POST(req: Request) {
     const target = cfg.piiMask ? masker.maskEmail(email) : email;
     // 嗜好メモ（ユーザー自筆の指示）はマスクせず素のまま注入する。
     const profile = await getJudgmentProfile();
-    const prompt = classifyContext(target, signals) + profileBlock(profile);
+    const prompt =
+      classifyContext(target, signals, cfg.piiMask ? masker : undefined) + profileBlock(profile);
     const { object, usage } = await generateObject({
       // 重要度判定は安価な判定用モデルで（未設定ならメインと同じ）。
       model: resolveModel({ ...cfg, model: cfg.judgmentModel }),
