@@ -41,11 +41,17 @@ export function ThreadView({
   messages,
   selectedId,
   onOpen,
+  anchorHtml,
+  anchorAttachments,
 }: {
   messages: Email[];
   selectedId: string;
   /** Re-anchor the reader to this message (open it as the current email). */
   onOpen?: (id: string) => void;
+  /** The anchor message's already-loaded rich body / attachments (the reader
+   *  fetched them), so its card renders instantly without a second round-trip. */
+  anchorHtml?: string;
+  anchorAttachments?: Attachment[];
 }) {
   const lastId = messages[messages.length - 1]?.id;
   const [view, setView] = useState<"cards" | "chat">(loadViewPref);
@@ -64,8 +70,6 @@ export function ThreadView({
   );
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const fetchedRef = useRef<Set<string>>(new Set());
-  // 📎 popover: which message's attachment bubble is open.
-  const [attPopover, setAttPopover] = useState<string | null>(null);
   const loadFull = useCallback((id: string) => {
     if (fetchedRef.current.has(id)) return;
     fetchedRef.current.add(id);
@@ -158,6 +162,11 @@ export function ThreadView({
         // The message the user opened from the list — subtle amber tint so
         // it's findable inside a long conversation.
         const current = m.id === selectedId;
+        // Effective rich data: the on-demand fetch, or — for the anchor — the
+        // reader's already-loaded body/attachments so it shows instantly.
+        const full =
+          fullMap[m.id] ??
+          (current ? { html: anchorHtml, attachments: anchorAttachments ?? [] } : undefined);
         return (
           <div
             key={m.id}
@@ -209,39 +218,17 @@ export function ThreadView({
                 </div>
               </button>
               {/* 📎 → download bubble right here (no scrolling up to the top). */}
+              {/* Attachment indicator → expand the card so the files show
+                  inline (in-thread, not a detached popover). */}
               {m.hasAttachment && (
-                <div className="relative shrink-0">
-                  <button
-                    onClick={() => {
-                      loadFull(m.id);
-                      setAttPopover((p) => (p === m.id ? null : m.id));
-                    }}
-                    title="添付ファイル"
-                    aria-label="添付ファイルを表示"
-                    className={cn(
-                      "grid size-7 place-items-center rounded-md transition-colors",
-                      attPopover === m.id
-                        ? "bg-accent-soft text-accent"
-                        : "text-fg-subtle hover:bg-surface-2 hover:text-fg",
-                    )}
-                  >
-                    <Paperclip className="size-4" />
-                  </button>
-                  {attPopover === m.id && (
-                    <>
-                      <div className="fixed inset-0 z-20" onClick={() => setAttPopover(null)} />
-                      <div className="absolute right-0 top-full z-30 mt-1 w-72 max-w-[80vw] rounded-lg border border-border bg-surface p-2 shadow-[var(--shadow)]">
-                        {fullMap[m.id]?.attachments?.length ? (
-                          <AttachmentList emailId={m.id} attachments={fullMap[m.id].attachments} bare />
-                        ) : (
-                          <p className="flex items-center gap-1.5 px-1 py-1.5 text-xs text-fg-subtle">
-                            <Loader2 className="size-3.5 animate-spin" /> 添付を読み込み中…
-                          </p>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
+                <button
+                  onClick={() => setOpen((prev) => new Set(prev).add(m.id))}
+                  title="添付ファイル（展開して表示）"
+                  aria-label="添付ファイルを表示"
+                  className="grid size-7 shrink-0 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
+                >
+                  <Paperclip className="size-4" />
+                </button>
               )}
               <button
                 onClick={() => toggle(m.id)}
@@ -270,18 +257,17 @@ export function ThreadView({
                     </button>
                   </div>
                 )}
-                {/* This message's own attachments (the anchor's show at the top
-                    of the reader; other messages' show here). Gate on the
-                    actually-fetched list, not the cached hasAttachment flag —
-                    the flag can be stale (e.g. an inline-tagged file cached
-                    before detection improved), which would hide real files. */}
-                {m.id !== selectedId && fullMap[m.id]?.attachments?.length ? (
-                  <AttachmentList emailId={m.id} attachments={fullMap[m.id].attachments} />
+                {/* Each message's attachments render inline in its own card —
+                    including the anchor — so the whole thread is consistent.
+                    Gate on the actually-fetched list, not the cached
+                    hasAttachment flag (which can be stale and hide real files). */}
+                {full?.attachments?.length ? (
+                  <AttachmentList emailId={m.id} attachments={full.attachments} />
                 ) : null}
                 {/* Body: rich HTML (indented quotes + inline images) once loaded;
                     plain text fallback while fetching or when there's no HTML. */}
-                {fullMap[m.id]?.html ? (
-                  <HtmlMailView html={fullMap[m.id].html!} embedded />
+                {full?.html ? (
+                  <HtmlMailView html={full.html} embedded />
                 ) : loading.has(m.id) && !m.body ? (
                   <p className="flex items-center gap-1.5 text-xs text-fg-subtle">
                     <Loader2 className="size-3.5 animate-spin" /> 読み込み中…

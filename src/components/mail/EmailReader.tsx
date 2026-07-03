@@ -246,7 +246,10 @@ export function EmailReader({
           {/* Meeting invite → calendar bridge (docs/05) */}
           {email.invite && <MeetingCard emailId={email.id} invite={email.invite} />}
 
-          {email.attachments && email.attachments.length > 0 && (
+          {/* Single email: attachments here. In a thread they render inside the
+              message card instead (consistent with the conversation), so skip
+              this top list to avoid a disconnected "navigation" above. */}
+          {!(thread && thread.length > 1) && email.attachments && email.attachments.length > 0 && (
             <AttachmentList emailId={email.id} attachments={email.attachments} />
           )}
 
@@ -261,7 +264,13 @@ export function EmailReader({
           <PrivateNote emailId={email.id} onSaved={onNoteSaved} />
 
           {thread && thread.length > 1 ? (
-            <ThreadView messages={thread} selectedId={email.id} onOpen={onOpenMessage} />
+            <ThreadView
+              messages={thread}
+              selectedId={email.id}
+              onOpen={onOpenMessage}
+              anchorHtml={email.html}
+              anchorAttachments={email.attachments}
+            />
           ) : (
             <>
               {email.html && (
