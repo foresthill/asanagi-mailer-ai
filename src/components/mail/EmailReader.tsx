@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ThreadView } from "./ThreadView";
 import { QuotedText, splitQuotedReply } from "./QuotedText";
+import { SelectableText } from "./SelectableText";
 import { MeetingCard } from "./MeetingCard";
 import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
@@ -290,12 +291,12 @@ export function EmailReader({
               {email.html && !textMode ? (
                 <HtmlMailView html={email.html} fontScale={zoom} />
               ) : (
-                <article
+                <SelectableText
                   className="mt-6 whitespace-pre-wrap leading-7 text-fg/90"
                   style={{ fontSize: `${Math.round(15 * zoom)}px` }}
                 >
                   <QuotedText text={email.body} />
-                </article>
+                </SelectableText>
               )}
             </>
           )}
