@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ConversationBubbles } from "./ConversationBubbles";
 import { QuotedText } from "./QuotedText";
+import { SelectableText } from "./SelectableText";
 import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
 
@@ -273,9 +274,9 @@ export function ThreadView({
                     <Loader2 className="size-3.5 animate-spin" /> 読み込み中…
                   </p>
                 ) : (
-                  <article className="whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
+                  <SelectableText className="whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
                     <QuotedText text={m.body} />
-                  </article>
+                  </SelectableText>
                 )}
               </div>
             )}
