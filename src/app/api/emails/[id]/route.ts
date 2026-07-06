@@ -34,9 +34,21 @@ function isAuthError(err: unknown): boolean {
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: rawId } = await ctx.params;
   const { provider, account, id } = await resolve(rawId);
+  // Cached body fallback (offline / token expiry / a moved-or-expunged IMAP
+  // message whose UID no longer resolves live but is still in our cache).
+  const serveCached = () => {
+    const cached = account ? cachedGet(account, id) : null;
+    if (!cached) return null;
+    return NextResponse.json({
+      email: { ...cached, account, id: `${account}/${cached.id}` },
+      stale: true,
+    });
+  };
   try {
     const email = await provider.get(id);
-    if (!email) return NextResponse.json({ error: "not found" }, { status: 404 });
+    // Live lookup miss (e.g. the message was archived/moved so this folder's
+    // UID is gone) — serve the cached copy rather than a dead "not found".
+    if (!email) return serveCached() ?? NextResponse.json({ error: "not found" }, { status: 404 });
     // Opening an email marks it read.
     if (!email.read) {
       try {
@@ -54,13 +66,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ email });
   } catch (err) {
     // プロバイダ不達でも、本文がキャッシュにあれば見せる（offline/失効耐性）。
-    const cached = account ? cachedGet(account, id) : null;
-    if (cached) {
-      return NextResponse.json({
-        email: { ...cached, account, id: `${account}/${cached.id}` },
-        stale: true,
-      });
-    }
+    const cached = serveCached();
+    if (cached) return cached;
     const reauth = isAuthError(err);
     return NextResponse.json(
       {
