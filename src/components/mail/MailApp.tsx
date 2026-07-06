@@ -510,8 +510,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       }
       // 即時フィードバック（一覧は上で除去済み）。サーバ反映は待たず背後で行い、
       // 90通でもUIが固まらない。失敗時だけ通知して実状態に取り直す。
+      // サーバ書き込みの完了 promise を返す（呼び出し側が await すれば反映後に
+      // リロードできる。await しない archive/trash 単発は従来どおり即時）。
       showToast(ids.length > 1 ? `${label}（${ids.length}通）` : label);
-      void (async () => {
+      return (async () => {
         const results = await Promise.all(
           ids.map((id) =>
             fetch(`/api/emails/${encodeURIComponent(id)}`, {
@@ -540,9 +542,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   /** 朝の一掃の実行: 推奨ごとにまとめて移動し、スヌーズ時刻を記録。 */
   const applySweep = async (archiveIds: string[], trashIds: string[]) => {
+    // await = サーバ反映まで待つ（mutateState が settle promise を返す）。
     if (archiveIds.length) await mutateState(archiveIds, "archived", "一凪: アーカイブ");
     if (trashIds.length) await mutateState(trashIds, "trashed", "一凪: ゴミ箱へ");
     localStorage.setItem("asanagi:last-sweep", String(Date.now()));
+    // 反映後に受信箱を再取得（新着の取り込み＋実状態に同期）。
+    if (archiveIds.length || trashIds.length) loadList(folder, account);
   };
   const trash = (ids: string[]) => mutateState(ids, "trashed", "ゴミ箱に移動しました");
   const restore = (ids: string[]) => mutateState(ids, "inbox", "受信箱に戻しました");
