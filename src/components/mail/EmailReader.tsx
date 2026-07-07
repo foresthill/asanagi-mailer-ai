@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import type { Email, FolderView, Importance } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { avatarColor, displayName, fullTime, initials } from "./helpers";
+import { avatarColor, displayName, fullTime, htmlToText, initials } from "./helpers";
 import { ThreadView } from "./ThreadView";
 import { QuotedText, splitQuotedReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
@@ -109,9 +109,13 @@ export function EmailReader({
   // leftover CSS/style block is dropped, and long blank runs collapse to one
   // blank line (HTML mail otherwise pastes with big gaps).
   const copyBody = async () => {
-    const { head } = splitQuotedReply(email.body);
-    const text = (head.trim() || email.body)
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
+    // Copy plain text, never markup. HTML mail (or a body that itself carries
+    // HTML tags — some senders put HTML in the text/plain part) is converted
+    // to text first; a normal plain-text body is used as-is.
+    const plain =
+      email.html || /<\/?[a-z][^>]*>/i.test(email.body) ? htmlToText(email.html || email.body) : email.body;
+    const { head } = splitQuotedReply(plain);
+    const text = (head.trim() || plain)
       .replace(/\r\n?/g, "\n")
       .replace(/[ \t 　]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
