@@ -98,6 +98,13 @@ function getDb(): DatabaseSync {
   } catch {
     /* column already exists */
   }
+  // マスキング監査: {masked:{TYPE:n},total,residual} の JSON。residual>0 =
+  // 構造化PIIが素通りした疑い（マスク精度の観測用）。
+  try {
+    db.exec("ALTER TABLE ai_usage ADD COLUMN mask_audit TEXT");
+  } catch {
+    /* column already exists */
+  }
   return db;
 }
 
@@ -580,6 +587,8 @@ export interface AiLogEntry {
   /** What actually left the device (PII-masked prompt) and the reply. */
   prompt: string | null;
   response: string | null;
+  /** Masking audit JSON: {masked:{TYPE:n},total,residual}. residual>0 = leak. */
+  maskAudit: string | null;
 }
 
 /** Keep the audit log bounded — newest N rows only. */
@@ -593,15 +602,15 @@ export function logAiUsage(
   model: string,
   inputTokens?: number,
   outputTokens?: number,
-  content?: { prompt?: string; response?: string },
+  content?: { prompt?: string; response?: string; maskAudit?: string },
 ): void {
   try {
     const clip = (s?: string) =>
       s == null ? null : s.length > AI_LOG_CONTENT_CAP ? s.slice(0, AI_LOG_CONTENT_CAP) + "…(以下略)" : s;
     const db = getDb();
     db.prepare(
-      `INSERT INTO ai_usage (kind, model, input_tokens, output_tokens, created_at, prompt, response)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO ai_usage (kind, model, input_tokens, output_tokens, created_at, prompt, response, mask_audit)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       kind,
       model,
@@ -610,6 +619,7 @@ export function logAiUsage(
       new Date().toISOString(),
       clip(content?.prompt),
       clip(content?.response),
+      content?.maskAudit ?? null,
     );
     // Prune anything older than the newest AI_LOG_MAX rows.
     db.prepare(
@@ -627,7 +637,7 @@ export function aiLogEntries(limit = 100): AiLogEntry[] {
   try {
     const rows = getDb()
       .prepare(
-        `SELECT id, kind, model, input_tokens, output_tokens, created_at, prompt, response
+        `SELECT id, kind, model, input_tokens, output_tokens, created_at, prompt, response, mask_audit
          FROM ai_usage ORDER BY id DESC LIMIT ?`,
       )
       .all(limit) as Record<string, unknown>[];
@@ -640,6 +650,7 @@ export function aiLogEntries(limit = 100): AiLogEntry[] {
       createdAt: String(r.created_at ?? ""),
       prompt: r.prompt == null ? null : String(r.prompt),
       response: r.response == null ? null : String(r.response),
+      maskAudit: r.mask_audit == null ? null : String(r.mask_audit),
     }));
   } catch {
     return [];

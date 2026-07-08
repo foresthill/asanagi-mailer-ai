@@ -3,7 +3,7 @@ import { generateText } from "ai";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { SUBJECT_SYSTEM } from "@/lib/ai/prompts";
 import { logAiUsage } from "@/lib/db";
-import { PiiMasker } from "@/lib/ai/pii";
+import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 
 export const maxDuration = 30;
 
@@ -42,9 +42,11 @@ export async function POST(req: Request) {
       .trim()
       .replace(/^["'「『]+|["'」』]+$/g, "")
       .slice(0, 120);
+    const logged = `[system]\n${SUBJECT_SYSTEM}\n\n[prompt]\n${prompt}`;
     logAiUsage("subject", cfg.model, usage?.inputTokens, usage?.outputTokens, {
-      prompt: `[system]\n${SUBJECT_SYSTEM}\n\n[prompt]\n${prompt}`,
+      prompt: logged,
       response: subject,
+      maskAudit: cfg.piiMask ? auditOutgoing("subject", masker, logged) : undefined,
     });
     return NextResponse.json({ subject, ai: true });
   } catch (err) {

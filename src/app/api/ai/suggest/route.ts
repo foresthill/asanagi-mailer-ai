@@ -4,7 +4,7 @@ import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { REFINE_SYSTEM, emailContext } from "@/lib/ai/prompts";
 import { logAiUsage } from "@/lib/db";
-import { PiiMasker } from "@/lib/ai/pii";
+import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import type { Email } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -83,9 +83,11 @@ export async function POST(req: Request) {
       system: REFINE_SYSTEM,
       prompt,
     });
+    const logged = `[system]\n${REFINE_SYSTEM}\n\n[prompt]\n${prompt}`;
     logAiUsage("suggest", cfg.model, usage?.inputTokens, usage?.outputTokens, {
-      prompt: `[system]\n${REFINE_SYSTEM}\n\n[prompt]\n${prompt}`,
+      prompt: logged,
       response: JSON.stringify(object, null, 2),
+      maskAudit: cfg.piiMask ? auditOutgoing("suggest", masker, logged) : undefined,
     });
     const out = object as { revised: string; subject?: string };
     return NextResponse.json({
