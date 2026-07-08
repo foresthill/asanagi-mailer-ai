@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
-import { REPLY_SYSTEM, emailContext, historyContext } from "@/lib/ai/prompts";
+import { REPLY_SYSTEM, emailContext, historyContext, replyIdentityBlock } from "@/lib/ai/prompts";
+import { getReplySignature } from "@/lib/store";
 import { logAiUsage } from "@/lib/db";
 import { PiiMasker } from "@/lib/ai/pii";
 import type { DraftRequest } from "@/lib/types";
@@ -37,8 +38,11 @@ export async function POST(req: Request) {
     const masker = new PiiMasker();
     const target = cfg.piiMask ? masker.maskEmail(email) : email;
     const maskedHistory = cfg.piiMask ? history?.map((m) => masker.maskEmail(m)) : history;
+    // 返信者の名乗り（アカウント別）。履歴の送信者名に引きずられず本人として書く。
+    const signature = await getReplySignature(email.account);
     const prompt = [
       "以下のメールに対する返信の下書きを作成してください。",
+      replyIdentityBlock(signature),
       guidance ? `補足の指示: ${guidance}` : "",
       // Conversation so far — agreed dates, open questions, tone.
       ...(maskedHistory?.length
