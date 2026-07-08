@@ -110,6 +110,36 @@ export class PiiMasker {
     return this.map.size;
   }
 
+  /** Distinct masked values per type, e.g. { EMAIL: 5, PHONE: 2, DOMAIN: 3 }. */
+  stats(): Record<string, number> {
+    return Object.fromEntries(this.counters);
+  }
+
+  /**
+   * Count structured PII STILL present in already-masked text — i.e. a leak: a
+   * value the masker missed, or (more often) text on a path that bypassed
+   * masking (user-authored guidance/メモ, headers we don't mask). Masked tokens
+   * like `[EMAIL_1]` don't match the patterns, so any hit is a real residual.
+   * NOTE: names/addresses are NOT detected here (regex only) — that gap needs
+   * NER (e.g. GiNZA). So residual=0 means "no structured PII slipped", NOT
+   * "fully anonymized".
+   */
+  residualPii(text: string): number {
+    if (!text) return 0;
+    let n = 0;
+    for (const p of PATTERNS) {
+      for (const m of text.matchAll(p.re)) {
+        if (!p.accept || p.accept(m[0])) n++;
+      }
+    }
+    return n;
+  }
+
+  /** Masking audit for one outgoing prompt: what was masked + what leaked. */
+  audit(outgoingText: string): { masked: Record<string, number>; total: number; residual: number } {
+    return { masked: this.stats(), total: this.count, residual: this.residualPii(outgoingText) };
+  }
+
   /** Reversibly tokenize a bare domain (no `@`, so the email regex misses it)
    *  as `[DOMAIN_n]`. Same domain → same token (shared seen/map). Used for the
    *  learned-signal block so company domains don't leak to the AI provider. */
@@ -142,4 +172,20 @@ export class PiiMasker {
       body: this.mask(email.body),
     };
   }
+}
+
+/**
+ * Audit one AI call's masking: returns a JSON string {masked,total,residual}
+ * for the AI log, and warns to the server log if any structured PII leaked
+ * (residual > 0) so it isn't silently swallowed. Call with the exact text that
+ * left the device (system + prompt).
+ */
+export function auditOutgoing(kind: string, masker: PiiMasker, outgoingText: string): string {
+  const a = masker.audit(outgoingText);
+  if (a.residual > 0) {
+    console.warn(
+      `[pii] ${kind}: ${a.residual} unmasked structured PII item(s) in the outgoing prompt (masked ${a.total}). Check the masking path.`,
+    );
+  }
+  return JSON.stringify(a);
 }

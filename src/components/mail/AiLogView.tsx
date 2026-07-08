@@ -13,7 +13,21 @@ interface AiLogEntry {
   createdAt: string;
   prompt: string | null;
   response: string | null;
+  maskAudit: string | null;
   estUsd?: number;
+}
+
+/** Parse the mask-audit JSON stored per call → a compact display. */
+function parseAudit(
+  raw: string | null,
+): { total: number; residual: number; masked: Record<string, number> } | null {
+  if (!raw) return null;
+  try {
+    const a = JSON.parse(raw) as { total?: number; residual?: number; masked?: Record<string, number> };
+    return { total: a.total ?? 0, residual: a.residual ?? 0, masked: a.masked ?? {} };
+  } catch {
+    return null;
+  }
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -73,6 +87,7 @@ export function AiLogView() {
           ) : (
             entries.map((e) => {
               const open = openId === e.id;
+              const audit = parseAudit(e.maskAudit);
               return (
                 <div key={e.id} className="rounded-xl border border-border bg-surface">
                   <button
@@ -86,6 +101,23 @@ export function AiLogView() {
                       {KIND_LABEL[e.kind] ?? e.kind}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{e.model}</span>
+                    {audit && (
+                      <span
+                        title={
+                          audit.residual > 0
+                            ? `マスクを素通りした構造化PIIが ${audit.residual} 件（人名・住所は未検出）`
+                            : `構造化PII ${audit.total} 件をマスク・素通り0`
+                        }
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
+                          audit.residual > 0
+                            ? "bg-high-soft text-high"
+                            : "bg-surface-2 text-fg-subtle"
+                        }`}
+                      >
+                        🔒{audit.total}
+                        {audit.residual > 0 ? ` ⚠${audit.residual}` : ""}
+                      </span>
+                    )}
                     <span className="shrink-0 text-[11px] tabular-nums text-fg-subtle">
                       in {e.inputTokens ?? "?"} / out {e.outputTokens ?? "?"}
                       {typeof e.estUsd === "number" ? ` ≈ ${usd(e.estUsd)}` : ""}
@@ -96,6 +128,32 @@ export function AiLogView() {
                   </button>
                   {open && (
                     <div className="space-y-3 border-t border-border px-4 py-3">
+                      {audit && (
+                        <div>
+                          <p className="mb-1 text-[10px] font-semibold uppercase text-fg-subtle">
+                            マスキング監査
+                          </p>
+                          <p className="text-[11px] leading-relaxed text-fg-muted">
+                            マスク {audit.total} 件
+                            {Object.keys(audit.masked).length > 0 && (
+                              <>
+                                （
+                                {Object.entries(audit.masked)
+                                  .map(([k, n]) => `${k}:${n}`)
+                                  .join(" / ")}
+                                ）
+                              </>
+                            )}
+                            {" ・ "}
+                            <span className={audit.residual > 0 ? "font-semibold text-high" : ""}>
+                              素通り {audit.residual} 件
+                            </span>
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-fg-subtle">
+                            ※構造化PII（メール/電話/番号）のみ計測。人名・住所は未検出（NER未導入）。
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <p className="mb-1 text-[10px] font-semibold uppercase text-fg-subtle">
                           送信内容（プロンプト）

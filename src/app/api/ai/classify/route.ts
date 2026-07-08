@@ -5,7 +5,7 @@ import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { CLASSIFY_SYSTEM, classifyContext, profileBlock } from "@/lib/ai/prompts";
 import { getJudgmentProfile, guessFromSignals, listSignals } from "@/lib/store";
 import { heuristicImportance } from "@/lib/importance";
-import { PiiMasker } from "@/lib/ai/pii";
+import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage, logJudgment } from "@/lib/db";
 import type { Email, Importance } from "@/lib/types";
 
@@ -75,9 +75,11 @@ export async function POST(req: Request) {
       prompt,
     });
     record(email, object.importance, object.reason, "ai");
+    const logged = `[system]\n${CLASSIFY_SYSTEM}\n\n[prompt]\n${prompt}`;
     logAiUsage("classify", cfg.judgmentModel, usage?.inputTokens, usage?.outputTokens, {
-      prompt: `[system]\n${CLASSIFY_SYSTEM}\n\n[prompt]\n${prompt}`,
+      prompt: logged,
       response: JSON.stringify(object, null, 2),
+      maskAudit: cfg.piiMask ? auditOutgoing("classify", masker, logged) : undefined,
     });
     return NextResponse.json({ ...object, reason: masker.unmask(object.reason), source: "ai" });
   } catch (err) {

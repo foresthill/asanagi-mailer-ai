@@ -5,7 +5,7 @@ import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { REPLY_SYSTEM, emailContext, historyContext, replyIdentityBlock } from "@/lib/ai/prompts";
 import { getReplySignature } from "@/lib/store";
 import { logAiUsage } from "@/lib/db";
-import { PiiMasker } from "@/lib/ai/pii";
+import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import type { DraftRequest } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -63,9 +63,11 @@ export async function POST(req: Request) {
       system: REPLY_SYSTEM,
       prompt,
     });
+    const logged = `[system]\n${REPLY_SYSTEM}\n\n[prompt]\n${prompt}`;
     logAiUsage("reply", cfg.model, usage?.inputTokens, usage?.outputTokens, {
-      prompt: `[system]\n${REPLY_SYSTEM}\n\n[prompt]\n${prompt}`,
+      prompt: logged,
       response: JSON.stringify(object, null, 2),
+      maskAudit: cfg.piiMask ? auditOutgoing("reply", masker, logged) : undefined,
     });
     return NextResponse.json({
       draft: { subject: masker.unmask(object.subject), body: masker.unmask(object.body) },

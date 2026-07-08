@@ -3,7 +3,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { SWEEP_SYSTEM, profileBlock } from "@/lib/ai/prompts";
-import { PiiMasker } from "@/lib/ai/pii";
+import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage } from "@/lib/db";
 import { getJudgmentProfile, getSweptIds, guessFromSignals, listSignals } from "@/lib/store";
 import { heuristicImportance } from "@/lib/importance";
@@ -125,9 +125,11 @@ export async function POST(req: Request) {
       system: SWEEP_SYSTEM,
       prompt,
     });
+    const logged = `[system]\n${SWEEP_SYSTEM}\n\n[prompt]\n${prompt}`;
     logAiUsage("sweep", cfg.judgmentModel, usage?.inputTokens, usage?.outputTokens, {
-      prompt: `[system]\n${SWEEP_SYSTEM}\n\n[prompt]\n${prompt}`,
+      prompt: logged,
       response: JSON.stringify(object.items, null, 2),
+      maskAudit: cfg.piiMask ? auditOutgoing("sweep", masker, logged) : undefined,
     });
 
     const byIndex = new Map(object.items.map((r) => [r.index, r]));
