@@ -41,6 +41,14 @@ import type { AccountInfo } from "@/lib/email/accounts";
 
 const QUICK_PROMPTS = ["もっと丁寧に", "もっと短く", "カジュアルに", "英語にして", "感謝を加えて"];
 
+// AIアシスタントの指示入力での送信キー設定（端末に保存）。
+// true: Enter=送信 / Shift+Enter=改行。 false(既定): Enter=改行 / Shift+Enter=送信。
+const ENTER_SEND_KEY = "asanagi:ai-enter-send";
+function loadEnterSend(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(ENTER_SEND_KEY) === "1";
+}
+
 interface HistoryItem {
   id: string;
   instruction: string;
@@ -131,6 +139,18 @@ export function ReplyComposer({
   const editorRef = useRef<DraftEditorHandle>(null);
   // In-flight AI request — 中止 button aborts it (initial draft / suggest).
   const abortRef = useRef<AbortController | null>(null);
+  // 指示入力の送信キー（Enter送信 ⇄ Shift+Enter送信）。端末に保存。
+  const [enterToSend, setEnterToSend] = useState(loadEnterSend);
+  const toggleEnterSend = () =>
+    setEnterToSend((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(ENTER_SEND_KEY, next ? "1" : "0");
+      } catch {
+        /* private mode — preference just won't stick */
+      }
+      return next;
+    });
 
   const reviewing = pending > 0;
 
@@ -890,7 +910,7 @@ export function ReplyComposer({
       </div>
 
       {/* AI assistant rail */}
-      <div className="flex w-[360px] shrink-0 flex-col border-l border-border bg-surface-2">
+      <div className="flex w-[400px] max-w-[42vw] shrink-0 flex-col border-l border-border bg-surface-2">
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <div className="grid size-6 place-items-center rounded-md bg-accent text-accent-fg">
             <Sparkles className="size-3.5" />
@@ -968,6 +988,17 @@ export function ReplyComposer({
         </div>
 
         <div className="border-t border-border p-3">
+          <div className="mb-1.5 flex items-center justify-end">
+            <label className="flex cursor-pointer items-center gap-1 text-[10px] text-fg-subtle">
+              <input
+                type="checkbox"
+                checked={enterToSend}
+                onChange={toggleEnterSend}
+                className="size-3 accent-[var(--accent)]"
+              />
+              Enterで送信
+            </label>
+          </div>
           <div className="flex items-end gap-2 rounded-xl border border-border bg-surface px-3 py-2 focus-within:border-accent">
             <textarea
               value={input}
@@ -977,20 +1008,27 @@ export function ReplyComposer({
                 // Never fire while the IME is composing (Japanese input:
                 // the conversion-confirm Enter must not send).
                 if (e.nativeEvent.isComposing) return;
-                // Enter = newline; Shift/Cmd/Ctrl+Enter = send.
-                if (e.shiftKey || e.metaKey || e.ctrlKey) {
+                // enterToSend: Enter=送信 / Shift+Enter=改行。
+                // 既定: Shift/Cmd/Ctrl+Enter=送信 / Enter=改行。
+                const send = enterToSend
+                  ? !e.shiftKey
+                  : e.shiftKey || e.metaKey || e.ctrlKey;
+                if (send) {
                   e.preventDefault();
                   runSuggest(input, selectionText ? "selection" : "whole");
                 }
               }}
-              rows={1}
+              rows={3}
               placeholder={
-                richMode
-                  ? "全体への指示（例: もっと丁寧に）→ 提案を確認して適用"
-                  : (selectionText ? "選択範囲への指示" : "全体への指示") + "（Shift+Enterで送信）"
+                (richMode
+                  ? "全体への指示（例: もっと丁寧に）"
+                  : selectionText
+                    ? "選択範囲への指示"
+                    : "全体への指示") +
+                (enterToSend ? "（Enterで送信・Shift+Enterで改行）" : "（Shift+Enterで送信）")
               }
               disabled={reviewing}
-              className="max-h-24 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-fg-subtle disabled:opacity-50"
+              className="max-h-48 min-h-[4.5rem] flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-fg-subtle disabled:opacity-50"
             />
             <button
               onClick={() => runSuggest(input, selectionText ? "selection" : "whole")}
