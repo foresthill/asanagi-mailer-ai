@@ -183,6 +183,10 @@ export class ImapProvider implements EmailProvider {
           bodyStructure: true,
           source: true,
         })) {
+          // Guard: a phantom/partial fetch row without a UID would become the
+          // bogus id "INBOX:undefined" (empty from/subject) and flash in the
+          // inbox until the next sync. Skip it.
+          if (msg.uid == null) continue;
           // List payloads stay lean: HTML arrives via get() only.
           out.push({ ...(await this.materialize(msg, state, folders[state])), html: undefined });
         }

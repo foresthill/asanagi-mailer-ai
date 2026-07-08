@@ -169,13 +169,17 @@ export function upsertEmails(account: string, emails: Email[]): void {
 
 /** Drop the oldest rows beyond the per-account retention cap. */
 export function prune(account: string, keep = RETENTION_PER_ACCOUNT): void {
-  getDb()
-    .prepare(
-      `DELETE FROM messages WHERE account = ? AND id NOT IN (
+  const d = getDb();
+  // Self-heal: purge malformed rows from a phantom/partial fetch (id ending in
+  // ":undefined"/":null" — empty from/subject) that would flash in the inbox.
+  d.prepare(
+    `DELETE FROM messages WHERE account = ? AND (id LIKE '%:undefined' OR id LIKE '%:null')`,
+  ).run(account);
+  d.prepare(
+    `DELETE FROM messages WHERE account = ? AND id NOT IN (
          SELECT id FROM messages WHERE account = ? ORDER BY date DESC LIMIT ?
        )`,
-    )
-    .run(account, account, keep);
+  ).run(account, account, keep);
 }
 
 /** List cached emails for the given accounts and mailbox state, newest first. */
