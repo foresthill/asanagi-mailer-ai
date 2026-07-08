@@ -172,9 +172,16 @@ export function prune(account: string, keep = RETENTION_PER_ACCOUNT): void {
   const d = getDb();
   // Self-heal: purge malformed rows from a phantom/partial fetch (id ending in
   // ":undefined"/":null" — empty from/subject) that would flash in the inbox.
-  d.prepare(
-    `DELETE FROM messages WHERE account = ? AND (id LIKE '%:undefined' OR id LIKE '%:null')`,
-  ).run(account);
+  // Surface it (don't swallow): a repeating count points at an upstream bug.
+  const purged = d
+    .prepare(`DELETE FROM messages WHERE account = ? AND (id LIKE '%:undefined' OR id LIKE '%:null')`)
+    .run(account);
+  const purgedCount = Number(purged.changes);
+  if (purgedCount > 0) {
+    console.warn(
+      `[db] purged ${purgedCount} malformed cached row(s) for "${account}" (id ":undefined"/":null" — phantom/partial fetch)`,
+    );
+  }
   d.prepare(
     `DELETE FROM messages WHERE account = ? AND id NOT IN (
          SELECT id FROM messages WHERE account = ? ORDER BY date DESC LIMIT ?
