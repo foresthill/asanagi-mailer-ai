@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { isTracked, snapshotLearning } from "./learning-history";
 import type {
   AIProvider,
   AISettings,
@@ -31,6 +32,10 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
 async function writeJson<T>(file: string, data: T): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(path.join(DATA_DIR, file), JSON.stringify(data, null, 2), "utf8");
+  // Learned state (signals / メモ / 署名 / notes) → local-only git history
+  // (best-effort, debounced; secrets & the DB are never tracked). See
+  // learning-history.ts. Non-learning files (secrets etc.) are skipped.
+  if (isTracked(file)) snapshotLearning();
 }
 
 // Exposed so the mock provider can persist mailbox mutations.
