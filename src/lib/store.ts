@@ -209,6 +209,31 @@ export async function saveJudgmentProfile(text: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// AI返信での「自分の名乗り／署名」。アカウント別（gmail / imap 等）に、返信を
+// 誰として書くかをAIに伝える。スレッド履歴の送信者名が別人でも、返信者は
+// 「そのアカウントの本人」であることを明示するために使う。
+// ---------------------------------------------------------------------------
+const REPLY_SIGNATURES = "reply-signatures.json";
+
+export async function getReplySignatures(): Promise<Record<string, string>> {
+  return readJson<Record<string, string>>(REPLY_SIGNATURES, {});
+}
+
+export async function getReplySignature(account?: string): Promise<string> {
+  if (!account) return "";
+  const all = await getReplySignatures();
+  return all[account] ?? "";
+}
+
+export async function saveReplySignature(account: string, text: string): Promise<void> {
+  const all = await getReplySignatures();
+  const trimmed = text.slice(0, 2000);
+  if (trimmed.trim()) all[account] = trimmed;
+  else delete all[account]; // 空 = そのアカウントの設定を消す
+  await writeJson(REPLY_SIGNATURES, all);
+}
+
+// ---------------------------------------------------------------------------
 // Learned importance signals (seed of the per-user knowledge base)
 // ---------------------------------------------------------------------------
 const SIGNALS = "signals.json";

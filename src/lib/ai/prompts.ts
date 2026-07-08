@@ -45,6 +45,23 @@ export const REPLY_SYSTEM = `あなたはプロのメールアシスタントで
 - 不明な事実は創作しない。日付・金額・固有名詞を勝手に作らない。
 - 署名やプレースホルダ（[あなたの名前] 等）は最小限にする。`;
 
+/**
+ * Tell the model who the replier is (per-account 名乗り). Empty → no-op. Sent
+ * as-is (user-authored, not PII). Crucial when the thread history is signed by
+ * a different person (shared/CC'd mailbox) — the reply must be in the account
+ * owner's voice, not the past sender's.
+ */
+export function replyIdentityBlock(signature: string): string {
+  const s = signature.trim();
+  if (!s) return "";
+  return [
+    "",
+    "## あなた（返信者）について",
+    "あなたは以下の人物本人として返信します。これまでのやりとりに別の送信者名が含まれていても、今回の返信者はこの人物です。相手（宛名）ではなく、あなた自身の名乗り・署名としてこれを使ってください:",
+    s,
+  ].join("\n");
+}
+
 export const SUBJECT_SYSTEM = `あなたはメールの件名を考えるアシスタントです。与えられた本文にふさわしい件名を1つだけ作ります。
 
 出力ルール:
