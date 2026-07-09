@@ -46,20 +46,39 @@ export const REPLY_SYSTEM = `あなたはプロのメールアシスタントで
 - 署名やプレースホルダ（[あなたの名前] 等）は最小限にする。`;
 
 /**
- * Tell the model who the replier is (per-account 名乗り). Empty → no-op. Sent
- * as-is (user-authored, not PII). Crucial when the thread history is signed by
- * a different person (shared/CC'd mailbox) — the reply must be in the account
- * owner's voice, not the past sender's.
+ * Fix the reply PERSPECTIVE (who is writing to whom) and, optionally, the name.
+ * Without this the model infers perspective from the target message and gets it
+ * wrong when the "reply target" is the user's OWN earlier message in the thread
+ * (it then writes as the other party, replying to yourself). We always state
+ * that the writer is the account owner, replying to the other participant.
+ *
+ * @param selfName  the account owner's display name (from the account), if known
+ * @param isOwn     true when the reply-target message was sent BY the account
+ *                  owner (so the model must not "reply to itself")
+ * @param signature user-authored 名乗り/署名 (per-account); refines the sign-off
  */
-export function replyIdentityBlock(signature: string): string {
-  const s = signature.trim();
-  if (!s) return "";
-  return [
-    "",
-    "## あなた（返信者）について",
-    "あなたは以下の人物本人として返信します。これまでのやりとりに別の送信者名が含まれていても、今回の返信者はこの人物です。相手（宛名）ではなく、あなた自身の名乗り・署名としてこれを使ってください:",
-    s,
-  ].join("\n");
+export function replyPerspective(opts: {
+  selfName?: string;
+  isOwn?: boolean;
+  signature?: string;
+}): string {
+  const name = opts.selfName?.trim();
+  const sig = opts.signature?.trim();
+  const lines = ["", "## あなた（返信者）について"];
+  lines.push(
+    name
+      ? `あなたは「${name}」本人として、このスレッドの相手（あなた以外の参加者）に返信します。宛名は相手、署名はあなた自身です。`
+      : "あなたはこのメールの受信者本人として、相手（差出人）に返信します。相手になりきって自分自身に返信してはいけません。",
+  );
+  if (opts.isOwn) {
+    lines.push(
+      "重要: 下の「返信対象の受信メール」は、あなた自身が過去に送ったメールです。自分に返信するのではなく、直前の相手からのメール（これまでのやりとりを参照）に対する、あなたからの続きの返信を書いてください。",
+    );
+  }
+  if (sig) {
+    lines.push(`名乗り・署名は次を用いてください: ${sig}`);
+  }
+  return lines.join("\n");
 }
 
 export const SUBJECT_SYSTEM = `あなたはメールの件名を考えるアシスタントです。与えられた本文にふさわしい件名を1つだけ作ります。

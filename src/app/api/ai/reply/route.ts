@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
-import { REPLY_SYSTEM, emailContext, historyContext, replyIdentityBlock } from "@/lib/ai/prompts";
-import { getReplySignature } from "@/lib/store";
+import { REPLY_SYSTEM, emailContext, historyContext, replyPerspective } from "@/lib/ai/prompts";
+import { getReplySignature, getEmailSettings } from "@/lib/store";
 import { logAiUsage } from "@/lib/db";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import type { DraftRequest } from "@/lib/types";
@@ -38,11 +38,19 @@ export async function POST(req: Request) {
     const masker = new PiiMasker();
     const target = cfg.piiMask ? masker.maskEmail(email) : email;
     const maskedHistory = cfg.piiMask ? history?.map((m) => masker.maskEmail(m)) : history;
-    // 返信者の名乗り（アカウント別）。履歴の送信者名に引きずられず本人として書く。
+    // 返信の視点（誰が誰に返信するか）を固定する。返信対象が自分の過去メール
+    // でも「自分に返信」しないようにし、名乗りはアカウント本人＋任意の署名。
     const signature = await getReplySignature(email.account);
+    const settings = await getEmailSettings();
+    const selfAddr = (
+      email.account === "gmail" ? settings.gmail?.address : settings.imap?.user
+    )?.toLowerCase();
+    const isOwn = !!selfAddr && email.from.email.toLowerCase() === selfAddr;
+    // 自分の過去メールなら差出人名＝自分の名。そうでなければアカウントの表示名。
+    const selfName = (isOwn ? email.from.name : settings.imap?.fromName) || undefined;
     const prompt = [
       "以下のメールに対する返信の下書きを作成してください。",
-      replyIdentityBlock(signature),
+      replyPerspective({ selfName, isOwn, signature }),
       guidance ? `補足の指示: ${guidance}` : "",
       // Conversation so far — agreed dates, open questions, tone.
       ...(maskedHistory?.length
