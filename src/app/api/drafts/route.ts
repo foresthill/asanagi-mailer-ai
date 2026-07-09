@@ -26,6 +26,11 @@ export async function POST(req: Request) {
     bcc: body.bcc,
     subject: body.subject ?? "",
     body: body.body ?? "",
+    // Preserve the rich-HTML alternative and attachments — the composer sends
+    // them (outgoing()) and restores them on reopen (openDraft), so dropping
+    // them here silently loses attachments/formatting from saved drafts.
+    html: body.html,
+    attachments: body.attachments,
     inReplyTo: body.inReplyTo,
     threadId: body.threadId,
     account: body.account,
