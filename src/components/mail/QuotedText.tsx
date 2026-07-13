@@ -47,8 +47,20 @@ export function splitQuotedReply(text: string): { head: string; quoted: string }
   return { head, quoted };
 }
 
+/**
+ * Display-time tidy for plain-text bodies whose source lost line structure —
+ * e.g. Google/Teams calendar invites cram "■URL: … ■会議 ID: … ■パスコード: …"
+ * onto one line. Break before a mid-line "■" bullet so each field is its own
+ * line, and collapse over-long blank runs. Display only — the stored body is
+ * untouched. (Only ■ is split; 中黒 "・" is a normal in-word char and left alone.)
+ */
+function tidyPlainBody(text: string): string {
+  return text.replace(/([^\n])■/g, "$1\n■").replace(/\n{3,}/g, "\n\n");
+}
+
 /** Body text with the quoted history collapsed behind a "···" toggle. */
-export function QuotedText({ text }: { text: string }) {
+export function QuotedText({ text: raw }: { text: string }) {
+  const text = tidyPlainBody(raw);
   const { head, quoted } = splitQuotedReply(text);
   const [show, setShow] = useState(false);
 
