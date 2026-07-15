@@ -23,6 +23,7 @@ import {
   ListOrdered,
   Link2,
 } from "lucide-react";
+import { handleLineNavKeyDown } from "./lineNav";
 
 export interface RichEditorHandle {
   getHtml: () => string;
@@ -141,6 +142,8 @@ export const RichEditor = forwardRef<
         class:
           "min-h-full text-[15px] leading-7 outline-none [&_img]:my-1.5 [&_img]:max-w-full [&_img]:rounded-md [&_p]:min-h-[1.2em] [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_a]:text-accent [&_a]:underline",
       },
+      // macOS Ctrl+A=行頭 / Ctrl+E=行末（Shiftで行選択）。
+      handleKeyDown: handleLineNavKeyDown,
       handlePaste(_view, event) {
         // Only intercept image pastes; text/HTML falls through to ProseMirror.
         const imgs = imageFilesFrom(event.clipboardData);
