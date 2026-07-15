@@ -81,6 +81,35 @@ function Highlighted({ text, terms }: { text: string; terms: string[] }) {
 }
 
 /**
+ * Preview line for a search hit: the normal snippet when the keyword is already
+ * visible there, otherwise a window cut from around the FIRST body match — so a
+ * "本文" hit shows *where* in the body it matched instead of just the opening
+ * 140 chars (which often don't contain the keyword at all).
+ */
+function previewFor(email: Email, terms: string[]): string {
+  const base = email.snippet ?? "";
+  if (!terms.length) return base;
+  const lowBase = base.toLowerCase();
+  if (terms.some((t) => lowBase.includes(t.toLowerCase()))) return base; // already visible
+  const body = email.body ?? "";
+  const lowBody = body.toLowerCase();
+  let at = -1;
+  let len = 0;
+  for (const t of terms) {
+    const i = lowBody.indexOf(t.toLowerCase());
+    if (i >= 0 && (at < 0 || i < at)) {
+      at = i;
+      len = t.length;
+    }
+  }
+  if (at < 0) return base; // hit was elsewhere (件名/差出人/宛先)
+  const start = Math.max(0, at - 40);
+  const end = Math.min(body.length, at + len + 60);
+  const cut = body.slice(start, end).replace(/\s+/g, " ").trim();
+  return `${start > 0 ? "…" : ""}${cut}${end < body.length ? "…" : ""}`;
+}
+
+/**
  * Which field(s) the search hit — mirrors db.searchCached (each keyword may hit
  * any field; a field is "hit" when it contains any keyword). Shown as badges so
  * it's obvious WHY a result matched (件名 / 本文 / 差出人 / 宛先).
@@ -616,7 +645,7 @@ function EmailListItem({
               </span>
             )}
             <p className="min-w-0 flex-1 truncate text-xs text-fg-subtle">
-              <Highlighted text={email.snippet} terms={terms} />
+              <Highlighted text={previewFor(email, terms)} terms={terms} />
             </p>
             {accountLabel && (
               <span
