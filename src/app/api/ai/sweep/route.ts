@@ -5,7 +5,14 @@ import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { SWEEP_SYSTEM, profileBlock } from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage } from "@/lib/db";
-import { getJudgmentProfile, getSweptIds, guessFromSignals, listSignals } from "@/lib/store";
+import {
+  getJudgmentProfile,
+  getSweptIds,
+  guessFromSignals,
+  guessSweepAction,
+  listSignals,
+  listSweepActions,
+} from "@/lib/store";
 import { heuristicImportance } from "@/lib/importance";
 import type { Email } from "@/lib/types";
 
@@ -77,13 +84,22 @@ export async function POST(req: Request) {
   if (!fresh.length) return NextResponse.json({ items: [], allReviewed: true });
 
   const signals = await listSignals();
+  // 過去に実際に選んだ処分（archive / trash）。無い送信者だけ archive を既定に。
+  const sweepActions = await listSweepActions();
   const items: SweepItem[] = [];
   const undecided: Email[] = [];
 
   for (const e of fresh.slice(0, 100)) {
     const learned = guessFromSignals(e.from.email, signals);
     if (learned === "low") {
-      items.push({ id: e.id, ...disp(e), action: "archive", reason: "学習済み: 低", source: "learned" });
+      const act = guessSweepAction(e.from.email, sweepActions) ?? "archive";
+      items.push({
+        id: e.id,
+        ...disp(e),
+        action: act,
+        reason: act === "trash" ? "学習済み: ゴミ箱" : "学習済み: 低",
+        source: "learned",
+      });
     } else if (learned) {
       items.push({ id: e.id, ...disp(e), action: "keep", reason: "学習済みの相手", source: "learned" });
     } else {

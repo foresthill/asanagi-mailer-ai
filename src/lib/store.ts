@@ -289,6 +289,67 @@ export async function recordImportanceFeedback(
   await writeJson(SIGNALS, signals);
 }
 
+// ---------------------------------------------------------------------------
+// 朝の一凪の「処分アクション」学習 — importance(low) だけでは archive と trash を
+// 区別できず、毎回「アーカイブ→ゴミ箱」を押し直す羽目になる。送信者/ドメイン
+// ごとに“実際に選んだ処分”を憶えて次回の既定にする。
+// ---------------------------------------------------------------------------
+const SWEEP_ACTIONS = "sweep-actions.json";
+
+export type SweepLearnAction = "archive" | "trash";
+
+export interface SweepActionSignal {
+  pattern: string;
+  kind: "sender" | "domain";
+  action: SweepLearnAction;
+  /** How many times the user confirmed this disposal. */
+  weight: number;
+  updatedAt: string;
+}
+
+export async function listSweepActions(): Promise<SweepActionSignal[]> {
+  return readJson<SweepActionSignal[]>(SWEEP_ACTIONS, []);
+}
+
+/** Remember "this sender's mail goes to archive / trash" (sender + domain). */
+export async function recordSweepAction(
+  fromEmail: string,
+  action: SweepLearnAction,
+  now = new Date(),
+): Promise<void> {
+  const all = await listSweepActions();
+  const domain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
+  const upsert = (pattern: string, kind: SweepActionSignal["kind"]) => {
+    if (!pattern) return;
+    const ex = all.find((s) => s.kind === kind && s.pattern === pattern);
+    if (ex) {
+      // Same choice → more confident; changed mind → the new one wins.
+      if (ex.action === action) ex.weight += 1;
+      else {
+        ex.action = action;
+        ex.weight = 1;
+      }
+      ex.updatedAt = now.toISOString();
+    } else {
+      all.push({ pattern, kind, action, weight: 1, updatedAt: now.toISOString() });
+    }
+  };
+  upsert(fromEmail, "sender");
+  upsert(domain, "domain");
+  await writeJson(SWEEP_ACTIONS, all);
+}
+
+/** Learned disposal for this sender (sender wins over domain); undefined = unknown. */
+export function guessSweepAction(
+  fromEmail: string,
+  all: SweepActionSignal[],
+): SweepLearnAction | undefined {
+  const domain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
+  const sender = all.find((s) => s.kind === "sender" && s.pattern === fromEmail);
+  if (sender) return sender.action;
+  return all.find((s) => s.kind === "domain" && s.pattern === domain)?.action;
+}
+
 /** A fast, non-AI heuristic guess using learned signals only. */
 export function guessFromSignals(
   fromEmail: string,
