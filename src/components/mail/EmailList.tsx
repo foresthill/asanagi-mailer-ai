@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   Archive,
   Check,
@@ -46,17 +46,47 @@ function domainOf(email: string): string {
   return at >= 0 ? email.slice(at + 1).toLowerCase() : email.toLowerCase();
 }
 
+/** Search keywords, parsed the same way db.searchCached does (space = AND). */
+function searchTerms(query?: string): string[] {
+  return (query ?? "")
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Mark the matched keywords inside a result's text (highlighter look). */
+function Highlighted({ text, terms }: { text: string; terms: string[] }) {
+  if (!terms.length || !text) return <>{text}</>;
+  // One capture group around the alternation → split() alternates text/match.
+  const parts = text.split(new RegExp(`(${terms.map(escapeRe).join("|")})`, "gi"));
+  return (
+    <>
+      {parts.map((p, i) =>
+        i % 2 === 1 ? (
+          <mark
+            key={i}
+            className="rounded-sm bg-amber-200/80 px-0.5 text-fg dark:bg-amber-400/30"
+          >
+            {p}
+          </mark>
+        ) : (
+          <Fragment key={i}>{p}</Fragment>
+        ),
+      )}
+    </>
+  );
+}
+
 /**
  * Which field(s) the search hit — mirrors db.searchCached (each keyword may hit
  * any field; a field is "hit" when it contains any keyword). Shown as badges so
  * it's obvious WHY a result matched (件名 / 本文 / 差出人 / 宛先).
  */
 function matchedFields(email: Email, query?: string): string[] {
-  const terms = (query ?? "")
-    .split(/\s+/)
-    .map((t) => t.trim().toLowerCase())
-    .filter(Boolean)
-    .slice(0, 5);
+  const terms = searchTerms(query).map((t) => t.toLowerCase());
   if (!terms.length) return [];
   const hit = (hay: string) => {
     const h = hay.toLowerCase();
@@ -456,6 +486,7 @@ function EmailListItem({
 }) {
   const { email, count, participants, unread, starred } = row;
   const hits = matchedFields(email, matchQuery);
+  const terms = searchTerms(matchQuery);
   const threadActionHint = count > 1 ? `（会話${count}通すべて）` : "";
   // Sent mail: the avatar represents the recipient (the row shows "To: …").
   const face = email.state === "sent" && email.to[0] ? email.to[0] : email.from;
@@ -515,7 +546,7 @@ function EmailListItem({
                 unread ? "font-semibold text-fg" : "font-normal text-fg-muted",
               )}
             >
-              {participants}
+              <Highlighted text={participants} terms={terms} />
             </span>
             {count > 1 && (
               <span
@@ -564,7 +595,7 @@ function EmailListItem({
                 unread ? "font-medium text-fg" : "text-fg-muted",
               )}
             >
-              {email.subject}
+              <Highlighted text={email.subject} terms={terms} />
             </p>
           </div>
           <div className="mt-0.5 flex items-center gap-2">
@@ -584,7 +615,9 @@ function EmailListItem({
                 ))}
               </span>
             )}
-            <p className="min-w-0 flex-1 truncate text-xs text-fg-subtle">{email.snippet}</p>
+            <p className="min-w-0 flex-1 truncate text-xs text-fg-subtle">
+              <Highlighted text={email.snippet} terms={terms} />
+            </p>
             {accountLabel && (
               <span
                 className="flex max-w-[40%] shrink-0 items-center gap-1 rounded-full border border-border bg-surface-2 px-1.5 py-px text-[10px] text-fg-muted"
