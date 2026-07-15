@@ -12,7 +12,7 @@ import type { JSONContent } from "@tiptap/core";
 import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
 import type { Segment } from "@/lib/diff";
 import { SuggestionNode } from "./suggestionNode";
-import { handleLineNavKeyDown } from "./lineNav";
+import { handleLineNavKeyDown, handleTripleClickLine } from "./lineNav";
 import {
   countSuggestions,
   docFromText,
@@ -76,6 +76,8 @@ export const DraftEditor = forwardRef<
       },
       // macOS Ctrl+A=行頭 / Ctrl+E=行末（Shiftで行選択）。
       handleKeyDown: handleLineNavKeyDown,
+      // トリプルクリック=その行を選択（単一段落なので既定は全文選択になる）。
+      handleTripleClick: handleTripleClickLine,
       // The doc is a single paragraph, so default paste (which builds multiple
       // block nodes) is rejected and nothing appears. Flatten ANY pasted slice
       // — whether ProseMirror parsed it from text/plain, text/html, or RTF

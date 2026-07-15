@@ -23,7 +23,7 @@ import {
   ListOrdered,
   Link2,
 } from "lucide-react";
-import { handleLineNavKeyDown } from "./lineNav";
+import { handleLineNavKeyDown, handleTripleClickLine } from "./lineNav";
 
 export interface RichEditorHandle {
   getHtml: () => string;
@@ -144,6 +144,8 @@ export const RichEditor = forwardRef<
       },
       // macOS Ctrl+A=行頭 / Ctrl+E=行末（Shiftで行選択）。
       handleKeyDown: handleLineNavKeyDown,
+      // トリプルクリック=その行を選択（段落全体ではなく視覚行）。
+      handleTripleClick: handleTripleClickLine,
       handlePaste(_view, event) {
         // Only intercept image pastes; text/HTML falls through to ProseMirror.
         const imgs = imageFilesFrom(event.clipboardData);

@@ -31,3 +31,23 @@ export function handleLineNavKeyDown(_view: unknown, event: KeyboardEvent): bool
   if (key === "e") return lineBoundary(event.shiftKey ? "extend" : "move", "forward");
   return false;
 }
+
+/**
+ * ProseMirror `editorProps.handleTripleClick` — select the VISUAL line under
+ * the cursor instead of the whole (single) paragraph, which for the plain
+ * DraftEditor means "select everything". Matches other mail clients where a
+ * triple-click grabs one line. Returns true so ProseMirror skips its default.
+ */
+export function handleTripleClickLine(): boolean {
+  const sel = typeof window !== "undefined" ? window.getSelection() : null;
+  const s = sel as
+    | (Selection & { modify?: (a: string, d: string, g: string) => void })
+    | null;
+  if (!s || typeof s.modify !== "function") return false;
+  // Collapse the word the double-click left selected → a caret on this line,
+  // then grow to the line's visual start and end.
+  s.collapseToStart();
+  s.modify("move", "backward", "lineboundary");
+  s.modify("extend", "forward", "lineboundary");
+  return true;
+}
