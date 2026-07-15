@@ -21,7 +21,13 @@ import path from "node:path";
 const DATA_DIR = process.env.ASANAGI_DATA_DIR || path.join(process.cwd(), ".data");
 
 // NON-secret learned state only. NEVER add secrets or the DB here.
-const TRACKED = ["signals.json", "judgment-profile.json", "reply-signatures.json", "notes.json"];
+const TRACKED = [
+  "signals.json",
+  "judgment-profile.json",
+  "reply-signatures.json",
+  "notes.json",
+  "sweep-actions.json", // 朝の一凪で学習した処分（archive/trash）
+];
 const TRACKED_SET = new Set(TRACKED);
 
 /** Is this store file part of the versioned learning history? */

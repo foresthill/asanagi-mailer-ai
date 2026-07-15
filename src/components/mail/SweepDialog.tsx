@@ -152,15 +152,16 @@ export function SweepDialog({
       } catch {
         /* 記録失敗は致命的でない */
       }
-      // 確定した判断を送信者の学習シグナルへ（keep=normal / それ以外=low）。
-      // 次回の判定（無料の簡易判定含む）がどんどん賢くなる。
+      // 確定した判断を学習へ。importance（keep=normal / それ以外=low）に加え、
+      // 実際に選んだ処分（archive / trash）も送る — これが無いと archive と
+      // trash を区別できず、毎回「アーカイブ→ゴミ箱」を押し直すことになる。
       try {
         const signals = items
           .map((i) => {
             const from = i.fromEmail ?? byId.get(i.id)?.from.email;
             const action = actions[i.id] ?? i.action;
             return from
-              ? { fromEmail: from, importance: action === "keep" ? "normal" : "low" }
+              ? { fromEmail: from, importance: action === "keep" ? "normal" : "low", action }
               : null;
           })
           .filter(Boolean);
