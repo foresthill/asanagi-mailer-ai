@@ -289,10 +289,12 @@ export function removeCached(account: string, id: string): void {
 }
 
 /**
- * Full-text-ish search over the cache: subject, body, sender name/address —
- * across accounts and folders. Case-insensitive substring match per keyword
- * (space-separated = AND). LIKE scan is millisecond-class at our retention
- * cap (≤5k rows/account); swap to FTS5+trigram when volume grows.
+ * Full-text-ish search over the cache: subject, body, sender AND recipients
+ * (To/Cc) — across accounts and folders. Case-insensitive substring match per
+ * keyword (space-separated = AND, each keyword may hit any field). Recipients
+ * are matched against the stored JSON, so a person's name/address hits whether
+ * they sent the mail or merely received it. LIKE scan is millisecond-class at
+ * our retention cap (≤5k rows/account); swap to FTS5+trigram when volume grows.
  */
 export function searchCached(query: string, limit = 50): Email[] {
   const terms = query
@@ -306,12 +308,13 @@ export function searchCached(query: string, limit = 50): Email[] {
     .map(
       () =>
         `(subject LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\'
-          OR from_name LIKE ? ESCAPE '\\' OR from_email LIKE ? ESCAPE '\\')`,
+          OR from_name LIKE ? ESCAPE '\\' OR from_email LIKE ? ESCAPE '\\'
+          OR to_json LIKE ? ESCAPE '\\' OR cc_json LIKE ? ESCAPE '\\')`,
     )
     .join(" AND ");
   const params = terms.flatMap((t) => {
     const like = `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-    return [like, like, like, like];
+    return [like, like, like, like, like, like];
   });
 
   const rows = getDb()

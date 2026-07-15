@@ -18,7 +18,7 @@ import {
   Star,
   X,
 } from "lucide-react";
-import type { FolderView } from "@/lib/types";
+import type { Email, FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, initials, relativeTime } from "./helpers";
 import type { ThreadRow } from "./threadList";
@@ -44,6 +44,32 @@ const AXIS_LABEL: Record<GroupAxis, string> = {
 function domainOf(email: string): string {
   const at = email.lastIndexOf("@");
   return at >= 0 ? email.slice(at + 1).toLowerCase() : email.toLowerCase();
+}
+
+/**
+ * Which field(s) the search hit — mirrors db.searchCached (each keyword may hit
+ * any field; a field is "hit" when it contains any keyword). Shown as badges so
+ * it's obvious WHY a result matched (件名 / 本文 / 差出人 / 宛先).
+ */
+function matchedFields(email: Email, query?: string): string[] {
+  const terms = (query ?? "")
+    .split(/\s+/)
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 5);
+  if (!terms.length) return [];
+  const hit = (hay: string) => {
+    const h = hay.toLowerCase();
+    return terms.some((t) => h.includes(t));
+  };
+  const people = (list?: { name?: string; email: string }[]) =>
+    (list ?? []).map((a) => `${a.name ?? ""} ${a.email}`).join(" ");
+  const out: string[] = [];
+  if (hit(email.subject)) out.push("件名");
+  if (hit(email.body)) out.push("本文");
+  if (hit(`${email.from.name ?? ""} ${email.from.email}`)) out.push("差出人");
+  if (hit(`${people(email.to)} ${people(email.cc)}`)) out.push("宛先");
+  return out;
 }
 
 /** rows を選択軸でセクションに束ねる。各セクションは元の日付順を保つ。 */
@@ -160,6 +186,7 @@ export function EmailList({
     <EmailListItem
       key={row.email.id}
       row={row}
+      matchQuery={searching ? searchQuery : undefined}
       active={row.email.id === selectedId}
       folder={folder}
       hasNote={noteIds.has(row.email.id)}
@@ -400,6 +427,7 @@ function EmailListItem({
   checked,
   selectionActive,
   accountLabel,
+  matchQuery,
   onSelect,
   onToggleCheck,
   onArchive,
@@ -409,6 +437,9 @@ function EmailListItem({
   row: ThreadRow;
   active: boolean;
   folder: FolderView;
+  /** Active search text → show which field(s) each hit matched. Undefined when
+   *  not searching. */
+  matchQuery?: string;
   /** This email has a private note (自分用メモ) → show the 📝 badge. */
   hasNote: boolean;
   /** This row is in the bulk selection. */
@@ -424,6 +455,7 @@ function EmailListItem({
   onToggleStar: () => void;
 }) {
   const { email, count, participants, unread, starred } = row;
+  const hits = matchedFields(email, matchQuery);
   const threadActionHint = count > 1 ? `（会話${count}通すべて）` : "";
   // Sent mail: the avatar represents the recipient (the row shows "To: …").
   const face = email.state === "sent" && email.to[0] ? email.to[0] : email.from;
@@ -536,6 +568,22 @@ function EmailListItem({
             </p>
           </div>
           <div className="mt-0.5 flex items-center gap-2">
+            {/* 検索時: どこに一致したかを明示（件名/本文/差出人/宛先）。 */}
+            {hits.length > 0 && (
+              <span
+                className="flex shrink-0 items-center gap-1"
+                title={`一致: ${hits.join("・")}`}
+              >
+                {hits.map((h) => (
+                  <span
+                    key={h}
+                    className="rounded bg-accent-soft px-1 py-px text-[10px] font-medium text-accent"
+                  >
+                    {h}
+                  </span>
+                ))}
+              </span>
+            )}
             <p className="min-w-0 flex-1 truncate text-xs text-fg-subtle">{email.snippet}</p>
             {accountLabel && (
               <span
