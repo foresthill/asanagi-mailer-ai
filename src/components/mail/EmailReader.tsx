@@ -51,6 +51,7 @@ export function EmailReader({
   onImportanceFeedback,
   onNoteSaved,
   onOpenMessage,
+  highlight,
 }: {
   email: Email | null;
   /** Conversation containing the email (oldest first); null while loading. */
@@ -67,6 +68,9 @@ export function EmailReader({
   onNoteSaved?: () => void;
   /** Re-anchor the reader to a thread message (open it as the current email). */
   onOpenMessage?: (id: string) => void;
+  /** Search query to highlight in the plain-text body — set only when the
+   *  email was opened from search results. */
+  highlight?: string;
 }) {
   // Session-sticky preference: rich HTML (default) vs plain text.
   const [textMode, setTextMode] = useState(false);
@@ -275,6 +279,7 @@ export function EmailReader({
               onOpen={onOpenMessage}
               anchorHtml={email.html}
               anchorAttachments={email.attachments}
+              highlight={highlight}
             />
           ) : (
             <>
@@ -299,7 +304,7 @@ export function EmailReader({
                   className="mt-6 whitespace-pre-wrap leading-7 text-fg/90"
                   style={{ fontSize: `${Math.round(15 * zoom)}px` }}
                 >
-                  <QuotedText text={email.body} />
+                  <QuotedText text={email.body} highlight={highlight} />
                 </SelectableText>
               )}
             </>
