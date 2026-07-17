@@ -58,6 +58,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // Auto-open the morning sweep at most once per session (and 12h via storage).
   const sweepPrompted = useRef(false);
   const [emails, setEmails] = useState<Email[]>([]);
+  // Latest list, read (not depended on) by mutateState so it can map the
+  // archived/trashed ids back to their senders for learning.
+  const emailsRef = useRef<Email[]>([]);
+  useEffect(() => {
+    emailsRef.current = emails;
+  }, [emails]);
   // Cache-wide search (all accounts & folders); null = not searching.
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Email[] | null>(null);
@@ -513,6 +519,32 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       // サーバ書き込みの完了 promise を返す（呼び出し側が await すれば反映後に
       // リロードできる。await しない archive/trash 単発は従来どおり即時）。
       showToast(ids.length > 1 ? `${label}（${ids.length}通）` : label);
+      // 学習: 受信箱で直接さばいた処分も教師信号にする（朝の一凪ダイアログ以外
+      // の操作が今まで学習に反映されていなかった）。ゴミ箱=「低＋ゴミ箱行き」、
+      // アーカイブ=「アーカイブ行き」（重要度は変えない＝対応済みの重要メールを
+      // 誤って低にしない）。並行PATCHの競合を避けるため1リクエストにまとめる。
+      if (state === "archived" || state === "trashed") {
+        const senders = [
+          ...new Set(
+            ids
+              .map((id) => emailsRef.current.find((e) => e.id === id)?.from.email)
+              .filter((v): v is string => Boolean(v)),
+          ),
+        ];
+        if (senders.length) {
+          void fetch("/api/sweep/learn", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              signals: senders.map((fromEmail) =>
+                state === "trashed"
+                  ? { fromEmail, importance: "low", action: "trash" }
+                  : { fromEmail, action: "archive" },
+              ),
+            }),
+          }).catch(() => {});
+        }
+      }
       return (async () => {
         const results = await Promise.all(
           ids.map((id) =>
