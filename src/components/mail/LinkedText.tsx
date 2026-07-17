@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
+import { markTerms } from "./highlight";
 
 /**
  * Plain text with live http(s) links. Trailing punctuation (Japanese
@@ -10,13 +11,14 @@ import { Fragment } from "react";
 const URL_RE = /(https?:\/\/[^\s<>"'「」『』（）()]+)/g;
 const TRAILING = /[.,;:!?。、）)\]］>»…]+$/;
 
-export function LinkedText({ text }: { text: string }) {
+export function LinkedText({ text, highlight = [] }: { text: string; highlight?: string[] }) {
   const parts = text.split(URL_RE);
   return (
     <>
       {parts.map((part, i) => {
         // split() with a capture group alternates text / match.
-        if (i % 2 === 0) return <Fragment key={i}>{part}</Fragment>;
+        // Non-URL segments get search-term highlighting; URLs stay clickable.
+        if (i % 2 === 0) return <Fragment key={i}>{markTerms(part, highlight)}</Fragment>;
         const trail = part.match(TRAILING)?.[0] ?? "";
         const url = trail ? part.slice(0, -trail.length) : part;
         return (

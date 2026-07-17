@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LinkedText } from "./LinkedText";
+import { parseTerms } from "./highlight";
 
 /** A line that introduces a quoted reply (kept with the quote when collapsing). */
 function isAttribution(l: string): boolean {
@@ -58,17 +59,19 @@ function tidyPlainBody(text: string): string {
   return text.replace(/([^\n])■/g, "$1\n■").replace(/\n{3,}/g, "\n\n");
 }
 
-/** Body text with the quoted history collapsed behind a "···" toggle. */
-export function QuotedText({ text: raw }: { text: string }) {
+/** Body text with the quoted history collapsed behind a "···" toggle.
+ *  `highlight` (search query) marks matches — set only when opened from search. */
+export function QuotedText({ text: raw, highlight }: { text: string; highlight?: string }) {
   const text = tidyPlainBody(raw);
+  const terms = parseTerms(highlight);
   const { head, quoted } = splitQuotedReply(text);
   const [show, setShow] = useState(false);
 
-  if (!quoted) return <LinkedText text={text} />;
+  if (!quoted) return <LinkedText text={text} highlight={terms} />;
 
   return (
     <>
-      {head && <LinkedText text={head} />}
+      {head && <LinkedText text={head} highlight={terms} />}
       <button
         onClick={() => setShow((s) => !s)}
         title={show ? "引用（過去のやりとり）を隠す" : "引用（過去のやりとり）を表示"}
@@ -78,7 +81,7 @@ export function QuotedText({ text: raw }: { text: string }) {
       </button>
       {show && (
         <div className="mt-1 border-l-2 border-border pl-3 text-fg-muted">
-          <LinkedText text={quoted} />
+          <LinkedText text={quoted} highlight={terms} />
         </div>
       )}
     </>

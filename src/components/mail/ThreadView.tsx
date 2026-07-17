@@ -44,6 +44,7 @@ export function ThreadView({
   onOpen,
   anchorHtml,
   anchorAttachments,
+  highlight,
 }: {
   messages: Email[];
   selectedId: string;
@@ -53,6 +54,8 @@ export function ThreadView({
    *  fetched them), so its card renders instantly without a second round-trip. */
   anchorHtml?: string;
   anchorAttachments?: Attachment[];
+  /** Search query to highlight in plain-text card bodies (search mode only). */
+  highlight?: string;
 }) {
   const lastId = messages[messages.length - 1]?.id;
   const [view, setView] = useState<"cards" | "chat">(loadViewPref);
@@ -275,7 +278,7 @@ export function ThreadView({
                   </p>
                 ) : (
                   <SelectableText className="whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
-                    <QuotedText text={m.body} />
+                    <QuotedText text={m.body} highlight={highlight} />
                   </SelectableText>
                 )}
               </div>
