@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import { ImageOff, Image as ImageIcon } from "lucide-react";
 import { parseTerms } from "./highlight";
@@ -51,6 +51,27 @@ function highlightDom(doc: Document, terms: string[]) {
     }
     if (last < text.length) frag.appendChild(doc.createTextNode(text.slice(last)));
     node.parentNode?.replaceChild(frag, node);
+  }
+}
+
+/**
+ * Bring an iframe's first search match into view. The iframe is content-sized
+ * (no internal scroll), so we scroll the parent's nearest scrollable ancestor
+ * to the mark's position (iframe offset + mark offset within it).
+ */
+function scrollMatchIntoView(iframe: HTMLIFrameElement, mark: HTMLElement) {
+  let sc: HTMLElement | null = iframe.parentElement;
+  while (sc) {
+    const oy = getComputedStyle(sc).overflowY;
+    if ((oy === "auto" || oy === "scroll") && sc.scrollHeight > sc.clientHeight) break;
+    sc = sc.parentElement;
+  }
+  // mark rect is relative to the iframe's own (unscrolled) viewport.
+  const targetY = iframe.getBoundingClientRect().top + mark.getBoundingClientRect().top;
+  if (sc) {
+    sc.scrollBy({ top: targetY - sc.getBoundingClientRect().top - 96, behavior: "smooth" });
+  } else {
+    window.scrollBy({ top: targetY - 96, behavior: "smooth" });
   }
 }
 
@@ -114,12 +135,27 @@ export function HtmlMailView({
     };
   }, [html, showImages, fontScale, highlight]);
 
+  // Scroll only once per (html, highlight) — not on every image-toggle reload.
+  const scrolledRef = useRef(false);
+  useEffect(() => {
+    scrolledRef.current = false;
+  }, [html, highlight]);
+
   // Sized to content. sandbox has NO allow-scripts, so allow-same-origin is
   // safe here and lets us measure the document height.
   const fit = () => {
     const el = iframeRef.current;
     const h = el?.contentDocument?.documentElement?.scrollHeight;
     if (el && h) el.style.height = `${Math.min(h + 8, 20000)}px`;
+    // After sizing, bring the first search match into view (search mode only).
+    if (!scrolledRef.current && el) {
+      const mark = el.contentDocument?.querySelector("mark.asanagi-hl") as HTMLElement | null;
+      if (mark) {
+        scrolledRef.current = true;
+        // Let the new height settle before measuring positions.
+        requestAnimationFrame(() => scrollMatchIntoView(el, mark));
+      }
+    }
   };
 
   return (
