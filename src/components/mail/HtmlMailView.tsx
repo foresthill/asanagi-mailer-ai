@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import { ImageOff, Image as ImageIcon } from "lucide-react";
+import { parseTerms } from "./highlight";
 
 /**
  * Safe rich rendering of HTML mail:
@@ -11,16 +12,61 @@ import { ImageOff, Image as ImageIcon } from "lucide-react";
  *  - remote images are BLOCKED by default (tracking-pixel privacy, local-first)
  *    and loaded only when the user opts in per email
  */
+/**
+ * Wrap search-term matches in <mark class="asanagi-hl"> inside the parsed mail
+ * DOM (text nodes only — never touches tags/attributes, so markup can't break).
+ * Case-insensitive; skips script/style. Runs on the already-sanitized doc.
+ */
+function highlightDom(doc: Document, terms: string[]) {
+  if (!terms.length) return;
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const lowTerms = terms.map((t) => t.toLowerCase());
+  const re = new RegExp(`(${terms.map(escapeRe).join("|")})`, "gi");
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const tag = node.parentElement?.tagName;
+      if (!tag || tag === "SCRIPT" || tag === "STYLE" || tag === "MARK") {
+        return NodeFilter.FILTER_REJECT;
+      }
+      const v = (node.nodeValue ?? "").toLowerCase();
+      return lowTerms.some((t) => v.includes(t)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+    },
+  });
+  const targets: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) targets.push(n as Text);
+  for (const node of targets) {
+    const text = node.nodeValue ?? "";
+    const frag = doc.createDocumentFragment();
+    re.lastIndex = 0;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      if (m.index > last) frag.appendChild(doc.createTextNode(text.slice(last, m.index)));
+      const mark = doc.createElement("mark");
+      mark.className = "asanagi-hl";
+      mark.textContent = m[0];
+      frag.appendChild(mark);
+      last = m.index + m[0].length;
+      if (m.index === re.lastIndex) re.lastIndex++; // guard against zero-width
+    }
+    if (last < text.length) frag.appendChild(doc.createTextNode(text.slice(last)));
+    node.parentNode?.replaceChild(frag, node);
+  }
+}
+
 export function HtmlMailView({
   html,
   fontScale = 1,
   embedded = false,
+  highlight,
 }: {
   html: string;
   fontScale?: number;
   /** Inside a thread card: drop the frame (border/rounded/top margin) so the
    *  card's own padding is the only padding — no "box inside a box". */
   embedded?: boolean;
+  /** Search query to highlight in the mail body (search mode only). */
+  highlight?: string;
 }) {
   const [showImages, setShowImages] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -50,6 +96,8 @@ export function HtmlMailView({
       }
     });
 
+    highlightDom(doc, parseTerms(highlight));
+
     const body = doc.body.innerHTML;
     return {
       blockedImages: blocked,
@@ -61,9 +109,10 @@ export function HtmlMailView({
   table { max-width: 100%; }
   a { color: #5a52c7; }
   blockquote { border-left: 2px solid #ddd; margin-left: 0; padding-left: 1em; color: #666; }
+  mark.asanagi-hl { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }
 </style></head><body>${body}</body></html>`,
     };
-  }, [html, showImages, fontScale]);
+  }, [html, showImages, fontScale, highlight]);
 
   // Sized to content. sandbox has NO allow-scripts, so allow-same-origin is
   // safe here and lets us measure the document height.

@@ -298,7 +298,7 @@ export function EmailReader({
                 </div>
               )}
               {email.html && !textMode ? (
-                <HtmlMailView html={email.html} fontScale={zoom} />
+                <HtmlMailView html={email.html} fontScale={zoom} highlight={highlight} />
               ) : (
                 <SelectableText
                   className="mt-6 whitespace-pre-wrap leading-7 text-fg/90"
