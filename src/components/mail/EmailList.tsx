@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   Archive,
   Check,
@@ -520,8 +520,16 @@ function EmailListItem({
   // Sent mail: the avatar represents the recipient (the row shows "To: …").
   const face = email.state === "sent" && email.to[0] ? email.to[0] : email.from;
   const showCheckbox = checked || selectionActive;
+  // Bring the selected row into view when it becomes active off-screen (e.g.
+  // opening a thread message that lives in this folder / after a folder switch).
+  // "nearest" = a no-op when the row is already visible (normal clicks).
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (active) rowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [active]);
   return (
     <div
+      ref={rowRef}
       onClick={onSelect}
       className={cn(
         "group relative mb-0.5 cursor-pointer rounded-xl px-3 py-3 transition-colors",

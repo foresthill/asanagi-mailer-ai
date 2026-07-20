@@ -484,6 +484,18 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         setSelected(data.email);
         classify(data.email);
         loadThread(data.email);
+        // 一覧を追従: 開いたメールが今の一覧に無く（例: スレッドの「このメールを
+        // 開く」でアーカイブ済みを開いた）別フォルダに属するなら、左の一覧を
+        // そのフォルダへ切り替える（選択はそのまま＝行が現れてハイライト＋
+        // 自動スクロール）。検索中はクロスフォルダ表示なので触らない。
+        if (
+          searchResults === null &&
+          data.email.state !== folder &&
+          !emailsRef.current.some((e) => e.id === id)
+        ) {
+          setFolder(data.email.state);
+          loadList(data.email.state, account);
+        }
       } else {
         // 開けなかった理由を黙殺しない（Gmailトークン失効など）。
         setSelectedId(null);
@@ -491,7 +503,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         if (data.needsReauth) setShowSettings(true); // 再認証へ誘導
       }
     },
-    [classify, loadThread, compose, composeMinimized],
+    [
+      classify,
+      loadThread,
+      compose,
+      composeMinimized,
+      searchResults,
+      folder,
+      loadList,
+      account,
+    ],
   );
 
   // Thread-unit by default: a conversation row carries every member id, so
