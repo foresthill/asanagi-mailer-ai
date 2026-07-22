@@ -214,6 +214,23 @@ export async function saveJudgmentProfile(text: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// 文章作成メモ（返信・添削のルール） — 判定用とは別枠。返信下書き(reply)と
+// 添削(suggest)のプロンプトに注入する、ユーザー自筆の文体ルール。
+// 例:「絵文字は使わない」「過剰敬語にしない」「勝手に日程を確約しない」。
+// AIが変な修正をしたら1行足すだけで恒久的に反映される（in-context 学習）。
+// ---------------------------------------------------------------------------
+const WRITING_NOTE = "writing-note.json";
+
+export async function getWritingNote(): Promise<string> {
+  const d = await readJson<{ text: string }>(WRITING_NOTE, { text: "" });
+  return d.text ?? "";
+}
+
+export async function saveWritingNote(text: string): Promise<void> {
+  await writeJson(WRITING_NOTE, { text: text.slice(0, 4000) });
+}
+
+// ---------------------------------------------------------------------------
 // AI返信での「自分の名乗り／署名」。アカウント別（gmail / imap 等）に、返信を
 // 誰として書くかをAIに伝える。スレッド履歴の送信者名が別人でも、返信者は
 // 「そのアカウントの本人」であることを明示するために使う。

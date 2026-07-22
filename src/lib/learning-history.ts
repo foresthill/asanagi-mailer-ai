@@ -27,6 +27,7 @@ const TRACKED = [
   "reply-signatures.json",
   "notes.json",
   "sweep-actions.json", // 朝の一凪で学習した処分（archive/trash）
+  "writing-note.json", // 返信・添削の文体ルール（AIへのメモ）
 ];
 const TRACKED_SET = new Set(TRACKED);
 

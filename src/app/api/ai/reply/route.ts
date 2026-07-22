@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
-import { REPLY_SYSTEM, emailContext, historyContext, replyPerspective } from "@/lib/ai/prompts";
-import { getReplySignature, getEmailSettings } from "@/lib/store";
+import {
+  REPLY_SYSTEM,
+  emailContext,
+  historyContext,
+  replyPerspective,
+  writingNoteBlock,
+} from "@/lib/ai/prompts";
+import { getReplySignature, getEmailSettings, getWritingNote } from "@/lib/store";
 import { logAiUsage } from "@/lib/db";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import type { DraftRequest } from "@/lib/types";
@@ -48,9 +54,11 @@ export async function POST(req: Request) {
     const isOwn = !!selfAddr && email.from.email.toLowerCase() === selfAddr;
     // 自分の過去メールなら差出人名＝自分の名。そうでなければアカウントの表示名。
     const selfName = (isOwn ? email.from.name : settings.imap?.fromName) || undefined;
+    const writingNote = await getWritingNote();
     const prompt = [
       "以下のメールに対する返信の下書きを作成してください。",
       replyPerspective({ selfName, isOwn, signature }),
+      writingNoteBlock(writingNote),
       guidance ? `補足の指示: ${guidance}` : "",
       // Conversation so far — agreed dates, open questions, tone.
       ...(maskedHistory?.length

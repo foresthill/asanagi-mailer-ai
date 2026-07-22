@@ -112,6 +112,17 @@ export function profileBlock(profile: string): string {
   return ["", "## ユーザーの嗜好メモ（最優先で尊重してください）", p].join("\n");
 }
 
+/**
+ * Inject the user's writing-style rules (文章作成メモ) into a reply/refine
+ * prompt. User-authored文体ルール (e.g. "絵文字は使わない") — sent as-is (not
+ * PII masked, like profileBlock) and must override generic phrasing habits.
+ */
+export function writingNoteBlock(note: string): string {
+  const n = note.trim();
+  if (!n) return "";
+  return ["", "## 文章作成のルール（ユーザー指定・最優先で守る）", n].join("\n");
+}
+
 export const CLASSIFY_SYSTEM = `あなたはユーザーの受信メールの重要度を判定するアシスタントです。
 重要度は high / normal / low の3段階。判定の根拠を日本語で一文添えます。
 
