@@ -11,8 +11,9 @@ export interface EmailProvider {
   /** List messages in a mailbox, newest first. */
   list(state: MailboxState): Promise<Email[]>;
 
-  /** Fetch a single message (full body). */
-  get(id: string): Promise<Email | null>;
+  /** Fetch a single message (full body). `messageIdHint` (the cached Message-ID)
+   *  lets IMAP relocate a mail whose id went stale after an archive/move. */
+  get(id: string, messageIdHint?: string): Promise<Email | null>;
 
   /** Move a message to inbox / archived / trashed. */
   setState(id: string, state: MailboxState): Promise<void>;
@@ -52,5 +53,6 @@ export interface EmailProvider {
   getAttachment?(
     messageId: string,
     attachmentId: string,
+    messageIdHint?: string,
   ): Promise<{ filename: string; mimeType: string; content: Buffer } | null>;
 }

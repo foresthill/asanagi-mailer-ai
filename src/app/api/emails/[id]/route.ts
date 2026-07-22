@@ -45,7 +45,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     });
   };
   try {
-    const email = await provider.get(id);
+    // Pass the cached Message-ID so IMAP can relocate a mail whose id went stale
+    // after archiving (moved folders → new UID) — otherwise its body/attachments
+    // vanish and downloads 404.
+    const hint = account ? (cachedGet(account, id)?.messageId ?? undefined) : undefined;
+    const email = await provider.get(id, hint);
     // Live lookup miss (e.g. the message was archived/moved so this folder's
     // UID is gone) — serve the cached copy rather than a dead "not found".
     if (!email) return serveCached() ?? NextResponse.json({ error: "not found" }, { status: 404 });

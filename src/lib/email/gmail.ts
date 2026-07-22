@@ -281,6 +281,7 @@ export class GmailProvider implements EmailProvider {
       .sort((a, b) => +new Date(b.date) - +new Date(a.date));
   }
 
+  // (messageIdHint is unused for Gmail — ids are stable across label changes.)
   async get(id: string): Promise<Email | null> {
     const res = await this.gmail.users.messages.get({ userId: "me", id, format: "full" });
     if (!res.data) return null;
