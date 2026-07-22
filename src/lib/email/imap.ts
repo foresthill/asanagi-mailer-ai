@@ -326,47 +326,98 @@ export class ImapProvider implements EmailProvider {
     return { folder: id.slice(0, i), uid: id.slice(i + 1) };
   }
 
-  async get(id: string): Promise<Email | null> {
+  /** Fetch one message by UID inside a folder (lock-scoped). */
+  private async fetchInFolder(
+    c: ImapFlow,
+    folder: string,
+    uid: string | number,
+    opts: Parameters<ImapFlow["fetchOne"]>[1],
+  ) {
+    const lock = await c.getMailboxLock(folder);
+    try {
+      return (await c.fetchOne(String(uid), opts, { uid: true })) || null;
+    } finally {
+      lock.release();
+    }
+  }
+
+  /**
+   * Find a message's CURRENT folder/uid by Message-ID. Needed because IMAP UIDs
+   * are per-folder: archiving MOVES the mail to the Archive folder and it gets a
+   * NEW uid, so the cached id (`INBOX:uid`) becomes stale — get()/getAttachment()
+   * then fail (blank body / 404 download). Search archive first (the common
+   * case), then the others.
+   */
+  private async relocate(
+    c: ImapFlow,
+    messageId: string,
+  ): Promise<{ folder: string; uid: number } | null> {
+    const f = await this.resolveFolders(c);
+    const mid = messageId.replace(/^<|>$/g, "");
+    const folders = [f.archived, f.inbox, f.sent, f.trashed].filter(
+      (x, i, a) => x && a.indexOf(x) === i,
+    );
+    for (const folder of folders) {
+      const lock = await c.getMailboxLock(folder);
+      try {
+        const uids = (await c.search({ header: { "message-id": mid } }, { uid: true })) as number[];
+        if (uids?.length) return { folder, uid: uids[uids.length - 1] };
+      } catch {
+        /* folder unsearchable — try the next */
+      } finally {
+        lock.release();
+      }
+    }
+    return null;
+  }
+
+  async get(id: string, messageIdHint?: string): Promise<Email | null> {
     const { folder, uid } = this.splitId(id);
     const c = this.connection();
     await c.connect();
     try {
       const folders = await this.resolveFolders(c);
-      const state =
-        (Object.keys(folders) as MailboxState[]).find((s) => folders[s] === folder) ?? "inbox";
-      const lock = await c.getMailboxLock(folder);
-      try {
-        const msg = await c.fetchOne(uid, { envelope: true, flags: true, source: true }, { uid: true });
-        return msg ? await this.materialize(msg, state, folder) : null;
-      } finally {
-        lock.release();
+      const fetchOpts = { envelope: true, flags: true, source: true } as const;
+      let loc: { folder: string; uid: string | number } = { folder, uid };
+      let msg = await this.fetchInFolder(c, folder, uid, fetchOpts);
+      // Stale id (moved/archived → new UID) → relocate by Message-ID.
+      if (!msg && messageIdHint) {
+        const r = await this.relocate(c, messageIdHint);
+        if (r) {
+          loc = r;
+          msg = await this.fetchInFolder(c, r.folder, r.uid, fetchOpts);
+        }
       }
+      if (!msg) return null;
+      const state =
+        (Object.keys(folders) as MailboxState[]).find((s) => folders[s] === loc.folder) ?? "inbox";
+      return await this.materialize(msg, state, loc.folder);
     } finally {
       await c.logout();
     }
   }
 
   /** On-demand attachment bytes — re-fetch the message and pick by index. */
-  async getAttachment(id: string, attachmentId: string) {
+  async getAttachment(id: string, attachmentId: string, messageIdHint?: string) {
     const { folder, uid } = this.splitId(id);
     const c = this.connection();
     await c.connect();
     try {
-      const lock = await c.getMailboxLock(folder);
-      try {
-        const msg = await c.fetchOne(uid, { source: true }, { uid: true });
-        if (!msg || !msg.source) return null;
-        const parsed = await simpleParser(msg.source, { skipImageLinks: true });
-        const att = parsed.attachments?.[Number(attachmentId)];
-        if (!att) return null;
-        return {
-          filename: repairMojibake(att.filename ?? "添付ファイル"),
-          mimeType: att.contentType ?? "application/octet-stream",
-          content: att.content as Buffer,
-        };
-      } finally {
-        lock.release();
+      let msg = await this.fetchInFolder(c, folder, uid, { source: true });
+      // Stale id after archiving → relocate by Message-ID so the download works.
+      if (!msg?.source && messageIdHint) {
+        const r = await this.relocate(c, messageIdHint);
+        if (r) msg = await this.fetchInFolder(c, r.folder, r.uid, { source: true });
       }
+      if (!msg?.source) return null;
+      const parsed = await simpleParser(msg.source, { skipImageLinks: true });
+      const att = parsed.attachments?.[Number(attachmentId)];
+      if (!att) return null;
+      return {
+        filename: repairMojibake(att.filename ?? "添付ファイル"),
+        mimeType: att.contentType ?? "application/octet-stream",
+        content: att.content as Buffer,
+      };
     } finally {
       await c.logout();
     }
