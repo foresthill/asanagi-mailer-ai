@@ -5,6 +5,7 @@ import { X, Loader2, Check, AlertCircle, KeyRound, Sparkles } from "lucide-react
 import type { AIProvider } from "@/lib/types";
 import { EmailConnectSection } from "./EmailConnectSection";
 import { ReplySignatureSection } from "./ReplySignatureSection";
+import { WritingNoteSection } from "./WritingNoteSection";
 
 type ProviderChoice = AIProvider | "auto";
 
@@ -334,6 +335,8 @@ export function ConnectionsSettings({
             <AiUsageSection />
 
             <ReplySignatureSection />
+
+            <WritingNoteSection />
 
             <div className="border-t border-border pt-4">
               <EmailConnectSection />
