@@ -46,38 +46,54 @@ export const REPLY_SYSTEM = `あなたはプロのメールアシスタントで
 - 署名やプレースホルダ（[あなたの名前] 等）は最小限にする。`;
 
 /**
- * Fix the reply PERSPECTIVE (who is writing to whom) and, optionally, the name.
- * Without this the model infers perspective from the target message and gets it
- * wrong when the "reply target" is the user's OWN earlier message in the thread
- * (it then writes as the other party, replying to yourself). We always state
- * that the writer is the account owner, replying to the other participant.
+ * Fix the message PERSPECTIVE (who is writing, to whom) — the single most
+ * dangerous place to get wrong: if the model infers perspective from the target
+ * message it will impersonate the OTHER party (e.g. draft the recipient's reply,
+ * signed as them). Sending that = a real incident. So we pin the writer to the
+ * account owner and add a hard "never impersonate the counterparty" guard.
  *
- * @param selfName  the account owner's display name (from the account), if known
- * @param isOwn     true when the reply-target message was sent BY the account
- *                  owner (so the model must not "reply to itself")
- * @param signature user-authored 名乗り/署名 (per-account); refines the sign-off
+ * Two modes:
+ * - "reply": the target is a message FROM the other party → reply as the owner.
+ * - "followup": the target is the owner's OWN sent mail with no reply yet →
+ *   this is NOT a reply (there is nothing to reply to); it's an additional
+ *   message / reminder to the same recipients, written as the owner. Framing it
+ *   as a "reply" is what makes the model hallucinate the recipient's response.
+ *
+ * @param selfName        the account owner's display name (the ONLY valid signer)
+ * @param counterpartyName who we are writing TO (the forbidden identity to sign as)
+ * @param mode            "reply" (default) or "followup"
+ * @param signature       user-authored 名乗り/署名 (per-account); refines the sign-off
  */
 export function replyPerspective(opts: {
   selfName?: string;
-  isOwn?: boolean;
+  counterpartyName?: string;
+  mode?: "reply" | "followup";
   signature?: string;
 }): string {
   const name = opts.selfName?.trim();
+  const other = opts.counterpartyName?.trim();
   const sig = opts.signature?.trim();
-  const lines = ["", "## あなた（返信者）について"];
-  lines.push(
-    name
-      ? `あなたは「${name}」本人として、このスレッドの相手（あなた以外の参加者）に返信します。宛名は相手、署名はあなた自身です。`
-      : "あなたはこのメールの受信者本人として、相手（差出人）に返信します。相手になりきって自分自身に返信してはいけません。",
-  );
-  if (opts.isOwn) {
+  const me = name ? `「${name}」本人` : "このメールアカウントの持ち主本人";
+  const lines = ["", "## あなた（送信者）について"];
+
+  if (opts.mode === "followup") {
     lines.push(
-      "重要: 下の「返信対象の受信メール」は、あなた自身が過去に送ったメールです。自分に返信するのではなく、直前の相手からのメール（これまでのやりとりを参照）に対する、あなたからの続きの返信を書いてください。",
+      `あなたは${me}です。下の「元メール」は、あなたが既に送信したもので、相手からの返信はまだありません。`,
+      `これは「返信」ではありません。同じ宛先（${other ? `「${other}」` : "元メールの宛先"}）への、あなたからの追加連絡（フォローアップ／リマインド）です。`,
+      `宛名は相手、差出人・署名はあなた自身（${name ?? "アカウント本人"}）。相手の受領返事や相手の発言を代筆してはいけません。`,
+    );
+  } else {
+    lines.push(
+      `あなたは${me}として、このスレッドの相手（あなた以外の参加者${other ? `＝「${other}」` : ""}）に返信します。宛名は相手、署名はあなた自身です。`,
     );
   }
-  if (sig) {
-    lines.push(`名乗り・署名は次を用いてください: ${sig}`);
-  }
+
+  // Hard guard — belt-and-suspenders against identity flip (the incident case).
+  lines.push(
+    `【厳守】あなたは相手（${other ?? "宛先の人物"}）になりすましてはいけません。相手の氏名・会社を名乗らず、相手からのメールを代筆せず、署名は必ず「${name ?? "あなた自身"}」にしてください。`,
+  );
+
+  if (sig) lines.push(`名乗り・署名は次を用いてください: ${sig}`);
   return lines.join("\n");
 }
 

@@ -54,10 +54,20 @@ export async function POST(req: Request) {
     const isOwn = !!selfAddr && email.from.email.toLowerCase() === selfAddr;
     // 自分の過去メールなら差出人名＝自分の名。そうでなければアカウントの表示名。
     const selfName = (isOwn ? email.from.name : settings.imap?.fromName) || undefined;
+    // 自分の送信メールに対する操作は「返信」ではなく「フォローアップ」。相手が
+    // まだ返していないメールに"返信"させると、AIが相手の受領返事を代筆して
+    // 相手になりすます（＝送信事故）。isOwn なら追加連絡として組み立てる。
+    const mode: "reply" | "followup" = isOwn ? "followup" : "reply";
+    // 宛名にする相手＝なりすまし禁止対象。フォローアップは元メールの宛先、
+    // 通常返信は差出人（表示名はマスク対象外なのでそのまま使える）。
+    const counterpartyName =
+      (mode === "followup" ? email.to?.[0]?.name : email.from.name) || undefined;
     const writingNote = await getWritingNote();
     const prompt = [
-      "以下のメールに対する返信の下書きを作成してください。",
-      replyPerspective({ selfName, isOwn, signature }),
+      mode === "followup"
+        ? "以下は、あなたが既に送信したメールです。同じ宛先への追加連絡（フォローアップ／リマインド）の下書きを作成してください。相手からの返信を書くのではありません。"
+        : "以下のメールに対する返信の下書きを作成してください。",
+      replyPerspective({ selfName, counterpartyName, mode, signature }),
       writingNoteBlock(writingNote),
       guidance ? `補足の指示: ${guidance}` : "",
       // Conversation so far — agreed dates, open questions, tone.
@@ -65,7 +75,7 @@ export async function POST(req: Request) {
         ? ["", "--- これまでのやりとり（古い順・抜粋） ---", historyContext(maskedHistory, email.id)]
         : []),
       "",
-      "--- 返信対象の受信メール ---",
+      mode === "followup" ? "--- あなたが送信した元メール ---" : "--- 返信対象の受信メール ---",
       emailContext(target),
     ]
       .filter(Boolean)
