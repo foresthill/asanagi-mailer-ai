@@ -46,6 +46,16 @@ export async function POST(req: Request) {
     // 構造化PIIをローカルでトークン化（下書き・元メール・選択範囲すべて
     // 同じトークン表を共有）。出力は端末側で原文に復元する。
     const masker = new PiiMasker();
+    if (cfg.piiMask && cfg.nerMask) {
+      await masker.learnEntities([
+        draft,
+        subject,
+        email?.subject,
+        email?.body,
+        email?.from.name,
+        ...(email?.to?.map((t) => t.name) ?? []),
+      ]);
+    }
     const maskedDraft = cfg.piiMask ? masker.mask(draft) : draft;
     const maskedEmail = cfg.piiMask && email ? masker.maskEmail(email) : email;
     const maskedSel = cfg.piiMask && selection?.text ? masker.mask(selection.text) : selection?.text;

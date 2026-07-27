@@ -74,11 +74,64 @@ export class PiiMasker {
   /** original → token (same value always gets the same token). */
   private seen = new Map<string, string>();
   private counters = new Map<string, number>();
+  /** NER-detected names/orgs to dictionary-replace (longest-first). */
+  private entities: string[] = [];
 
-  /** Replace structured PII in `text` with reversible tokens. */
+  /**
+   * Learn person/company names from `texts` via local NER (opt-in) and register
+   * them as reversible tokens, so a subsequent mask()/maskEmail() also hides
+   * them. Dynamic import keeps the ML runtime out of the path unless enabled.
+   * Best-effort: NER failure must never block an AI call (structured PII is
+   * still masked by regex), so errors are swallowed.
+   */
+  async learnEntities(texts: (string | undefined)[]): Promise<void> {
+    const joined = texts.filter(Boolean).join("\n").trim();
+    if (!joined) return;
+    try {
+      const { detectEntities } = await import("./ner");
+      for (const e of await detectEntities(joined)) {
+        this.registerEntity(e.text, e.type === "ORG" ? "ORG" : "NAME");
+      }
+    } catch (err) {
+      console.warn("[pii] NER masking skipped:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  /** Force-mask a specific personal/company name and return its token. Used for
+   *  the reply perspective guard so the principal names (writer + counterparty)
+   *  are tokenized consistently with the body — otherwise they'd leak in plain
+   *  text. Idempotent; registering here also masks the name in body/name fields
+   *  via mask(). No-op (returns the input) for empty names. */
+  maskName(name: string | undefined): string | undefined {
+    if (!name?.trim()) return name;
+    this.registerEntity(name.trim(), "NAME");
+    return this.mask(name);
+  }
+
+  /** Register one arbitrary surface string (a NER name/org) as a token. */
+  private registerEntity(surface: string, label: "NAME" | "ORG"): void {
+    const s = surface.trim();
+    if (s.length < 2 || this.seen.has(s)) return;
+    const n = (this.counters.get(label) ?? 0) + 1;
+    this.counters.set(label, n);
+    const token = `[${label}_${n}]`;
+    this.map.set(token, s);
+    this.seen.set(s, token);
+    // Keep longest-first so a longer name masks before its substrings.
+    this.entities.push(s);
+    this.entities.sort((a, b) => b.length - a.length);
+  }
+
+  /** Replace structured PII (+ any learned names/orgs) in `text` with tokens. */
   mask(text: string): string {
     if (!text) return text;
     let out = text;
+    // Dictionary pass first: NER-learned names/orgs are arbitrary strings the
+    // regex patterns can't match. Longest-first (see registerEntity).
+    for (const key of this.entities) {
+      const token = this.seen.get(key);
+      if (token) out = out.split(key).join(token);
+    }
     for (const p of PATTERNS) {
       out = out.replace(p.re, (raw) => {
         if (p.accept && !p.accept(raw)) return raw;
@@ -155,12 +208,17 @@ export class PiiMasker {
     return token;
   }
 
-  /** Masked copy of an email for AI prompts. The display NAME is kept (needed
-   *  for greeting/宛名 quality), but From/To/Cc/Bcc email ADDRESSES are masked
-   *  (the domain identifies the company = confidential) along with subject,
-   *  snippet and body. Same address → same token as its occurrences in the body. */
+  /** Masked copy of an email for AI prompts. From/To/Cc/Bcc email ADDRESSES are
+   *  masked (the domain identifies the company = confidential) along with
+   *  subject, snippet and body. Display NAMES pass through mask() too: without
+   *  NER learning they're unchanged (kept for greeting/宛名 quality); with NER
+   *  on, a learned person/company name gets the same token as in the body. */
   maskEmail(email: Email): Email {
-    const addr = <T extends EmailAddress>(a: T): T => ({ ...a, email: this.mask(a.email) });
+    const addr = <T extends EmailAddress>(a: T): T => ({
+      ...a,
+      name: a.name ? this.mask(a.name) : a.name,
+      email: this.mask(a.email),
+    });
     return {
       ...email,
       from: addr(email.from),

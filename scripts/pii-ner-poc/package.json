@@ -1,0 +1,9 @@
+{
+  "name": "pii-ner-poc",
+  "private": true,
+  "type": "module",
+  "description": "Isolated PoC harness for local Japanese NER (人名・社名マスキング). NOT part of the app bundle.",
+  "dependencies": {
+    "@huggingface/transformers": "^3.0.0"
+  }
+}

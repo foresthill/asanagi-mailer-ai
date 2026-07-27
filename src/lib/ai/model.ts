@@ -52,6 +52,8 @@ export interface AIConfig {
   source: "settings" | "env";
   /** 構造化PIIをAI送信前にマスクする（既定ON・lib/ai/pii.ts）。 */
   piiMask: boolean;
+  /** 人名・社名もローカルNERでマスクする（実験的・既定OFF・lib/ai/ner.ts）。 */
+  nerMask: boolean;
 }
 
 function envKey(p: AIProvider): string | undefined {
@@ -101,7 +103,16 @@ export async function loadAIConfig(): Promise<AIConfig> {
   const source: "settings" | "env" =
     storedKey(provider) || explicitSetting || s.model?.trim() ? "settings" : "env";
 
-  return { provider, model, judgmentModel, apiKey, configured, source, piiMask: s.piiMask ?? true };
+  return {
+    provider,
+    model,
+    judgmentModel,
+    apiKey,
+    configured,
+    source,
+    piiMask: s.piiMask ?? true,
+    nerMask: s.nerMask ?? false,
+  };
 }
 
 /** Build the language model for the given resolved config. */

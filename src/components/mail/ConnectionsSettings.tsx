@@ -19,6 +19,7 @@ interface View {
   model: string;
   judgmentModel: string;
   piiMask: boolean;
+  nerMask: boolean;
   keys: Record<AIProvider, KeyStatus>;
   defaultModels: Record<AIProvider, string>;
   cheapModels: Record<AIProvider, string>;
@@ -327,7 +328,38 @@ export function ConnectionsSettings({
                 <span className="text-[11px] leading-relaxed text-fg-subtle">
                   本文中のメールアドレス・電話番号・クレジットカード番号・12桁番号・郵便番号を
                   端末内で <code>[EMAIL_1]</code> 等に置換してからAIへ送り、AIの出力では原文に復元します
-                  （可逆なので品質への影響は最小）。人名のマスキングは今後対応予定です。
+                  （可逆なので品質への影響は最小）。人名・社名のマスキングは下の設定で追加できます。
+                </span>
+              </span>
+            </label>
+
+            <label
+              className={`flex items-start gap-2 rounded-xl border border-border bg-bg px-3 py-2.5 ${
+                view?.piiMask === false ? "opacity-50" : ""
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={view?.nerMask ?? false}
+                disabled={view?.piiMask === false}
+                onChange={async (e) => {
+                  const nerMask = e.target.checked;
+                  const res = await fetch("/api/settings/ai", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ nerMask }),
+                  });
+                  if (res.ok) setView((await res.json()) as View);
+                }}
+                className="mt-0.5 size-4 accent-[var(--accent,#6d5ae6)]"
+              />
+              <span className="flex flex-col gap-0.5 text-xs">
+                <span className="font-medium">人名・社名もマスク（ローカルNER・実験的）</span>
+                <span className="text-[11px] leading-relaxed text-fg-subtle">
+                  端末内のAIモデルで本文中の人名・会社名を検出し <code>[NAME_1]</code>・
+                  <code>[ORG_1]</code> に置換してからAIへ送ります（出力では原文に復元）。完全ローカルで
+                  外部送信なし。<strong>初回のみモデル読込に時間がかかり</strong>、メモリを数百MB使います。
+                  上の「個人情報マスキング」がONのときのみ有効。
                 </span>
               </span>
             </label>

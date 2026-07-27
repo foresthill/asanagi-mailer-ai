@@ -59,6 +59,14 @@ export async function POST(req: Request) {
   try {
     // 構造化PIIはローカルでトークン化してから送る（lib/ai/pii.ts）。
     const masker = new PiiMasker();
+    if (cfg.piiMask && cfg.nerMask) {
+      await masker.learnEntities([
+        email.subject,
+        email.body,
+        email.from.name,
+        ...(email.to?.map((t) => t.name) ?? []),
+      ]);
+    }
     const target = cfg.piiMask ? masker.maskEmail(email) : email;
     // 嗜好メモ（ユーザー自筆の指示）はマスクせず素のまま注入する。
     const profile = await getJudgmentProfile();
