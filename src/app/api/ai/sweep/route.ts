@@ -117,10 +117,17 @@ export async function POST(req: Request) {
   try {
     // One batched call for everything unknown — from/subject/preview only.
     const masker = new PiiMasker();
+    if (cfg.piiMask && cfg.nerMask) {
+      await masker.learnEntities(
+        undecided.flatMap((e) => [e.from.name, e.subject, e.snippet]),
+      );
+    }
     const lines = undecided.map((e, i) => {
-      // Keep the display name (helps the keep/trash call) but mask the address.
+      // Address always masked; the display name only when NER learned it as a
+      // person/company (mask() is a no-op otherwise, so triage keeps the name).
+      const fromName = cfg.piiMask ? masker.mask(e.from.name ?? "") : (e.from.name ?? "");
       const fromEmail = cfg.piiMask ? masker.mask(e.from.email) : e.from.email;
-      const from = `${e.from.name ?? ""} <${fromEmail}>`.trim();
+      const from = `${fromName} <${fromEmail}>`.trim();
       const subject = cfg.piiMask ? masker.mask(e.subject) : e.subject;
       const preview = (cfg.piiMask ? masker.mask(e.snippet) : e.snippet).slice(0, 140);
       return `${i}. From: ${from}\n   件名: ${subject}\n   冒頭: ${preview}`;

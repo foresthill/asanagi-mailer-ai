@@ -24,6 +24,7 @@ async function safeView() {
     model: s.model ?? "",
     judgmentModel: s.judgmentModel ?? "",
     piiMask: s.piiMask ?? true,
+    nerMask: s.nerMask ?? false,
     keys,
     defaultModels: DEFAULT_MODELS,
     cheapModels: CHEAP_MODELS,
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
   if (typeof body.model === "string") patch.model = body.model;
   if (typeof body.judgmentModel === "string") patch.judgmentModel = body.judgmentModel;
   if (typeof body.piiMask === "boolean") patch.piiMask = body.piiMask;
+  if (typeof body.nerMask === "boolean") patch.nerMask = body.nerMask;
   if (body.keys && typeof body.keys === "object") {
     const keys: Partial<Record<AIProvider, string>> = {};
     for (const p of PROVIDERS) {

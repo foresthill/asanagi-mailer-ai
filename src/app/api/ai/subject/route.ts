@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     // Body goes to the BYOK provider → mask structured PII first (関所), unmask
     // on the way out so the suggested subject reads naturally.
     const masker = new PiiMasker();
+    if (cfg.piiMask && cfg.nerMask) await masker.learnEntities([body]);
     const masked = cfg.piiMask ? masker.mask(body) : body;
     const prompt = `次のメール本文にふさわしい件名を1つだけ返してください。\n\n--- 本文 ---\n${masked}`;
     const { text, usage } = await generateText({

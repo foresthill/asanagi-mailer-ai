@@ -42,8 +42,7 @@ export async function POST(req: Request) {
     // 構造化PIIはローカルでトークン化してから送り、下書き中のトークンは
     // 端末側で原文に戻す（lib/ai/pii.ts — 可逆なので品質を落とさない）。
     const masker = new PiiMasker();
-    const target = cfg.piiMask ? masker.maskEmail(email) : email;
-    const maskedHistory = cfg.piiMask ? history?.map((m) => masker.maskEmail(m)) : history;
+    const nerOn = cfg.piiMask && cfg.nerMask;
     // 返信の視点（誰が誰に返信するか）を固定する。返信対象が自分の過去メール
     // でも「自分に返信」しないようにし、名乗りはアカウント本人＋任意の署名。
     const signature = await getReplySignature(email.account);
@@ -59,15 +58,40 @@ export async function POST(req: Request) {
     // 相手になりすます（＝送信事故）。isOwn なら追加連絡として組み立てる。
     const mode: "reply" | "followup" = isOwn ? "followup" : "reply";
     // 宛名にする相手＝なりすまし禁止対象。フォローアップは元メールの宛先、
-    // 通常返信は差出人（表示名はマスク対象外なのでそのまま使える）。
+    // 通常返信は差出人。
     const counterpartyName =
       (mode === "followup" ? email.to?.[0]?.name : email.from.name) || undefined;
+
+    // Opt-in NER masking of 人名・社名. Learn entities from the whole thread FIRST,
+    // then force-register the principal names — all BEFORE masking the email, so
+    // the body, address fields AND the perspective guard tokenize them
+    // consistently (reversible → identity logic and unmasked output unchanged).
+    if (nerOn) {
+      await masker.learnEntities([
+        email.subject,
+        email.body,
+        email.from.name,
+        ...(email.to?.map((t) => t.name) ?? []),
+        ...(history?.flatMap((h) => [h.subject, h.body]) ?? []),
+      ]);
+    }
+    const pSelfName = nerOn ? masker.maskName(selfName) : selfName;
+    const pCounterparty = nerOn ? masker.maskName(counterpartyName) : counterpartyName;
+
+    const target = cfg.piiMask ? masker.maskEmail(email) : email;
+    const maskedHistory = cfg.piiMask ? history?.map((m) => masker.maskEmail(m)) : history;
+    const pSignature = nerOn && signature ? masker.mask(signature) : signature;
     const writingNote = await getWritingNote();
     const prompt = [
       mode === "followup"
         ? "以下は、あなたが既に送信したメールです。同じ宛先への追加連絡（フォローアップ／リマインド）の下書きを作成してください。相手からの返信を書くのではありません。"
         : "以下のメールに対する返信の下書きを作成してください。",
-      replyPerspective({ selfName, counterpartyName, mode, signature }),
+      replyPerspective({
+        selfName: pSelfName,
+        counterpartyName: pCounterparty,
+        mode,
+        signature: pSignature,
+      }),
       writingNoteBlock(writingNote),
       guidance ? `補足の指示: ${guidance}` : "",
       // Conversation so far — agreed dates, open questions, tone.

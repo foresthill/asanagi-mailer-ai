@@ -198,6 +198,8 @@ export interface AISettings {
   provider?: AIProvider | "auto";
   /** 構造化PII（メアド・電話番号等）をAI送信前にマスクする。既定ON。 */
   piiMask?: boolean;
+  /** 人名・社名もローカルNERでマスクする（実験的・既定OFF・初回モデル読込あり）。 */
+  nerMask?: boolean;
   /** Provider-specific model id. Empty → sensible per-provider default. */
   model?: string;
   /**
