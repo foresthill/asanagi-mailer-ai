@@ -115,6 +115,31 @@ body {
   animation: slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* 朝の一凪: 判定済みの行が1つずつ「整う」演出（accentが一瞬さっと差してから澄む）。 */
+@keyframes sweep-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+    background-color: color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    background-color: transparent;
+  }
+}
+.animate-sweep-reveal {
+  animation: sweep-reveal 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-sweep-reveal {
+    animation: none;
+  }
+}
+
 /* Tiptap / ProseMirror */
 .ProseMirror {
   white-space: pre-wrap;
