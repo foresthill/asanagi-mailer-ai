@@ -46,6 +46,8 @@ export function SweepDialog({
   const [actions, setActions] = useState<Record<string, SweepAction>>({});
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 判定結果を1行ずつ「整えて」見せる演出用のカウンタ（表示行数）。 */
+  const [revealed, setRevealed] = useState(0);
   /** AI判定が使えずキーワード判定にフォールバックした場合の注意書き。 */
   const [warning, setWarning] = useState<string | null>(null);
   /** 朝の一凪の累計AIコスト（接続設定と同じ /api/ai/usage の sweep 分）。 */
@@ -103,6 +105,23 @@ export function SweepDialog({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 判定が届いたら、行を1つずつ「整えて」いく（AIが1通ずつ捌いている体感）。
+  // 全体で最大 ~1.4s に収まるよう1行あたりの間隔を調整。reduced-motion では即表示。
+  useEffect(() => {
+    if (loading || error || items.length === 0) return;
+    const total = items.length;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const step = reduce ? 0 : Math.max(35, Math.min(85, Math.floor(1400 / total)));
+    const timer = setInterval(() => {
+      setRevealed((n) => {
+        const next = reduce ? total : n + 1;
+        if (next >= total) clearInterval(timer);
+        return Math.min(next, total);
+      });
+    }, step);
+    return () => clearInterval(timer);
+  }, [loading, error, items.length]);
 
   const byId = useMemo(() => new Map(emails.map((e) => [e.id, e])), [emails]);
 
@@ -278,7 +297,7 @@ export function SweepDialog({
                 )}
               </div>
               <div className="flex flex-col gap-0.5">
-                {ordered.map((i) => {
+                {ordered.slice(0, revealed).map((i) => {
                   const mail = byId.get(i.id);
                   // Prefer the fields the API echoed back; fall back to the
                   // local list, then (last resort) nothing — never the raw id.
@@ -290,7 +309,7 @@ export function SweepDialog({
                     <div
                       key={i.id}
                       className={cn(
-                        "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5",
+                        "animate-sweep-reveal flex items-center gap-2.5 rounded-lg px-2.5 py-1.5",
                         cur === "keep" ? "opacity-55" : "",
                       )}
                     >
@@ -347,6 +366,12 @@ export function SweepDialog({
                   );
                 })}
               </div>
+              {revealed < ordered.length && (
+                <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-fg-subtle">
+                  <Sparkles className="size-3 animate-pulse text-accent" />
+                  受信箱を整えています… {revealed}/{ordered.length}
+                </p>
+              )}
             </>
           )}
         </div>
