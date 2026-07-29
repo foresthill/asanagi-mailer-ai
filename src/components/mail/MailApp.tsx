@@ -933,6 +933,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       {showSweep && (
         <SweepDialog
           emails={emails}
+          accountLabels={
+            // どのアカウントのメールかを行ごとに表示（複数アカウント接続時のみ）。
+            accounts.length > 1
+              ? Object.fromEntries(accounts.map((a) => [a.key, a.address ?? a.label]))
+              : null
+          }
           onApply={applySweep}
           onClose={() => {
             // スキップでも12時間はスヌーズ（毎回せがまない）。

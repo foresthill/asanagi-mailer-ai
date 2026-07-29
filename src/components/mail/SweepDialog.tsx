@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Archive, Check, Inbox, Loader2, Sparkles, Trash2, X } from "lucide-react";
 import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { displayName } from "./helpers";
+import { avatarColor, displayName } from "./helpers";
 
 type SweepAction = "keep" | "archive" | "trash";
 
@@ -31,11 +31,15 @@ const ACTIONS: { value: SweepAction; label: string; icon: typeof Archive }[] = [
  */
 export function SweepDialog({
   emails,
+  accountLabels,
   onApply,
   onClose,
 }: {
   /** Current inbox emails (list payloads — no bodies needed). */
   emails: Email[];
+  /** account key → short label; non-null shows an origin badge per row (so you
+   *  can tell which mailbox each mail belongs to). Null when a single account. */
+  accountLabels?: Record<string, string> | null;
   /** (archiveIds, trashIds) — applied per mail. */
   onApply: (archiveIds: string[], trashIds: string[]) => Promise<void>;
   onClose: () => void;
@@ -305,6 +309,9 @@ export function SweepDialog({
                     i.fromName || i.fromEmail || (mail ? displayName(mail.from) : "");
                   const subject = i.subject ?? mail?.subject ?? "";
                   const cur = actions[i.id] ?? i.action;
+                  // どのメールアカウント（gmail / imap 等）のメールかを示すバッジ。
+                  const acct = mail?.account;
+                  const acctLabel = accountLabels && acct ? (accountLabels[acct] ?? acct) : null;
                   return (
                     <div
                       key={i.id}
@@ -329,6 +336,18 @@ export function SweepDialog({
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })}
+                            </span>
+                          )}
+                          {acctLabel && (
+                            <span
+                              className="flex max-w-[110px] shrink-0 items-center gap-1 rounded-full border border-border bg-surface-2 px-1.5 py-px text-[9px] text-fg-muted"
+                              title={`アカウント: ${acctLabel}`}
+                            >
+                              <span
+                                className="size-1.5 rounded-full"
+                                style={{ background: avatarColor(acct ?? "") }}
+                              />
+                              <span className="truncate">{acctLabel}</span>
                             </span>
                           )}
                         </span>
