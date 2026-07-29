@@ -3,7 +3,7 @@ import { listAccounts, getProviderFor } from "@/lib/email/accounts";
 import { cachedList, cachedStarred, repliedThreadIds, upsertEmails } from "@/lib/db";
 import { getEmailSettings, listSignals } from "@/lib/store";
 import { annotateImportance } from "@/lib/importance";
-import type { Email, FolderView, MailboxState } from "@/lib/types";
+import type { Email, FolderView } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +44,16 @@ async function finalize(lists: Email[][], state: FolderView): Promise<Email[]> {
       .flat()
       .filter(afterHorizon)
       .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-      .slice(0, 100),
+      .slice(0, LIST_CAP),
     signals,
   );
 }
+
+/** How many messages the list shows. The provider live-fetches only its newest
+ *  window (Gmail 50); merging the cache + this higher cap keeps older inbox mail
+ *  visible instead of vanishing behind the newest slice. Deeper history needs
+ *  server pagination (planned). */
+const LIST_CAP = 300;
 
 /**
  * List emails for one account or all accounts (unified inbox).
@@ -96,9 +102,17 @@ export async function GET(req: Request) {
       targets.map(async (a) => {
         try {
           const provider = await getProviderFor(a.key);
-          const emails = await provider.list(state);
-          upsertEmails(a.key, emails); // write-through (raw provider ids)
-          return markReplied(a.key, emails).map((e) => tag(a.key, e));
+          const live = await provider.list(state);
+          upsertEmails(a.key, live); // write-through (raw provider ids)
+          // Merge the local cache so inbox mail older than the provider's fetch
+          // window (Gmail newest-50) stays visible. Live is authoritative for
+          // the freshest slice → it overrides any stale cached copy; the cache
+          // fills the older tail. Dedupe by raw provider id.
+          const merged = new Map<string, Email>(
+            cachedList([a.key], state, LIST_CAP).map((e) => [e.id, e]),
+          );
+          for (const e of live) merged.set(e.id, e);
+          return markReplied(a.key, [...merged.values()]).map((e) => tag(a.key, e));
         } catch {
           // Provider unreachable → serve the local cache for this account.
           stale.push(a.key);
