@@ -75,6 +75,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // mail of each checked conversation row.
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  /** Live revalidation in flight — drives the "更新中…" indicator even after the
+   *  cache has painted (stale-while-revalidate), so 更新 gives visible feedback. */
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Email | null>(null);
   const [thread, setThread] = useState<Email[] | null>(null);
@@ -136,6 +139,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     async (f: FolderView, acct: string) => {
       const token = ++listReq.current;
       setLoading(true);
+      setRefreshing(true);
       const apply = (data: { emails?: Email[]; accounts?: AccountInfo[] }) => {
         if (token !== listReq.current) return; // superseded
         const list: Email[] = data.emails ?? [];
@@ -173,7 +177,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       } catch {
         /* network/parse failure → keep what's shown; the next load retries */
       } finally {
-        if (token === listReq.current) setLoading(false);
+        if (token === listReq.current) {
+          setLoading(false);
+          setRefreshing(false); // live revalidation done
+        }
         loadStorage(); // cache just changed → refresh the meter
       }
     },
@@ -856,6 +863,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           folder={folder}
           rows={rows}
           loading={loading && searchResults === null}
+          refreshing={refreshing && searchResults === null}
           selectedId={selectedId}
           searchQuery={searchQuery}
           searching={searchResults !== null}
