@@ -163,6 +163,7 @@ export function EmailList({
   folder,
   rows,
   loading,
+  refreshing,
   selectedId,
   searchQuery,
   searching,
@@ -192,6 +193,9 @@ export function EmailList({
   /** Conversation rows (1 row = 1 conversation when grouping is on). */
   rows: ThreadRow[];
   loading: boolean;
+  /** Live revalidation in flight (content already on screen from cache).
+   *  Distinct from `loading` (initial skeleton) so the refresh gives feedback. */
+  refreshing: boolean;
   selectedId: string | null;
   /** Current search box value; non-empty switches the list to results. */
   searchQuery: string;
@@ -315,12 +319,17 @@ export function EmailList({
             <>
               <button
                 onClick={onRefresh}
-                disabled={loading}
+                disabled={loading || refreshing}
                 title="更新"
                 className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-50"
               >
-                <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+                <RefreshCw className={cn("size-3.5", (loading || refreshing) && "animate-spin")} />
               </button>
+              {refreshing && (
+                <span className="flex items-center text-[11px] text-fg-subtle" aria-live="polite">
+                  更新中…
+                </span>
+              )}
               <button
                 onClick={onToggleGrouping}
                 title={

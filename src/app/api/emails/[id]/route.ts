@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
-import { cachedGet, removeCached, setJudgmentVerdict, updateCached } from "@/lib/db";
+import { cachedGet, removeCached, setJudgmentVerdict, updateCached, upsertEmails } from "@/lib/db";
 import { recordImportanceFeedback } from "@/lib/store";
 import type { EmailProvider } from "@/lib/email";
 import type { Importance, MailboxState } from "@/lib/types";
@@ -31,7 +31,7 @@ function isAuthError(err: unknown): boolean {
   return m.includes("invalid_grant") || m.includes("expired") || m.includes("revoked");
 }
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: rawId } = await ctx.params;
   const { provider, account, id } = await resolve(rawId);
   // Cached body fallback (offline / token expiry / a moved-or-expunged IMAP
@@ -44,6 +44,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       stale: true,
     });
   };
+  // Cache-first fast path (?cached=1): return the local copy instantly with no
+  // provider round-trip, so the reader paints immediately (and works offline).
+  // The client then revalidates live in the background. email:null when we have
+  // nothing cached → the client falls through to the live fetch.
+  if (new URL(req.url).searchParams.get("cached") === "1") {
+    return serveCached() ?? NextResponse.json({ email: null });
+  }
   try {
     // Pass the cached Message-ID so IMAP can relocate a mail whose id went stale
     // after archiving (moved folders → new UID) — otherwise its body/attachments
@@ -62,6 +69,15 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         /* marking read is best-effort */
       }
       email.read = true;
+    }
+    // Cache the full message (incl. html) so the next open is instant and it's
+    // readable offline. Raw provider id — must run before we tag the id below.
+    if (account) {
+      try {
+        upsertEmails(account, [email]);
+      } catch {
+        /* caching is best-effort — never fail the read over it */
+      }
     }
     if (account) {
       email.account = account;

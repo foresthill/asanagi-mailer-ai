@@ -87,6 +87,13 @@ function getDb(): DatabaseSync {
   } catch {
     /* column already exists */
   }
+  // Cache the rendered HTML so opening a mail is instant and works offline
+  // (list writes strip html to stay lean → upsert preserves it via COALESCE).
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN html TEXT");
+  } catch {
+    /* column already exists */
+  }
   // AIログ: 実際に送った中身（マスク後＝端末から出た形）と返答を残す。
   try {
     db.exec("ALTER TABLE ai_usage ADD COLUMN prompt TEXT");
@@ -119,6 +126,7 @@ function rowToEmail(r: Record<string, unknown>): Email {
     subject: String(r.subject ?? ""),
     snippet: String(r.snippet ?? ""),
     body: String(r.body ?? ""),
+    html: (r.html as string) || undefined,
     date: String(r.date ?? ""),
     read: Boolean(r.read),
     starred: Boolean(r.starred),
@@ -133,12 +141,23 @@ function rowToEmail(r: Record<string, unknown>): Email {
 export function upsertEmails(account: string, emails: Email[]): void {
   if (!emails.length) return;
   const d = getDb();
+  // ON CONFLICT (not INSERT OR REPLACE) so a lean list write — which carries no
+  // html — preserves any html cached earlier by a reader open (COALESCE keeps
+  // the old value when the incoming one is null).
   const stmt = d.prepare(`
-    INSERT OR REPLACE INTO messages
+    INSERT INTO messages
       (account, id, thread_id, from_name, from_email, to_json, cc_json, bcc_json,
        subject, snippet, body, date, read, starred, state, message_id, fetched_at,
-       has_attachment)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       has_attachment, html)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(account, id) DO UPDATE SET
+      thread_id=excluded.thread_id, from_name=excluded.from_name,
+      from_email=excluded.from_email, to_json=excluded.to_json, cc_json=excluded.cc_json,
+      bcc_json=excluded.bcc_json, subject=excluded.subject, snippet=excluded.snippet,
+      body=excluded.body, date=excluded.date, read=excluded.read, starred=excluded.starred,
+      state=excluded.state, message_id=excluded.message_id, fetched_at=excluded.fetched_at,
+      has_attachment=excluded.has_attachment,
+      html=COALESCE(excluded.html, messages.html)
   `);
   const now = new Date().toISOString();
   d.exec("BEGIN");
@@ -164,6 +183,7 @@ export function upsertEmails(account: string, emails: Email[]): void {
         e.messageId ?? null,
         now,
         hasAtt ? 1 : 0,
+        e.html ?? null,
       );
     }
     d.exec("COMMIT");
