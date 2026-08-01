@@ -102,6 +102,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [noteIds, setNoteIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
+  const selectToken = useRef(0);
 
   const loadStorage = useCallback(async () => {
     try {
@@ -485,8 +486,34 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       setSelectedId(id);
       if (!composeMinimized) setCompose(null);
       setEmails((list) => list.map((e) => (e.id === id ? { ...e, read: true } : e)));
-      const res = await fetch(`/api/emails/${encodeURIComponent(id)}`);
-      const data = await res.json().catch(() => ({}));
+
+      const token = ++selectToken.current;
+      const enc = encodeURIComponent(id);
+      let painted = false;
+
+      // 1) Cache-first paint — instant, no provider round-trip (offline-safe).
+      try {
+        const cdata = await fetch(`/api/emails/${enc}?cached=1`).then((r) => r.json());
+        if (token === selectToken.current && cdata?.email) {
+          setSelected(cdata.email);
+          loadThread(cdata.email);
+          painted = true;
+        }
+      } catch {
+        /* cache is best-effort — fall through to live */
+      }
+
+      // 2) Revalidate live (fresh state / html / read-sync) and replace on land.
+      //    The route itself falls back to cache on network error, so offline
+      //    still resolves to the cached copy rather than throwing.
+      let data: { email?: Email; error?: string; needsReauth?: boolean } = {};
+      try {
+        data = await fetch(`/api/emails/${enc}`).then((r) => r.json());
+      } catch {
+        /* offline / network error → keep whatever the cache painted */
+      }
+      if (token !== selectToken.current) return; // superseded by another open
+
       if (data.email) {
         setSelected(data.email);
         classify(data.email);
@@ -503,8 +530,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           setFolder(data.email.state);
           loadList(data.email.state, account);
         }
-      } else {
-        // 開けなかった理由を黙殺しない（Gmailトークン失効など）。
+      } else if (!painted) {
+        // 何も表示できていない時だけエラー扱い（キャッシュが出ていれば維持）。
         setSelectedId(null);
         showToast(data.error ?? "メールを開けませんでした");
         if (data.needsReauth) setShowSettings(true); // 再認証へ誘導
