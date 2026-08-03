@@ -111,15 +111,15 @@ export function SweepDialog({
   }, []);
 
   // 判定が届いたら、行を1つずつ「整えて」いく（AIが1通ずつ捌いている体感）。
-  // 全体で最大 ~1.4s に収まるよう1行あたりの間隔を調整。reduced-motion では即表示。
+  // 進行（1件ずつ現れる）は常に行い、スライド/点滅の“動き”だけ reduced-motion 時に
+  // CSS 側で抑える（globals.css）。1行あたり 50–120ms、全体で ~2s 以内に収める。
   useEffect(() => {
     if (loading || error || items.length === 0) return;
     const total = items.length;
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const step = reduce ? 0 : Math.max(35, Math.min(85, Math.floor(1400 / total)));
+    const step = Math.max(50, Math.min(120, Math.floor(2000 / total)));
     const timer = setInterval(() => {
       setRevealed((n) => {
-        const next = reduce ? total : n + 1;
+        const next = n + 1;
         if (next >= total) clearInterval(timer);
         return Math.min(next, total);
       });
