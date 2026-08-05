@@ -129,12 +129,14 @@ export function SweepDialog({
 
   const byId = useMemo(() => new Map(emails.map((e) => [e.id, e])), [emails]);
 
-  // 処分対象が先（ゴミ箱→アーカイブ→残す）に並ぶよう、AI推奨順を保ちつつ
-  // 「残す」を末尾へ。各行のセレクタで自由に変えられる。
+  // 処分対象が先（ゴミ箱→アーカイブ→残す）に並ぶよう、AI推奨順で一度だけ整列。
+  // 手動変更（各行のセレクタ）では並べ替えない — 押した行がその場で色だけ
+  // 変わり、位置は動かない。再整列すると押した瞬間に行が別グループへ飛んで
+  // 「バーっと振り分け」がしづらいため（deps は items のみ・actions を含めない）。
   const ordered = useMemo(() => {
     const rank: Record<SweepAction, number> = { trash: 0, archive: 1, keep: 2 };
-    return [...items].sort((a, b) => rank[actions[a.id] ?? a.action] - rank[actions[b.id] ?? b.action]);
-  }, [items, actions]);
+    return [...items].sort((a, b) => rank[a.action] - rank[b.action]);
+  }, [items]);
 
   const archiveCount = items.filter((i) => actions[i.id] === "archive").length;
   const trashCount = items.filter((i) => actions[i.id] === "trash").length;
