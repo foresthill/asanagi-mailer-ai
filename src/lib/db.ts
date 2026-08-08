@@ -19,12 +19,17 @@ const DB_PATH = path.join(DATA_DIR, "asanagi.db");
 /** Per-account retention: keep this many newest messages. */
 export const RETENTION_PER_ACCOUNT = 5000;
 
-let db: DatabaseSync | null = null;
+// Keep the connection on globalThis, not a module-level binding: in dev, editing
+// this file hot-reloads the module and would otherwise re-open a second
+// connection against the live one (getDb re-init) → all DB routes 500 until a
+// restart. globalThis survives module re-evaluation, so the connection (and its
+// one-time migration) is reused across reloads.
+const dbGlobal = globalThis as unknown as { __asanagiDb?: DatabaseSync };
 
 function getDb(): DatabaseSync {
-  if (db) return db;
+  if (dbGlobal.__asanagiDb) return dbGlobal.__asanagiDb;
   mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  db = new DatabaseSync(DB_PATH);
+  const db = new DatabaseSync(DB_PATH);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -112,6 +117,7 @@ function getDb(): DatabaseSync {
   } catch {
     /* column already exists */
   }
+  dbGlobal.__asanagiDb = db;
   return db;
 }
 
@@ -316,28 +322,50 @@ export function removeCached(account: string, id: string): void {
  * they sent the mail or merely received it. LIKE scan is millisecond-class at
  * our retention cap (≤5k rows/account); swap to FTS5+trigram when volume grows.
  */
+/** Common function words that shouldn't drive a match on their own. A pasted
+ *  sentence full of "the/on/to" was matching everything (AND over the first few
+ *  words, all of them common). Dropped from the fallback term match. */
+const SEARCH_STOP = new Set([
+  "the", "a", "an", "of", "to", "in", "on", "at", "by", "for", "and", "or", "is",
+  "are", "be", "with", "from", "this", "that", "it", "as", "was", "were", "will",
+  "your", "you", "please", "we", "our",
+]);
+
+const SEARCH_FIELDS = ["subject", "body", "from_name", "from_email", "to_json", "cc_json"];
+
+/**
+ * Cache search. Phrase-first: the whole query as a contiguous substring (what
+ * pasting a sentence expects — precise, no matching on scattered "the"/"on").
+ * Only when the phrase hits nothing do we fall back to an AND over the
+ * meaningful terms (1-char and stopwords dropped so distinctive words drive it).
+ */
 export function searchCached(query: string, limit = 50): Email[] {
-  const terms = query
+  const q = query.trim();
+  if (!q) return [];
+  const db = getDb();
+  const esc = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+  const orClause = SEARCH_FIELDS.map((f) => `${f} LIKE ? ESCAPE '\\'`).join(" OR ");
+
+  // 1) Phrase match — the entire query as one substring.
+  const phraseLike = `%${esc(q)}%`;
+  const phrase = db
+    .prepare(`SELECT * FROM messages WHERE (${orClause}) ORDER BY date DESC LIMIT ?`)
+    .all(...SEARCH_FIELDS.map(() => phraseLike), limit) as Record<string, unknown>[];
+  if (phrase.length) return phrase.map(rowToEmail);
+
+  // 2) Fallback — every meaningful term must appear (AND).
+  const terms = q
     .split(/\s+/)
     .map((t) => t.trim())
-    .filter(Boolean)
-    .slice(0, 5);
+    .filter((t) => t.length >= 2 && !SEARCH_STOP.has(t.toLowerCase()))
+    .slice(0, 6);
   if (!terms.length) return [];
-
-  const clause = terms
-    .map(
-      () =>
-        `(subject LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\'
-          OR from_name LIKE ? ESCAPE '\\' OR from_email LIKE ? ESCAPE '\\'
-          OR to_json LIKE ? ESCAPE '\\' OR cc_json LIKE ? ESCAPE '\\')`,
-    )
-    .join(" AND ");
+  const clause = terms.map(() => `(${orClause})`).join(" AND ");
   const params = terms.flatMap((t) => {
-    const like = `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-    return [like, like, like, like, like, like];
+    const like = `%${esc(t)}%`;
+    return SEARCH_FIELDS.map(() => like);
   });
-
-  const rows = getDb()
+  const rows = db
     .prepare(`SELECT * FROM messages WHERE ${clause} ORDER BY date DESC LIMIT ?`)
     .all(...params, limit) as Record<string, unknown>[];
   return rows.map(rowToEmail);
