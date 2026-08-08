@@ -1,12 +1,29 @@
 import { Fragment, type ReactNode } from "react";
 
-/** Search keywords, parsed the same way db.searchCached does (space = AND). */
+/** Common function words not worth highlighting on their own (mirrors
+ *  db.searchCached's fallback so we don't light up every "the"/"on"). */
+const STOP = new Set([
+  "the", "a", "an", "of", "to", "in", "on", "at", "by", "for", "and", "or", "is",
+  "are", "be", "with", "from", "this", "that", "it", "as", "was", "were", "will",
+  "your", "you", "please", "we", "our",
+]);
+
+/**
+ * Terms to highlight, aligned with db.searchCached: for a multi-word query,
+ * highlight the whole phrase first (the precise match), then the meaningful
+ * words — dropping 1-char and stopwords so "the"/"on" don't get highlighted.
+ */
 export function parseTerms(query?: string): string[] {
-  return (query ?? "")
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter(Boolean)
-    .slice(0, 5);
+  const q = (query ?? "").trim();
+  if (!q) return [];
+  const words = q.split(/\s+/).map((t) => t.trim()).filter(Boolean);
+  const meaningful = words
+    .filter((t) => t.length >= 2 && !STOP.has(t.toLowerCase()))
+    .slice(0, 6);
+  // Phrase first (longest → wins in the alternation); fall back to raw words
+  // only when everything was filtered out (e.g. a query of just "the").
+  if (words.length > 1) return [q, ...meaningful];
+  return meaningful.length ? meaningful : words;
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
