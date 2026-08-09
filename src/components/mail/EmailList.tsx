@@ -164,6 +164,7 @@ export function EmailList({
   rows,
   loading,
   refreshing,
+  searchError,
   selectedId,
   searchQuery,
   searching,
@@ -196,6 +197,8 @@ export function EmailList({
   /** Live revalidation in flight (content already on screen from cache).
    *  Distinct from `loading` (initial skeleton) so the refresh gives feedback. */
   refreshing: boolean;
+  /** The last search request failed (vs 0 hits) → show an error, not「該当なし」. */
+  searchError?: boolean;
   selectedId: string | null;
   /** Current search box value; non-empty switches the list to results. */
   searchQuery: string;
@@ -413,13 +416,15 @@ export function EmailList({
             <div className="flex flex-col items-center gap-2 text-fg-subtle">
               <Inbox className="size-8 opacity-50" />
               <p className="text-sm">
-                {searching
-                  ? serverSearched
-                    ? "サーバ全履歴にも該当するメールがありません"
-                    : "該当するメールがありません（ローカルキャッシュ内を検索）"
-                  : folder === "inbox"
-                    ? "受信箱はすべて片付きました 🎉"
-                    : "ここには何もありません"}
+                {searching && searchError
+                  ? "検索に失敗しました（時間をおいて再試行してください）"
+                  : searching
+                    ? serverSearched
+                      ? "サーバ全履歴にも該当するメールがありません"
+                      : "該当するメールがありません（ローカルキャッシュ内を検索）"
+                    : folder === "inbox"
+                      ? "受信箱はすべて片付きました 🎉"
+                      : "ここには何もありません"}
               </p>
               {searching && !serverSearched && (
                 <ServerSearchButton searching={serverSearching} onClick={onServerSearch} />

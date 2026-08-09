@@ -67,6 +67,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // Cache-wide search (all accounts & folders); null = not searching.
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Email[] | null>(null);
+  /** True when the last search request failed (vs genuinely 0 hits) — so the UI
+   *  shows an error instead of a misleading「該当なし」when the server errors. */
+  const [searchError, setSearchError] = useState(false);
   // Gmail-style flat conversation rows (docs/04 §1.6); off = 1 mail = 1 row.
   const [grouping, setGrouping] = useState(loadGroupingPref);
   // Section grouping axis (none / by account / by sender domain).
@@ -315,9 +318,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+        if (!res.ok) throw new Error(`search ${res.status}`);
         const data = await res.json();
+        setSearchError(false);
         setSearchResults(data.emails ?? []);
       } catch {
+        // Distinguish failure from "no hits": an error must not read as 0件.
+        setSearchError(true);
         setSearchResults([]);
       }
     }, 300);
@@ -894,6 +901,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           selectedId={selectedId}
           searchQuery={searchQuery}
           searching={searchResults !== null}
+          searchError={searchError}
           grouping={grouping}
           groupAxis={groupAxis}
           noteIds={noteIds}
