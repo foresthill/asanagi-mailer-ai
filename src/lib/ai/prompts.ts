@@ -97,6 +97,33 @@ export function replyPerspective(opts: {
   return lines.join("\n");
 }
 
+export const PROJECTS_SYSTEM = `あなたは、業務メールの履歴から「進行中の案件（プロジェクト）」を抽出して整理するアシスタントです。
+与えられたスレッド要約（差出人・件名・冒頭）だけを根拠に、アクティブな案件を洗い出します。
+
+抽出ルール:
+- 1案件 = 1つの取引・提案・実証・納品など、継続したまとまり。関連スレッドは1案件にまとめる。
+- 宣伝メール・メルマガ・通知・請求書の自動配信は案件にしない（人と進めている仕事だけ）。
+- 各案件について、相手先（会社・担当）、進捗（一言＋0-100%の推定）、優先度（高/中/低）、
+  次アクション（具体的に）、必要なら期限、備考を出す。
+- 状態は「進行中」（動いている）/「要確認」（案件化するか精査が要る）/「完了」。
+- 根拠が薄い項目は断定せず、推定である旨を statusLabel/memo に控えめに示す。
+- 事実を創作しない。件名・要約に無い固有名詞や数値を作らない。
+- 出力の言語は日本語。10〜15件程度に厳選する（重要・活発なものを優先）。`;
+
+/** Compact, masked thread summaries for the projects prompt (subject + snippet
+ *  + masked sender/date). One line per thread — bodies are NOT sent whole. */
+export function projectsContext(
+  threads: { date: string; from: string; subject: string; snippet: string }[],
+): string {
+  return [
+    "## スレッド要約（新しい順）",
+    ...threads.map(
+      (t, i) =>
+        `${i + 1}. [${t.date.slice(0, 10)}] From: ${t.from}\n   件名: ${t.subject}\n   冒頭: ${t.snippet.slice(0, 160)}`,
+    ),
+  ].join("\n");
+}
+
 export const SUBJECT_SYSTEM = `あなたはメールの件名を考えるアシスタントです。与えられた本文にふさわしい件名を1つだけ作ります。
 
 出力ルール:

@@ -17,6 +17,7 @@ import {
   ListChecks,
   FileText,
   ScrollText,
+  FolderKanban,
 } from "lucide-react";
 import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -58,9 +59,9 @@ export function Sidebar({
   accounts: AccountInfo[];
   account: string; // "all" or an account key
   storage: StorageInfo | null;
-  view: "mail" | "contacts" | "triage" | "ailog";
+  view: "mail" | "contacts" | "triage" | "ailog" | "projects";
   onSelect: (f: FolderView) => void;
-  onSelectView: (v: "mail" | "contacts" | "triage" | "ailog") => void;
+  onSelectView: (v: "mail" | "contacts" | "triage" | "ailog" | "projects") => void;
   onSelectAccount: (key: string) => void;
   onOpenSettings: () => void;
   onOpenScheduled: () => void;
@@ -123,6 +124,19 @@ export function Sidebar({
         >
           <Users className={cn("size-4", view === "contacts" && "text-accent")} />
           <span className="flex-1 text-left">連絡先</span>
+        </button>
+        <button
+          onClick={() => onSelectView("projects")}
+          title="メール履歴から抽出した案件の進捗・次アクション"
+          className={cn(
+            "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+            view === "projects"
+              ? "bg-accent-soft font-medium text-fg"
+              : "text-fg-muted hover:bg-surface hover:text-fg",
+          )}
+        >
+          <FolderKanban className={cn("size-4", view === "projects" && "text-accent")} />
+          <span className="flex-1 text-left">プロジェクト</span>
         </button>
         <button
           onClick={() => onSelectView("triage")}
