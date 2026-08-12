@@ -7,6 +7,7 @@ import type {
   EmailSettings,
   ImportanceSignal,
   Importance,
+  ProjectHub,
   ScheduledSend,
   SavedDraft,
 } from "@/lib/types";
@@ -228,6 +229,19 @@ export async function getWritingNote(): Promise<string> {
 
 export async function saveWritingNote(text: string): Promise<void> {
   await writeJson(WRITING_NOTE, { text: text.slice(0, 4000) });
+}
+
+// ---------------------------------------------------------------------------
+// プロジェクト・ハブ — AI抽出した案件一覧（pull型）。実データはローカルのみ。
+// ---------------------------------------------------------------------------
+const PROJECTS = "projects.json";
+
+export async function getProjectHub(): Promise<ProjectHub> {
+  return readJson<ProjectHub>(PROJECTS, { projects: [] });
+}
+
+export async function saveProjectHub(hub: ProjectHub): Promise<void> {
+  await writeJson(PROJECTS, hub);
 }
 
 // ---------------------------------------------------------------------------

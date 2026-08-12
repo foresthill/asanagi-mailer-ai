@@ -265,3 +265,44 @@ export interface EmailSettings {
     smtpFrom?: string;
   };
 }
+
+// ---------------------------------------------------------------------------
+// Project Hub (プロジェクト・ハブ) — mail をアクティブ案件にまとめて、進捗と
+// 次アクションを一覧する。行データは AI 抽出（pull型）でローカルに保存し、
+// 実データは端末外に出さない（.data/projects.json）。
+// ---------------------------------------------------------------------------
+export interface ProjectParty {
+  /** 相手先の会社・組織名 */
+  org: string;
+  /** 担当者名（任意） */
+  person?: string;
+}
+
+export interface Project {
+  id: string;
+  /** 案件名 */
+  name: string;
+  /** 区分・カテゴリ（短く） */
+  tag?: string;
+  parties: ProjectParty[];
+  status: "進行中" | "要確認" | "完了";
+  /** 進捗の一言（例: NDA締結・提案準備） */
+  statusLabel: string;
+  /** 進捗率の推定 0-100 */
+  pct: number;
+  priority: "高" | "中" | "低";
+  /** 期限・次の予定（あれば） */
+  due?: string;
+  /** 次アクション */
+  next: string;
+  /** 備考 */
+  memo?: string;
+  /** 情報源の最終更新（ISO） */
+  updated: string;
+}
+
+export interface ProjectHub {
+  projects: Project[];
+  /** 生成日時（ISO） */
+  generatedAt?: string;
+}
