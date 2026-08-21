@@ -5,6 +5,7 @@ import { getProviderFor } from "@/lib/email/accounts";
 import { upsertEmails } from "@/lib/db";
 import { addScheduled, dueScheduled, listScheduled, updateScheduled } from "@/lib/store";
 import { attachmentsWithinCap } from "@/lib/attachments";
+import { friendlyEmailError } from "@/lib/email/errors";
 import type { EmailProvider } from "@/lib/email";
 import type { OutgoingMessage, ScheduledSend } from "@/lib/types";
 
@@ -46,9 +47,10 @@ async function runFlush(): Promise<number> {
       sentVia.set(provider.name, provider);
       await updateScheduled(item.id, { status: "sent" });
     } catch (err) {
+      // 予約送信の失敗理由も分かりやすい日本語に（送信箱/予約一覧で表示される）。
       await updateScheduled(item.id, {
         status: "failed",
-        error: err instanceof Error ? err.message : "send failed",
+        error: friendlyEmailError(err).message,
       });
     }
   }
