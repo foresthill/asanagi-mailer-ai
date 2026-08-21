@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
 import { upsertEmails } from "@/lib/db";
-import { attachmentsWithinCap } from "@/lib/attachments";
+import { attachmentsWithinCap, totalAttachmentBytes } from "@/lib/attachments";
 import { friendlyEmailError } from "@/lib/email/errors";
 import type { OutgoingMessage } from "@/lib/types";
 
@@ -45,7 +45,9 @@ export async function POST(req: Request) {
   } catch (err) {
     // 低レベルの生エラー（write ERANGE / 535 / ECONNREFUSED 等）を、ユーザーが
     // 対処できる日本語メッセージに変換する（lib/email/errors.ts）。
-    const { message, needsReauth } = friendlyEmailError(err);
-    return NextResponse.json({ error: message, needsReauth }, { status: needsReauth ? 401 : 500 });
+    const { message: errMsg, needsReauth } = friendlyEmailError(err, {
+      bytes: totalAttachmentBytes(message.attachments),
+    });
+    return NextResponse.json({ error: errMsg, needsReauth }, { status: needsReauth ? 401 : 500 });
   }
 }

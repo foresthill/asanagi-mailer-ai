@@ -6,7 +6,13 @@
  * reauth prompt. Unknown errors keep a short technical tail (in parens) so
  * support can still diagnose.
  */
-export function friendlyEmailError(err: unknown): { message: string; needsReauth: boolean } {
+export function friendlyEmailError(
+  err: unknown,
+  /** Total attachment bytes of the message — lets an ambiguous socket error
+   *  (ERANGE) be phrased as a network problem when the payload is clearly small,
+   *  instead of hinting at size. */
+  opts?: { bytes?: number },
+): { message: string; needsReauth: boolean } {
   const raw = err instanceof Error ? err.message : String(err);
   const m = raw.toLowerCase();
 
@@ -27,12 +33,14 @@ export function friendlyEmailError(err: unknown): { message: string; needsReauth
     };
   }
   // Socket-level write failure mid-send (ERANGE/EPIPE/reset/"write after end").
-  // Ambiguous — could be a transient drop, a fussy server, or an oversized
-  // payload — so we suggest retry AND the two likely fixes, without over-claiming.
+  // Small payload → almost certainly a network/連接 drop, so say so plainly.
+  // Larger payload → size could also be a factor, so mention both.
   if (/erange|epipe|econnreset|write after end|socket.*(closed|hang)|premature/.test(m)) {
+    const small = (opts?.bytes ?? 0) < 3 * 1024 * 1024;
     return {
-      message:
-        "送信中に接続が切れました（write ERANGE 等）。もう一度お試しください。解消しない場合は、添付ファイルを小さくするか、ネットワーク（テザリング等）をご確認ください。",
+      message: small
+        ? "送信中に接続が切れました（ネットワークエラーの可能性）。ネットワーク（社内NW／VPN／テザリング等）をご確認のうえ、もう一度お試しください。"
+        : "送信中に接続が切れました。添付ファイルを小さくするか、ネットワークをご確認のうえ、もう一度お試しください。",
       needsReauth: false,
     };
   }
