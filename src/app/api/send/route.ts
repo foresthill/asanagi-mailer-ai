@@ -4,6 +4,7 @@ import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
 import { upsertEmails } from "@/lib/db";
 import { attachmentsWithinCap } from "@/lib/attachments";
+import { friendlyEmailError } from "@/lib/email/errors";
 import type { OutgoingMessage } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -42,20 +43,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    // Gmail OAuthトークン失効（7日失効）を分かりやすく案内し、再認証へ誘導。
-    const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-    const reauth =
-      msg.includes("invalid_grant") || msg.includes("expired") || msg.includes("revoked");
-    return NextResponse.json(
-      {
-        error: reauth
-          ? "Gmailの認証が切れているため送信できませんでした（接続設定から再認証してください）"
-          : err instanceof Error
-            ? err.message
-            : "送信に失敗しました",
-        needsReauth: reauth,
-      },
-      { status: reauth ? 401 : 500 },
-    );
+    // 低レベルの生エラー（write ERANGE / 535 / ECONNREFUSED 等）を、ユーザーが
+    // 対処できる日本語メッセージに変換する（lib/email/errors.ts）。
+    const { message, needsReauth } = friendlyEmailError(err);
+    return NextResponse.json({ error: message, needsReauth }, { status: needsReauth ? 401 : 500 });
   }
 }
