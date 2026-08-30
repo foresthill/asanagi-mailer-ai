@@ -397,6 +397,68 @@ export class ImapProvider implements EmailProvider {
     }
   }
 
+  /**
+   * Server-side conversation across folders (Inbox / Sent / Archive / Trash) so
+   * your own replies (Sent) appear interleaved even when they were never cached.
+   * IMAP has no native threading, so we match by the References-chain root
+   * (threadId ≈ the root Message-ID — the same key materialize() derives). The
+   * route caches the result, so subsequent opens are also complete offline.
+   */
+  async thread(threadId: string): Promise<Email[]> {
+    const root = threadId.replace(/^<|>$/g, "").trim();
+    // uid-fallback thread ids (no Message-ID) can't be matched server-side.
+    if (!root.includes("@")) return [];
+    const c = this.connection();
+    await c.connect();
+    const out: Email[] = [];
+    const seen = new Set<string>();
+    try {
+      const f = await this.resolveFolders(c);
+      const folders = [f.inbox, f.sent, f.archived, f.trashed].filter(
+        (x, i, a) => x && a.indexOf(x) === i,
+      );
+      for (const folder of folders) {
+        const state =
+          (Object.keys(f) as MailboxState[]).find((s) => f[s] === folder) ?? "inbox";
+        const lock = await c.getMailboxLock(folder);
+        try {
+          // A thread's members all carry the root in References (or In-Reply-To);
+          // the root itself is matched by Message-ID. Union across criteria.
+          const uids = new Set<number>();
+          const add = async (header: Record<string, string>) => {
+            try {
+              const r = (await c.search({ header }, { uid: true })) as number[];
+              r?.forEach((u) => uids.add(u));
+            } catch {
+              /* server rejected this header search — skip it */
+            }
+          };
+          await add({ references: root });
+          await add({ "in-reply-to": root });
+          await add({ "message-id": root });
+          if (!uids.size) continue;
+          for await (const msg of c.fetch(
+            [...uids].join(","),
+            { envelope: true, flags: true, bodyStructure: true, source: true },
+            { uid: true },
+          )) {
+            if (msg.uid == null) continue;
+            const em = await this.materialize(msg, state, folder);
+            const key = em.messageId ?? em.id;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push({ ...em, html: undefined });
+          }
+        } finally {
+          lock.release();
+        }
+      }
+    } finally {
+      await c.logout();
+    }
+    return out.sort((a, b) => +new Date(a.date) - +new Date(b.date));
+  }
+
   /** On-demand attachment bytes — re-fetch the message and pick by index. */
   async getAttachment(id: string, attachmentId: string, messageIdHint?: string) {
     const { folder, uid } = this.splitId(id);
