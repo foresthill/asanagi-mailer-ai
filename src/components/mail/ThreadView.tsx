@@ -179,7 +179,10 @@ export function ThreadView({
               "rounded-xl border transition-colors scroll-mt-4",
               current
                 ? "border-amber-300/70 bg-amber-50/60 dark:border-amber-300/30 dark:bg-amber-400/10"
-                : "border-border bg-surface",
+                : m.state === "sent"
+                  ? // 自分の送信は accent 寄りに色付け（一目で自分の発言と分かる）
+                    "border-accent/40 bg-accent-soft/50"
+                  : "border-border bg-surface",
               expanded || current ? "" : "hover:border-accent/40",
             )}
           >

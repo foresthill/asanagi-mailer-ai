@@ -26,7 +26,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const provider = await getProviderFor(account);
     if (provider.thread) {
       messages = await provider.thread(threadId);
-      upsertEmails(account, messages); // keep the cache complete for offline
+      if (messages.length) {
+        upsertEmails(account, messages); // keep the cache complete for offline
+      } else {
+        // Server-side threading N/A (e.g. a uid-fallback thread id with no
+        // Message-ID) → don't show an empty conversation; use the cache.
+        messages = cachedThread(account, threadId);
+      }
     } else {
       messages = cachedThread(account, threadId);
     }
