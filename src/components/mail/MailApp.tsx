@@ -893,7 +893,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       )}
       {view === "triage" && (!compose || composeMinimized) && <TriageView />}
       {view === "ailog" && (!compose || composeMinimized) && <AiLogView />}
-      {view === "projects" && (!compose || composeMinimized) && <ProjectsView />}
+      {view === "projects" && (!compose || composeMinimized) && (
+        <ProjectsView
+          onOpenEmail={(id) => {
+            setView("mail");
+            void selectEmail(id);
+          }}
+        />
+      )}
       {view === "mail" && (!replying || composeMinimized) && (
         <EmailList
           folder={folder}

@@ -299,6 +299,8 @@ export interface Project {
   memo?: string;
   /** 情報源の最終更新（ISO） */
   updated: string;
+  /** この案件の最新メールの id（account/xxx）— 一覧から本文へ飛ぶ用。 */
+  anchorId?: string;
 }
 
 export interface ProjectHub {

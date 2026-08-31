@@ -108,7 +108,9 @@ export const PROJECTS_SYSTEM = `あなたは、業務メールの履歴から「
 - 状態は「進行中」（動いている）/「要確認」（案件化するか精査が要る）/「完了」。
 - 根拠が薄い項目は断定せず、推定である旨を statusLabel/memo に控えめに示す。
 - 事実を創作しない。件名・要約に無い固有名詞や数値を作らない。
-- 出力の言語は日本語。10〜15件程度に厳選する（重要・活発なものを優先）。`;
+- 出力の言語は日本語。10〜15件程度に厳選する（重要・活発なものを優先）。
+- 各案件で根拠にしたスレッドの番号（下の一覧の先頭の数字）を sources に入れる
+  （最新メールへ飛べるようにするため。複数可）。`;
 
 /** Compact, masked thread summaries for the projects prompt (subject + snippet
  *  + masked sender/date). One line per thread — bodies are NOT sent whole. */

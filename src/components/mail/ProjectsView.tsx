@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw, Search, Sparkles } from "lucide-react";
+import { ArrowUpRight, Loader2, RefreshCw, Search, Sparkles } from "lucide-react";
 import type { Project, ProjectHub } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +47,7 @@ function haystack(p: Project): string {
  * データはローカルのAI抽出結果（/api/projects, .data/projects.json）。実データは
  * 端末外に出ない。更新は pull型（ボタンでメールキャッシュから再生成）。
  */
-export function ProjectsView() {
+export function ProjectsView({ onOpenEmail }: { onOpenEmail?: (id: string) => void }) {
   const [hub, setHub] = useState<ProjectHub | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -221,6 +221,14 @@ export function ProjectsView() {
                     )}
                     <PrioBadge p={p.priority} />
                   </div>
+                  {p.anchorId && onOpenEmail && (
+                    <button
+                      onClick={() => onOpenEmail(p.anchorId!)}
+                      className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-medium text-accent hover:underline"
+                    >
+                      最新メールを開く <ArrowUpRight className="size-3" />
+                    </button>
+                  )}
                 </div>
                 {/* Parties */}
                 <div className="text-[12.5px]">
