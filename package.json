@@ -17,13 +17,15 @@
     "start:standalone": "node .next-standalone/standalone/server.js",
     "start": "next start",
     "tauri": "tauri",
-    "lint": "eslint"
+    "lint": "eslint",
+    "mcp": "node mcp/asanagi-mcp.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.81",
     "@ai-sdk/openai": "^3.0.67",
     "@ai-sdk/react": "^3.0.197",
     "@huggingface/transformers": "^3.8.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@openrouter/ai-sdk-provider": "^2.9.0",
     "@tiptap/core": "^3.25.0",
     "@tiptap/extension-bold": "3.25.0",
