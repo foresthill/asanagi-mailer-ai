@@ -36,6 +36,10 @@ const schema = z.object({
       due: z.string().describe("期限・次の予定（あれば。例: 打合せ 7/30 10:00）").optional(),
       next: z.string().describe("次アクション（具体的に）"),
       memo: z.string().describe("備考（推定である旨など）").optional(),
+      sources: z
+        .array(z.number().int())
+        .describe("根拠にしたスレッド番号（一覧の先頭の数字・複数可）")
+        .optional(),
     }),
   ),
 });
@@ -109,6 +113,14 @@ export async function POST() {
     // Restore any masked tokens the model echoed back, then materialize.
     const un = (s?: string) => (s ? masker.unmask(s) : s);
     const generatedAt = new Date().toISOString();
+    // Map the AI's 1-based thread numbers → the latest source email's id, so a
+    // row can jump straight to the most recent mail of that project.
+    const anchorOf = (sources?: number[]): string | undefined => {
+      const cands = (sources ?? []).map((n) => threads[n - 1]).filter(Boolean);
+      if (!cands.length) return undefined;
+      const latest = cands.reduce((a, b) => (+new Date(b.date) > +new Date(a.date) ? b : a));
+      return latest.account ? `${latest.account}/${latest.id}` : latest.id;
+    };
     const projects: Project[] = object.projects.map((p, i) => ({
       id: String(i),
       name: un(p.name) ?? "",
@@ -122,6 +134,7 @@ export async function POST() {
       next: un(p.next) ?? "",
       memo: un(p.memo),
       updated: generatedAt,
+      anchorId: anchorOf(p.sources),
     }));
 
     const hub: ProjectHub = { projects, generatedAt };
