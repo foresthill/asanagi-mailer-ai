@@ -75,6 +75,33 @@ function scrollMatchIntoView(iframe: HTMLIFrameElement, mark: HTMLElement) {
   }
 }
 
+/** Reply-history markers used by the major clients. Conservative on purpose:
+ *  we do NOT fold a bare <blockquote> (often a legitimate inline quote). */
+const QUOTE_SELECTOR =
+  "blockquote[type='cite'], .gmail_quote, div[class*='gmail_quote'], .moz-cite-prefix, [id*='divRplyFwdMsg']";
+
+/** Collapse the quoted reply history. When `show` is false, remove the marker
+ *  and everything after it (keeping the new content). Returns whether a quote
+ *  was present, so the caller can offer a toggle. */
+function foldQuote(doc: Document, show: boolean): boolean {
+  const marker = doc.querySelector(QUOTE_SELECTOR);
+  if (!marker) return false;
+  if (show) return true;
+  let node: Node = marker;
+  let removedMarker = false;
+  while (node.nodeName !== "BODY") {
+    const parent = node.parentNode;
+    if (!parent) break;
+    while (node.nextSibling) parent.removeChild(node.nextSibling);
+    if (!removedMarker) {
+      parent.removeChild(node);
+      removedMarker = true;
+    }
+    node = parent;
+  }
+  return true;
+}
+
 export function HtmlMailView({
   html,
   fontScale = 1,
@@ -90,9 +117,10 @@ export function HtmlMailView({
   highlight?: string;
 }) {
   const [showImages, setShowImages] = useState(false);
+  const [showQuote, setShowQuote] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const { srcDoc, blockedImages } = useMemo(() => {
+  const { srcDoc, blockedImages, hasQuote } = useMemo(() => {
     const clean = DOMPurify.sanitize(html, {
       USE_PROFILES: { html: true },
       FORBID_TAGS: ["form", "input", "button"],
@@ -119,9 +147,14 @@ export function HtmlMailView({
 
     highlightDom(doc, parseTerms(highlight));
 
+    // Fold the quoted history by default. When searching, keep it expanded so a
+    // match inside the quote isn't hidden.
+    const hasQuote = foldQuote(doc, showQuote || !!highlight?.trim());
+
     const body = doc.body.innerHTML;
     return {
       blockedImages: blocked,
+      hasQuote,
       srcDoc: `<!doctype html><html><head><meta charset="utf-8"><base target="_blank">
 <style>
   body { margin: 0; padding: 4px 2px; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
@@ -133,7 +166,7 @@ export function HtmlMailView({
   mark.asanagi-hl { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }
 </style></head><body>${body}</body></html>`,
     };
-  }, [html, showImages, fontScale, highlight]);
+  }, [html, showImages, fontScale, highlight, showQuote]);
 
   // Scroll only once per (html, highlight) — not on every image-toggle reload.
   const scrolledRef = useRef(false);
@@ -198,6 +231,14 @@ export function HtmlMailView({
         }
         style={{ height: 400 }}
       />
+      {hasQuote && !highlight?.trim() && (
+        <button
+          onClick={() => setShowQuote((s) => !s)}
+          className="mt-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-[11px] text-fg-muted hover:border-accent hover:text-accent"
+        >
+          {showQuote ? "引用（過去のやりとり）を隠す ▴" : "引用（過去のやりとり）を表示 ▾"}
+        </button>
+      )}
     </div>
   );
 }

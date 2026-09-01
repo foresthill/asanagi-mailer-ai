@@ -103,12 +103,20 @@ export function ThreadView({
   // Long threads (10–20 messages) make the opened message (amber) require a lot
   // of scrolling. On open, scroll that message into view automatically.
   const currentRef = useRef<HTMLDivElement>(null);
+  // Auto-scroll to the opened message ONCE per open — not on every messages
+  // update. Otherwise a late thread refresh (server-side thread() lands after
+  // the cache paint) re-fires this and yanks you back while you're scrolling up
+  // through the history (ばーっと過去を遡れない問題).
+  const scrolledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (view !== "cards") return; // chat mode scrolls itself
+    if (view !== "cards" || !selectedId || scrolledFor.current === selectedId) return;
     const t = setTimeout(() => {
-      // Land on the TOP of the opened message (not centered/bottom) so reading
-      // starts at its head.
-      currentRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+      // Wait until the anchor is actually in the DOM (messages may still be
+      // loading) — only then count it as scrolled so we don't retry forever.
+      if (currentRef.current) {
+        currentRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
+        scrolledFor.current = selectedId;
+      }
     }, 80); // let the reader's enter animation settle first
     return () => clearTimeout(t);
   }, [selectedId, messages.length, view]);
