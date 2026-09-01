@@ -235,6 +235,24 @@ export function cachedList(accounts: string[], state: MailboxState, limit = 100)
   return rows.map(rowToEmail);
 }
 
+/** Of the given provider ids, which are already cached for this account. Used
+ *  by the inbox backfill to fetch only the missing ones. */
+export function existingIds(account: string, ids: string[]): Set<string> {
+  if (!ids.length) return new Set();
+  const out = new Set<string>();
+  const db = getDb();
+  // Chunk to stay well under SQLite's parameter limit.
+  for (let i = 0; i < ids.length; i += 400) {
+    const chunk = ids.slice(i, i + 400);
+    const marks = chunk.map(() => "?").join(",");
+    const rows = db
+      .prepare(`SELECT id FROM messages WHERE account = ? AND id IN (${marks})`)
+      .all(account, ...chunk) as Record<string, unknown>[];
+    for (const r of rows) out.add(String(r.id));
+  }
+  return out;
+}
+
 export function cachedGet(account: string, id: string): Email | null {
   const row = getDb()
     .prepare("SELECT * FROM messages WHERE account = ? AND id = ?")

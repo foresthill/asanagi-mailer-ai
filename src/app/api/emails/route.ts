@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { listAccounts, getProviderFor } from "@/lib/email/accounts";
-import { cachedList, cachedStarred, repliedThreadIds, upsertEmails } from "@/lib/db";
+import { cachedList, cachedStarred, existingIds, repliedThreadIds, upsertEmails } from "@/lib/db";
 import { getEmailSettings, listSignals } from "@/lib/store";
 import { annotateImportance } from "@/lib/importance";
 import type { Email, FolderView } from "@/lib/types";
@@ -120,6 +120,32 @@ export async function GET(req: Request) {
         }
       }),
     );
+
+    // Non-blocking backfill: the live list only fetches the provider's newest
+    // window (Gmail 50), so mail that arrived while the app was closed — buried
+    // under 50+ newer — never gets cached and silently vanishes from the inbox.
+    // After responding, page the IDs and cache the missing ones (bounded per
+    // load; self-limits to a cheap id-list call once caught up).
+    if (state === "inbox") {
+      after(async () => {
+        for (const a of targets) {
+          try {
+            const provider = await getProviderFor(a.key);
+            if (!provider.listIds) continue;
+            const ids = await provider.listIds("inbox", 400);
+            const have = existingIds(a.key, ids);
+            const missing = ids.filter((id) => !have.has(id)).slice(0, 50);
+            if (!missing.length) continue;
+            const fetched = (
+              await Promise.all(missing.map((id) => provider.get(id).catch(() => null)))
+            ).filter((e): e is Email => !!e);
+            if (fetched.length) upsertEmails(a.key, fetched.map((e) => ({ ...e, html: undefined })));
+          } catch {
+            /* backfill is best-effort */
+          }
+        }
+      });
+    }
 
     const emails = await finalize(lists, state);
     return NextResponse.json({ emails, accounts, stale });

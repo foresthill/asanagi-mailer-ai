@@ -253,21 +253,41 @@ export class GmailProvider implements EmailProvider {
     this.inboxCutoff = inboxCutoff;
   }
 
-  async list(state: MailboxState): Promise<Email[]> {
+  /** Gmail search query for a mailbox state (+ the inbox 表示開始日 horizon). */
+  private stateQuery(state: MailboxState): string {
     // The horizon keeps a years-deep inbox emptiable: without it, archiving
     // the visible 50 just surfaces the next-older 50, forever (80k+ mails).
     const horizon =
       state === "inbox" && this.inboxCutoff
         ? ` after:${this.inboxCutoff.replace(/-/g, "/")}`
         : "";
-    const q =
-      (state === "inbox"
+    const base =
+      state === "inbox"
         ? "in:inbox"
         : state === "trashed"
           ? "in:trash"
           : state === "sent"
             ? "in:sent"
-            : "-in:inbox -in:trash -in:sent") + horizon; // archived: exclude sent too
+            : "-in:inbox -in:trash -in:sent"; // archived: exclude sent too
+    return base + horizon;
+  }
+
+  /** Just the message IDs for a state (cheap — no per-message get). Used by the
+   *  cache backfill so mail that never passed a live sync still gets cached. */
+  async listIds(state: MailboxState, limit = 400): Promise<string[]> {
+    const q = this.stateQuery(state);
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await this.gmail.users.messages.list({ userId: "me", q, maxResults: 500, pageToken });
+      for (const m of res.data.messages ?? []) if (m.id) ids.push(m.id);
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken && ids.length < limit);
+    return ids.slice(0, limit);
+  }
+
+  async list(state: MailboxState): Promise<Email[]> {
+    const q = this.stateQuery(state);
     const res = await this.gmail.users.messages.list({ userId: "me", q, maxResults: 50 });
     const ids = res.data.messages ?? [];
     const full = await Promise.all(
