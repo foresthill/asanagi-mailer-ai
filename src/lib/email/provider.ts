@@ -11,6 +11,14 @@ export interface EmailProvider {
   /** List messages in a mailbox, newest first. */
   list(state: MailboxState): Promise<Email[]>;
 
+  /**
+   * Just the message IDs for a mailbox (cheap — no bodies). Optional: used by
+   * the cache backfill to catch mail that never passed a live `list()` sync
+   * (arrived while the app was closed and buried under newer mail). Backends
+   * without it simply skip backfill.
+   */
+  listIds?(state: MailboxState, limit?: number): Promise<string[]>;
+
   /** Fetch a single message (full body). `messageIdHint` (the cached Message-ID)
    *  lets IMAP relocate a mail whose id went stale after an archive/move. */
   get(id: string, messageIdHint?: string): Promise<Email | null>;
