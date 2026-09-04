@@ -49,6 +49,31 @@ claude mcp add asanagi -- node /Users/foresthill/Development/AI-Driven/ai-mailer
 "env": { "ASANAGI_DATA_DIR": "/path/to/.data" }
 ```
 
+## Claude Desktop にワンクリック導入（.mcpb・推奨）
+
+設定JSONを手で書かず、**Desktop Extension（`.mcpb`）**でクリック導入できます。
+
+### ビルド
+```bash
+cd mcp
+npm install
+npx --yes @anthropic-ai/mcpb pack . asanagi.mcpb
+```
+→ `mcp/asanagi.mcpb` が生成（サーバ＋依存＋manifest を同梱。**メール本体 .data は含まない**）。
+
+### インストール
+1. Claude Desktop → **Settings → Extensions → Install Extension**
+2. `asanagi.mcpb` を選択
+3. **「Asanagi データフォルダ」**に、このリポジトリの `.data`（`asanagi.db` がある場所）を指定
+4. 確認 → 完了（`asanagi` の6ツールが使える）
+
+### 配布（GitHub Actions）
+`.github/workflows/mcpb.yml` がタグ `mcp-v*`（または手動実行）で `.mcpb` をビルドし、
+Release に添付します。バンドルはコードのみなので公開リリースで秘匿データは出ません。
+```bash
+git tag mcp-v0.1.0 && git push origin mcp-v0.1.0
+```
+
 ## 動作確認
 ```bash
 npm run mcp   # 単体起動（stdio。Ctrl+C で終了）

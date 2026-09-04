@@ -1,0 +1,34 @@
+{
+  "manifest_version": "0.3",
+  "name": "asanagi",
+  "display_name": "Asanagi メール MCP",
+  "version": "0.1.0",
+  "description": "Asanagi のローカルメールキャッシュとプロジェクト・ハブを読み取り専用で公開するMCPサーバ（端末内で完結）",
+  "author": { "name": "foresthill" },
+  "server": {
+    "type": "node",
+    "entry_point": "asanagi-mcp.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/asanagi-mcp.mjs"],
+      "env": { "ASANAGI_DATA_DIR": "${user_config.data_dir}" }
+    }
+  },
+  "user_config": {
+    "data_dir": {
+      "type": "directory",
+      "title": "Asanagi データフォルダ",
+      "description": "Asanagi の .data フォルダ（asanagi.db がある場所）を選んでください",
+      "required": true,
+      "default": "${HOME}/Development/AI-Driven/ai-mailer/.data"
+    }
+  },
+  "tools": [
+    { "name": "search_mail", "description": "メール検索（件名・本文・差出人・宛先）" },
+    { "name": "list_recent", "description": "フォルダの最近のメール" },
+    { "name": "get_thread", "description": "会話を時系列で（自分の送信含む）" },
+    { "name": "check_received", "description": "特定の差出人・件名が届いているか確認" },
+    { "name": "get_email", "description": "1通の本文全文" },
+    { "name": "list_projects", "description": "プロジェクト・ハブ（進捗・次アクション）" }
+  ]
+}
