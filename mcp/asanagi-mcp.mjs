@@ -18,15 +18,32 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-const DATA_DIR = process.env.ASANAGI_DATA_DIR || path.join(import.meta.dirname, "..", ".data");
-const DB_PATH = path.join(DATA_DIR, "asanagi.db");
-const PROJECTS_PATH = path.join(DATA_DIR, "projects.json");
+const CONFIGURED = process.env.ASANAGI_DATA_DIR || path.join(import.meta.dirname, "..", ".data");
+
+/** Find the folder that actually holds asanagi.db. Accepts either the `.data`
+ *  folder itself OR a parent (e.g. the project root) that contains `.data` —
+ *  so users can pick the VISIBLE project folder in Claude Desktop's picker
+ *  instead of the hidden `.data` folder. */
+function dataDir() {
+  for (const d of [CONFIGURED, path.join(CONFIGURED, ".data")]) {
+    if (existsSync(path.join(d, "asanagi.db"))) return d;
+  }
+  return CONFIGURED;
+}
+const dbPath = () => path.join(dataDir(), "asanagi.db");
+const projectsPath = () => path.join(dataDir(), "projects.json");
 
 let _db;
 function db() {
   if (!_db) {
-    if (!existsSync(DB_PATH)) throw new Error(`Asanagi cache not found: ${DB_PATH}. 先にアプリを一度起動してメールを同期してください。`);
-    _db = new DatabaseSync(DB_PATH, { readOnly: true });
+    const p = dbPath();
+    if (!existsSync(p)) {
+      throw new Error(
+        `asanagi.db が見つかりません（探した場所: ${CONFIGURED} と ${path.join(CONFIGURED, ".data")}）。` +
+          `Asanagi のプロジェクトフォルダ（.data がある場所）を指定し、先にアプリを起動してメールを同期してください。`,
+      );
+    }
+    _db = new DatabaseSync(p, { readOnly: true });
   }
   return _db;
 }
@@ -175,9 +192,10 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    if (!existsSync(PROJECTS_PATH)) return ok({ projects: [], note: "まだ生成されていません。アプリの『プロジェクト』→『メール履歴から更新』で生成してください。" });
+    const pp = projectsPath();
+    if (!existsSync(pp)) return ok({ projects: [], note: "まだ生成されていません。アプリの『プロジェクト』→『メール履歴から更新』で生成してください。" });
     try {
-      return ok(JSON.parse(await readFile(PROJECTS_PATH, "utf8")));
+      return ok(JSON.parse(await readFile(pp, "utf8")));
     } catch {
       return ok({ projects: [], error: "projects.json を読めませんでした" });
     }
