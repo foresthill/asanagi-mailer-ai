@@ -1,0 +1,11 @@
+{
+  "name": "asanagi-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Asanagi 読み取り専用MCPサーバ（.mcpb バンドルのルート）",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.4.3"
+  }
+}

@@ -1,0 +1,37 @@
+name: Build Asanagi MCPB
+
+# Claude Desktop 用の .mcpb（ワンクリック拡張）をビルド。
+# バンドルは CODE のみ（サーバ＋依存＋manifest）で、メール本体(.data)は含まない
+# ＝実行時にユーザー端末のパスから読むので、公開リリースしても秘匿データは出ない。
+on:
+  push:
+    tags: ["mcp-v*"] # 例: git tag mcp-v0.1.0 && git push --tags
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # リリースに .mcpb を添付するため
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install bundle deps
+        working-directory: mcp
+        run: npm install
+      - name: Pack .mcpb
+        working-directory: mcp
+        run: npx --yes @anthropic-ai/mcpb pack . asanagi.mcpb
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: asanagi-mcpb
+          path: mcp/asanagi.mcpb
+      - name: Attach to release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mcp/asanagi.mcpb
