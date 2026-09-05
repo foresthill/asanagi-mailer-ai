@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { Archive, Check, Inbox, Loader2, Sparkles, Trash2, X } from "lucide-react";
 import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -116,7 +116,9 @@ export function SweepDialog({
   useEffect(() => {
     if (loading || error || items.length === 0) return;
     const total = items.length;
-    const step = Math.max(50, Math.min(120, Math.floor(2000 / total)));
+    // Stagger so it reads as a wave: brisk for long lists (rows overlap the
+    // 0.45s sweep), deliberate for short ones. Whole cascade stays ~≤2s.
+    const step = Math.max(35, Math.min(90, Math.floor(1800 / total)));
     const timer = setInterval(() => {
       setRevealed((n) => {
         const next = n + 1;
@@ -145,6 +147,15 @@ export function SweepDialog({
   const aiCount = items.filter((i) => i.source === "ai").length;
   const freeCount = items.length - aiCount;
   const usd = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`);
+
+  /** 「なぎ払い」演出のウォッシュ色（判定＝行の運命を色で示す）。
+   *  ゴミ箱=赤 / アーカイブ=青 / 残す=無し。CSS変数 --sweep-wash に渡す。 */
+  const washFor = (action: SweepAction): string =>
+    action === "trash"
+      ? "color-mix(in srgb, var(--high) 30%, transparent)"
+      : action === "archive"
+        ? "color-mix(in srgb, var(--accent) 26%, transparent)"
+        : "transparent";
 
   /** 全行を一括で同じ処分に（ヘッダの一括ボタン）。 */
   const setAll = (action: SweepAction) =>
@@ -317,6 +328,9 @@ export function SweepDialog({
                   return (
                     <div
                       key={i.id}
+                      // Wash color = the verdict AT reveal (the animation plays
+                      // once on mount, showing how this mail was dealt).
+                      style={{ "--sweep-wash": washFor(i.action) } as CSSProperties}
                       className={cn(
                         "animate-sweep-reveal flex items-center gap-2.5 rounded-lg px-2.5 py-1.5",
                         cur === "keep" ? "opacity-55" : "",
