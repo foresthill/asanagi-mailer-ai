@@ -1,11 +1,11 @@
-# Asanagi MCP サーバ（読み取り専用・ローカル）
+# Asanagi MCP サーバ（読み取り中心＋下書きのみ・ローカル）
 
 Asanagi のローカルキャッシュ（`.data/asanagi.db`）と プロジェクト・ハブ
 （`.data/projects.json`）を **MCP ツール**として公開します。Claude 側から
 「このメール来てた？」「あの件どうなってた？」「プロジェクトの進捗は？」を
 **端末内のデータ**で答えられます。
 
-- **read-only**（検索・取得・進捗のみ）。送信/アーカイブ/削除はアプリ側の明示操作に限定。
+- **書き込みは下書き作成だけ**（検索・取得・進捗＋`create_draft`）。**送信はしない**・アーカイブ/削除も無し。下書きは `.data/drafts.json` に保存され、アプリの下書きから人が確認・編集して手動送信する。
 - **local-first**：ローカルの SQLite を読むだけ。答えは接続した AI クライアントに渡ります（＝BYOK と同じ扱い）。
 - 検索対象は **同期済みキャッシュ**。まだ触れていない古いメールは、先にアプリで開く/同期すると対象になります。
 
@@ -14,10 +14,11 @@ Asanagi のローカルキャッシュ（`.data/asanagi.db`）と プロジェ�
 |---|---|
 | `search_mail(query, limit?)` | メール検索（件名・本文・差出人・宛先） |
 | `list_recent(folder?, account?, limit?)` | フォルダの最近のメール |
-| `get_thread(id)` | 会話を時系列で（自分の送信も含む） |
+| `get_thread(id)` | 会話を時系列で（自分の送信も含む・`replied`/`awaitingReply` 付き） |
 | `check_received(from?, subject?, sinceDays?)` | 届いているか確認（件数＋最新） |
 | `get_email(id)` | 1通の本文全文 |
 | `list_projects()` | プロジェクト・ハブ（進捗・次アクション） |
+| `create_draft(body, reply_to_id?, to?, cc?, subject?, account?)` | 返信/新規の**下書き**を作成（送信しない・`.data/drafts.json` に保存） |
 
 ## セットアップ
 
@@ -65,7 +66,7 @@ npx --yes @anthropic-ai/mcpb pack . asanagi.mcpb
 1. Claude Desktop → **Settings → Extensions → Install Extension**
 2. `asanagi.mcpb` を選択
 3. **「Asanagi データフォルダ」**に、このリポジトリの `.data`（`asanagi.db` がある場所）を指定
-4. 確認 → 完了（`asanagi` の6ツールが使える）
+4. 確認 → 完了（`asanagi` の7ツールが使える）
 
 ### 配布（GitHub Actions）
 `.github/workflows/mcpb.yml` がタグ `mcp-v*`（または手動実行）で `.mcpb` をビルドし、
@@ -82,4 +83,4 @@ npm run mcp   # 単体起動（stdio。Ctrl+C で終了）
 
 ## メモ（今後）
 - claude.ai（web）から使うには HTTP トランスポート版＋認証が必要（別途）。
-- 書き込み系ツール（送信・アーカイブ等）は事故防止のため未実装。入れる場合は明示確認付きで。
+- 送信・アーカイブ・削除は事故防止のため**未実装**（`create_draft` は下書き保存のみで送信しない）。送信までMCPに載せる場合は明示確認付きで。

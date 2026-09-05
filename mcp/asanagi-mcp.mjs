@@ -12,7 +12,8 @@
  */
 import path from "node:path";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -44,6 +45,12 @@ function db() {
       );
     }
     _db = new DatabaseSync(p, { readOnly: true });
+    // Fail fast (5s) instead of hanging if the app holds a lock mid-write.
+    try {
+      _db.exec("PRAGMA busy_timeout = 5000");
+    } catch {
+      /* pragma is best-effort */
+    }
   }
   return _db;
 }
@@ -93,7 +100,14 @@ function ok(data) {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
 
-const server = new McpServer({ name: "asanagi", version: "0.1.0" });
+/** "Name <a@b>" or "a@b" -> { name?, email }. */
+function parseAddr(s) {
+  const m = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(s);
+  if (m) return { name: m[1] || undefined, email: m[2].trim() };
+  return { email: String(s).trim() };
+}
+
+const server = new McpServer({ name: "asanagi", version: "0.1.2" });
 
 server.registerTool(
   "search_mail",
@@ -143,7 +157,20 @@ server.registerTool(
     const marks = acct ? "account = ? AND thread_id = ?" : "thread_id = ?";
     const params = acct ? [acct, threadId] : [threadId];
     const rows = db().prepare(`SELECT * FROM messages WHERE ${marks} ORDER BY date ASC LIMIT 100`).all(...params);
-    return ok(rows.map((r) => ({ ...lite(r), body: (r.body || "").slice(0, 4000) })));
+    // "返したか" — did I already reply in this thread? True if a sent message
+    // exists AND it's newer than the newest received one (a stale sent that
+    // predates a later inbound doesn't count as "replied to that inbound").
+    const sent = rows.filter((r) => r.state === "sent");
+    const inbound = rows.filter((r) => r.state !== "sent");
+    const lastSent = sent.at(-1)?.date ?? "";
+    const lastInbound = inbound.at(-1)?.date ?? "";
+    const replied = sent.length > 0 && lastSent >= lastInbound;
+    return ok({
+      replied,
+      awaitingReply: inbound.length > 0 && lastInbound > lastSent,
+      count: rows.length,
+      messages: rows.map((r) => ({ ...lite(r), body: (r.body || "").slice(0, 4000) })),
+    });
   },
 );
 
@@ -199,6 +226,94 @@ server.registerTool(
     } catch {
       return ok({ projects: [], error: "projects.json を読めませんでした" });
     }
+  },
+);
+
+// The ONLY write tool. Draft-only by design — it never sends. Drafts land in
+// .data/drafts.json (the same local store the app's composer reads), so you
+// open, review, edit and send them by hand in Asanagi. No provider call here.
+server.registerTool(
+  "create_draft",
+  {
+    description:
+      "返信・新規メールの下書きを作成する（送信はしない・端末内の下書きに保存のみ）。" +
+      "reply_to_id を渡すと、その相手・件名(Re:)・スレッドを引き継いで返信下書きにする。" +
+      "作成後は Asanagi アプリの下書きから内容を確認・編集して手動で送信する。",
+    inputSchema: {
+      body: z.string().describe("本文（プレーンテキスト）"),
+      reply_to_id: z.string().optional().describe("返信元の email id (account/xxx)。相手・件名・スレッドを引き継ぐ"),
+      to: z.array(z.string()).optional().describe("宛先。'Name <a@b>' か 'a@b'。reply_to_id 指定時は省略可"),
+      cc: z.array(z.string()).optional().describe("Cc。'Name <a@b>' か 'a@b'"),
+      subject: z.string().optional().describe("件名。reply_to_id 指定時は省略で自動 Re:"),
+      account: z.string().optional().describe("送信元アカウント。省略時は返信元 or 既定"),
+    },
+  },
+  async ({ body, reply_to_id, to, cc, subject, account }) => {
+    let toAddrs = (to ?? []).map(parseAddr);
+    let subj = subject ?? "";
+    let account_ = account;
+    let threadId;
+    let inReplyTo;
+
+    if (reply_to_id) {
+      const { account: a, raw } = splitId(reply_to_id);
+      const src = a
+        ? db().prepare("SELECT * FROM messages WHERE account = ? AND id = ?").get(a, raw)
+        : db().prepare("SELECT * FROM messages WHERE id = ? LIMIT 1").get(raw);
+      if (!src) return ok({ error: "返信元が見つかりませんでした（キャッシュ内に無い可能性）" });
+      // Reply to the sender of the source message.
+      if (!toAddrs.length && src.from_email) {
+        toAddrs = [{ name: src.from_name || undefined, email: src.from_email }];
+      }
+      if (!subj) {
+        const base = String(src.subject ?? "").replace(/^\s*(re:\s*)+/i, "").trim();
+        subj = `Re: ${base}`;
+      }
+      account_ = account_ ?? src.account;
+      threadId = src.thread_id || src.id;
+      inReplyTo = src.message_id || undefined;
+    }
+
+    if (!toAddrs.length) {
+      return ok({ error: "宛先(to)が空です。reply_to_id か to を指定してください。" });
+    }
+
+    const draft = {
+      id: randomUUID(),
+      to: toAddrs,
+      ...(cc && cc.length ? { cc: cc.map(parseAddr) } : {}),
+      subject: subj,
+      body,
+      ...(threadId ? { threadId } : {}),
+      ...(inReplyTo ? { inReplyTo } : {}),
+      ...(account_ ? { account: account_ } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Upsert into drafts.json (same shape the app's saveDraft writes).
+    const dp = path.join(dataDir(), "drafts.json");
+    let all = [];
+    try {
+      all = JSON.parse(await readFile(dp, "utf8"));
+      if (!Array.isArray(all)) all = [];
+    } catch {
+      /* no file yet → start fresh */
+    }
+    all.push(draft);
+    await writeFile(dp, JSON.stringify(all, null, 2), "utf8");
+
+    return ok({
+      created: true,
+      note: "下書きに保存しました（未送信）。Asanagi アプリの下書きから確認・編集して送信してください。",
+      draft: {
+        id: draft.id,
+        to: draft.to,
+        cc: draft.cc,
+        subject: draft.subject,
+        account: draft.account,
+        isReply: !!reply_to_id,
+      },
+    });
   },
 );
 
