@@ -735,10 +735,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     showToast("学習しました（今後の判定に反映されます）");
   };
 
-  /** Open the composer with a prepared initial state. */
+  /** Open the composer with a prepared initial state. `target` overrides the
+   *  reply source — so a per-message 返信 in the thread replies to THAT message
+   *  (In-Reply-To = its Message-ID), not just whatever is anchored. */
   const openCompose = useCallback(
-    (kind: ComposeKind, mode: ComposeAI) => {
-      if (kind !== "new" && !selected) return;
+    (kind: ComposeKind, mode: ComposeAI, target?: Email) => {
+      const src = target ?? selected;
+      if (kind !== "new" && !src) return;
       // Starting a new compose while one is open would replace the draft.
       if (
         compose !== null &&
@@ -746,7 +749,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       )
         return;
       const selfAddresses = accounts.map((a) => a.address).filter((s): s is string => !!s);
-      const init = buildCompose(kind, mode, selected ?? undefined, selfAddresses);
+      const init = buildCompose(kind, mode, src ?? undefined, selfAddresses);
       // New mail from a specific account view sends from that account.
       if (kind === "new" && account !== "all") init.account = account;
       // Conversation so far → AI drafting context (agreed dates, open points).
@@ -754,6 +757,15 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       startCompose(init);
     },
     [selected, accounts, account, thread, compose],
+  );
+
+  /** Reply/forward to a specific thread message (per-message action buttons). */
+  const replyToMessage = useCallback(
+    (id: string, kind: ComposeKind, mode: ComposeAI) => {
+      const m = thread?.find((x) => x.id === id) ?? (selected?.id === id ? selected : undefined);
+      openCompose(kind, mode, m ?? undefined);
+    },
+    [thread, selected, openCompose],
   );
 
   const onSent = (kind: "sent" | "scheduled") => {
@@ -951,6 +963,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onTrash={() => selected && trash([selected.id])}
           onRestore={() => selected && restore([selected.id])}
           onReply={openCompose}
+          onReplyMessage={replyToMessage}
           onToggleStar={() => selected && toggleStar(selected.id)}
           onImportanceFeedback={onImportanceFeedback}
           onNoteSaved={loadNoteIds}

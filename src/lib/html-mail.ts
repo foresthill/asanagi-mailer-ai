@@ -37,7 +37,10 @@ export function wrapHtmlBody(inner: string): string {
 
 /** Gmail-style quoted-block wrapper for the original message in a reply. */
 export function quoteBlock(innerHtml: string): string {
-  return `<blockquote style="margin:0.8em 0 0 0;padding-left:1em;border-left:2px solid #ccc;color:#555">${innerHtml}</blockquote>`;
+  // type="cite" marks this as quoted reply history — the standard signal other
+  // clients honor, and what our reader's foldQuote() folds behind a toggle
+  // (it deliberately ignores bare <blockquote> to avoid folding inline quotes).
+  return `<blockquote type="cite" style="margin:0.8em 0 0 0;padding-left:1em;border-left:2px solid #ccc;color:#555">${innerHtml}</blockquote>`;
 }
 
 /** An inline image pulled out of an HTML body for cid embedding. */

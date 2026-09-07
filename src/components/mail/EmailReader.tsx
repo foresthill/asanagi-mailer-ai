@@ -47,6 +47,7 @@ export function EmailReader({
   onTrash,
   onRestore,
   onReply,
+  onReplyMessage,
   onToggleStar,
   onImportanceFeedback,
   onNoteSaved,
@@ -62,6 +63,8 @@ export function EmailReader({
   onTrash: () => void;
   onRestore: () => void;
   onReply: (kind: ComposeKind, mode: ComposeAI) => void;
+  /** Reply/forward to a SPECIFIC thread message (per-message action buttons). */
+  onReplyMessage?: (id: string, kind: ComposeKind, mode: ComposeAI) => void;
   onToggleStar: () => void;
   onImportanceFeedback: (importance: Importance) => void;
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
@@ -277,6 +280,7 @@ export function EmailReader({
               messages={thread}
               selectedId={email.id}
               onOpen={onOpenMessage}
+              onReplyMessage={onReplyMessage}
               anchorHtml={email.html}
               anchorAttachments={email.attachments}
               highlight={highlight}
