@@ -49,6 +49,8 @@ export function SweepDialog({
   /** AI推奨を初期値に、ユーザーが行ごとに上書きできる現在の処分。 */
   const [actions, setActions] = useState<Record<string, SweepAction>>({});
   const [applying, setApplying] = useState(false);
+  /** 確定後の余韻: list=一覧 / sweeping=処分対象が払い出される / calm=凪いだ表示。 */
+  const [phase, setPhase] = useState<"list" | "sweeping" | "calm">("list");
   const [error, setError] = useState<string | null>(null);
   /** 判定結果を1行ずつ「整えて」見せる演出用のカウンタ（表示行数）。 */
   const [revealed, setRevealed] = useState(0);
@@ -175,10 +177,14 @@ export function SweepDialog({
    *  何も記録せず、次回また提示される。 */
   async function apply() {
     setApplying(true);
+    // 処分対象を「払い出す」演出へ（keep はその場に残る）。サーバが速くても
+    // 払い出しが目に入るよう、アニメ分の最低時間を確保してから凪ぎ表示に移る。
+    setPhase("sweeping");
     try {
       const archiveIds = items.filter((i) => actions[i.id] === "archive").map((i) => i.id);
       const trashIds = items.filter((i) => actions[i.id] === "trash").map((i) => i.id);
-      await onApply(archiveIds, trashIds);
+      const sweepAnim = new Promise((r) => setTimeout(r, 600));
+      await Promise.all([onApply(archiveIds, trashIds), sweepAnim]);
       try {
         await fetch("/api/sweep/reviewed", {
           method: "POST",
@@ -211,7 +217,14 @@ export function SweepDialog({
       } catch {
         /* 学習は best-effort */
       }
+      // 払い出しが済んだら、少しだけ「凪いだ」余韻を見せてから閉じる。
+      setPhase("calm");
+      await new Promise((r) => setTimeout(r, 900));
       onClose();
+    } catch (e) {
+      // 処分に失敗したら一覧へ戻し、理由を出す（勝手に閉じない）。
+      setPhase("list");
+      setError(e instanceof Error ? `処分に失敗しました: ${e.message}` : "処分に失敗しました");
     } finally {
       setApplying(false);
     }
@@ -257,6 +270,14 @@ export function SweepDialog({
             <p className="py-10 text-center text-sm text-fg-subtle">
 受信箱は凪いでいます 🌊
             </p>
+          ) : phase === "calm" ? (
+            <div className="animate-calm flex flex-col items-center gap-2 py-16 text-center">
+              <span className="text-4xl">🌊</span>
+              <p className="text-sm font-medium text-fg">受信箱が凪ぎました</p>
+              <p className="text-[11px] text-fg-subtle">
+                アーカイブ{archiveCount}・ゴミ箱{trashCount}を払い出しました
+              </p>
+            </div>
           ) : (
             <>
               {warning && (
@@ -330,9 +351,17 @@ export function SweepDialog({
                       key={i.id}
                       // Wash color = the verdict AT reveal (the animation plays
                       // once on mount, showing how this mail was dealt).
-                      style={{ "--sweep-wash": washFor(i.action) } as CSSProperties}
+                      // Wash color follows the CURRENT disposition (so a manual
+                      // archive→trash change sweeps out in the right color).
+                      style={{ "--sweep-wash": washFor(cur) } as CSSProperties}
                       className={cn(
-                        "animate-sweep-reveal flex items-center gap-2.5 rounded-lg px-2.5 py-1.5",
+                        "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5",
+                        // reveal on first show; on 確定, actionable rows 払い出し.
+                        phase === "sweeping" && cur !== "keep"
+                          ? "animate-sweep-out"
+                          : phase === "list"
+                            ? "animate-sweep-reveal"
+                            : "",
                         cur === "keep" ? "opacity-55" : "",
                       )}
                     >
