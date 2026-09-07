@@ -8,9 +8,11 @@ import { parseTerms } from "./highlight";
 function isAttribution(l: string): boolean {
   if (/^\s*>/.test(l)) return false; // a quote line itself, not the intro
   return (
-    /<[^@\s]+@[^>\s]+>\s*[:：]?\s*$/.test(l) || // "… 山田 <a@b.c>:"（自作引用含む）
+    /<[^@\s]+@[^>\s]+>\s*(のメール)?\s*[:：]?\s*$/.test(l) || // "… 山田 <a@b.c>:" / "…<a@b.c>のメール:"（Gmail 日本語）
     /^On\b.*\bwrote:\s*$/.test(l) || // Gmail (EN)
-    /^\d{4}年\d{1,2}月\d{1,2}日.*[:：]\s*$/.test(l) || // 日本語の日時引用
+    /^\d{4}年\d{1,2}月\d{1,2}日.*[:：]\s*$/.test(l) || // 日本語の日時引用（年月日）
+    /^\d{4}[/／]\d{1,2}[/／]\d{1,2}.*[:：]\s*$/.test(l) || // "2026/09/04 14:36、… のメール:"（スラッシュ日付）
+    /のメール\s*[:：]\s*$/.test(l) || // "…さんからのメール:" 系の締め
     /^-{2,}\s*(Original Message|元のメッセージ|転送メッセージ)\s*-{2,}/i.test(l) ||
     /^_{5,}$/.test(l) || // Outlook の区切り線
     /^(差出人|From)\s*[:：]/.test(l) // Outlook ヘッダブロック

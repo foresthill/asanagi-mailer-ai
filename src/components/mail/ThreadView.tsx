@@ -1,8 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUpRight, ChevronDown, Loader2, MessageCircle, Paperclip, Rows3 } from "lucide-react";
+import {
+  ArrowUpRight,
+  ChevronDown,
+  Forward,
+  Loader2,
+  MessageCircle,
+  Paperclip,
+  Reply,
+  Rows3,
+  Sparkles,
+} from "lucide-react";
 import type { Email, Attachment } from "@/lib/types";
+import type { ComposeAI, ComposeKind } from "./compose";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ConversationBubbles } from "./ConversationBubbles";
@@ -42,6 +53,7 @@ export function ThreadView({
   messages,
   selectedId,
   onOpen,
+  onReplyMessage,
   anchorHtml,
   anchorAttachments,
   highlight,
@@ -50,6 +62,8 @@ export function ThreadView({
   selectedId: string;
   /** Re-anchor the reader to this message (open it as the current email). */
   onOpen?: (id: string) => void;
+  /** Reply/forward to THIS specific message (per-message action buttons). */
+  onReplyMessage?: (id: string, kind: ComposeKind, mode: ComposeAI) => void;
   /** The anchor message's already-loaded rich body / attachments (the reader
    *  fetched them), so its card renders instantly without a second round-trip. */
   anchorHtml?: string;
@@ -260,16 +274,48 @@ export function ThreadView({
             </div>
             {expanded && (
               <div className="rounded-b-xl border-t border-border bg-surface px-4 py-4">
-                {onOpen && m.id !== selectedId && (
-                  <div className="mb-2 flex justify-end">
-                    <button
-                      onClick={() => onOpen(m.id)}
-                      title="このメールをリーダーで開く（返信・重要学習などに使えます）"
-                      className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
-                    >
-                      このメールを開く
-                      <ArrowUpRight className="size-3" />
-                    </button>
+                {/* Per-message actions: reply/forward to THIS message so it's
+                    clear which mail you're answering — no scrolling to the top. */}
+                {(onReplyMessage || (onOpen && m.id !== selectedId)) && (
+                  <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                    {onReplyMessage && (
+                      <>
+                        <button
+                          onClick={() => onReplyMessage(m.id, "reply", "plain")}
+                          title="このメールに返信"
+                          className="flex items-center gap-1 rounded-md border border-accent bg-accent-soft px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:opacity-90"
+                        >
+                          <Reply className="size-3" />
+                          返信
+                        </button>
+                        <button
+                          onClick={() => onReplyMessage(m.id, "reply", "ai")}
+                          title="AIがこのメールへの返信を下書き"
+                          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                        >
+                          <Sparkles className="size-3" />
+                          AIで返信
+                        </button>
+                        <button
+                          onClick={() => onReplyMessage(m.id, "forward", "plain")}
+                          title="このメールを転送"
+                          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                        >
+                          <Forward className="size-3" />
+                          転送
+                        </button>
+                      </>
+                    )}
+                    {onOpen && m.id !== selectedId && (
+                      <button
+                        onClick={() => onOpen(m.id)}
+                        title="このメールをリーダーで開く（重要学習などに使えます）"
+                        className="ml-auto flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                      >
+                        このメールを開く
+                        <ArrowUpRight className="size-3" />
+                      </button>
+                    )}
                   </div>
                 )}
                 {/* Each message's attachments render inline in its own card —
