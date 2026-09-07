@@ -4,16 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   ChevronDown,
-  Forward,
   Loader2,
   MessageCircle,
   Paperclip,
-  Reply,
   Rows3,
-  Sparkles,
 } from "lucide-react";
 import type { Email, Attachment } from "@/lib/types";
 import type { ComposeAI, ComposeKind } from "./compose";
+import { ReplyButton, AiReplyButton } from "./ReplyButtons";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ConversationBubbles } from "./ConversationBubbles";
@@ -274,36 +272,15 @@ export function ThreadView({
             </div>
             {expanded && (
               <div className="rounded-b-xl border-t border-border bg-surface px-4 py-4">
-                {/* Per-message actions: reply/forward to THIS message so it's
-                    clear which mail you're answering — no scrolling to the top. */}
+                {/* Per-message actions: same split buttons as the reader bar
+                    (返信/AIで返信＋メニューに 全員に返信/AIで全員に返信/転送) so
+                    it's clear which mail you're answering — no scrolling up. */}
                 {(onReplyMessage || (onOpen && m.id !== selectedId)) && (
-                  <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
                     {onReplyMessage && (
                       <>
-                        <button
-                          onClick={() => onReplyMessage(m.id, "reply", "plain")}
-                          title="このメールに返信"
-                          className="flex items-center gap-1 rounded-md border border-accent bg-accent-soft px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:opacity-90"
-                        >
-                          <Reply className="size-3" />
-                          返信
-                        </button>
-                        <button
-                          onClick={() => onReplyMessage(m.id, "reply", "ai")}
-                          title="AIがこのメールへの返信を下書き"
-                          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
-                        >
-                          <Sparkles className="size-3" />
-                          AIで返信
-                        </button>
-                        <button
-                          onClick={() => onReplyMessage(m.id, "forward", "plain")}
-                          title="このメールを転送"
-                          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
-                        >
-                          <Forward className="size-3" />
-                          転送
-                        </button>
+                        <ReplyButton onReply={(kind, mode) => onReplyMessage(m.id, kind, mode)} />
+                        <AiReplyButton onReply={(kind, mode) => onReplyMessage(m.id, kind, mode)} />
                       </>
                     )}
                     {onOpen && m.id !== selectedId && (
