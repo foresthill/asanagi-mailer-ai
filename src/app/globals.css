@@ -177,6 +177,66 @@ body {
   }
 }
 
+/* 朝の一凪の払い出し: 確定時、処分対象(アーカイブ/ゴミ箱)が判定色をまといつつ
+   左へ払われ、行がたたまれて受信箱が「凪ぐ」。keep はその場に静かに残る。 */
+@keyframes sweep-out {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+    max-height: 60px;
+  }
+  30% {
+    background-color: var(--sweep-wash, transparent);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-44px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: -2px; /* gap-0.5 も詰めて隙間なく凪ぐ */
+  }
+}
+.animate-sweep-out {
+  position: relative;
+  overflow: hidden;
+  animation: sweep-out 0.55s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+/* 凪いだ表示(🌊)がふわっと立ち上がる。 */
+@keyframes calm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-calm {
+  animation: calm-rise 0.5s ease-out both;
+}
+@keyframes sweep-out-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: -2px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-sweep-out {
+    animation: sweep-out-fade 0.3s ease-out both;
+  }
+  .animate-calm {
+    animation: none;
+  }
+}
+
 /* Tiptap / ProseMirror */
 .ProseMirror {
   white-space: pre-wrap;
