@@ -189,6 +189,7 @@ export function EmailList({
   onTrash,
   onToggleStar,
   onRefresh,
+  width,
 }: {
   folder: FolderView;
   /** Conversation rows (1 row = 1 conversation when grouping is on). */
@@ -233,6 +234,8 @@ export function EmailList({
   onTrash: (ids: string[]) => void;
   onToggleStar: (id: string) => void;
   onRefresh: () => void;
+  /** Pixel width for the list pane (resizable layout). Omit → fixed 384px. */
+  width?: number;
 }) {
   const selectionActive = checkedIds.size > 0;
   // 折りたたんだセクションのキー（軸ごとに保持）。
@@ -272,7 +275,13 @@ export function EmailList({
   );
 
   return (
-    <div className="flex w-[384px] shrink-0 flex-col border-r border-border bg-surface">
+    <div
+      style={width ? { width } : undefined}
+      className={cn(
+        "flex shrink-0 flex-col border-r border-border bg-surface",
+        width ? "" : "w-[384px]",
+      )}
+    >
       {selectionActive ? (
         // Bulk action bar — replaces the header while rows are checked.
         <header className="flex items-center gap-1.5 px-4 pb-2 pt-5">

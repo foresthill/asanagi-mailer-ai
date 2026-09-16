@@ -12,6 +12,7 @@ import type {
 import { Sidebar } from "./Sidebar";
 import { EmailList } from "./EmailList";
 import { EmailReader } from "./EmailReader";
+import { ResizeHandle } from "./ResizeHandle";
 import { ReplyComposer } from "./ReplyComposer";
 import { ConnectionsSettings } from "./ConnectionsSettings";
 import { ScheduledPanel } from "./ScheduledPanel";
@@ -41,6 +42,15 @@ function loadGroupAxis(): GroupAxis {
   if (typeof window === "undefined") return "none";
   const v = localStorage.getItem(GROUP_AXIS_KEY);
   return v === "account" || v === "sender" ? v : "none";
+}
+
+/** 一覧ペイン幅（ドラッグで可変・px）の永続化キーと既定値。 */
+const LIST_WIDTH_KEY = "asanagi:list-width";
+const DEFAULT_LIST_WIDTH = 384;
+function loadListWidth(): number {
+  if (typeof window === "undefined") return DEFAULT_LIST_WIDTH;
+  const n = Number(localStorage.getItem(LIST_WIDTH_KEY));
+  return Number.isFinite(n) && n >= 300 && n <= 680 ? n : DEFAULT_LIST_WIDTH;
 }
 
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
@@ -78,6 +88,20 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // Bulk selection — keyed by row representative id; actions apply to every
   // mail of each checked conversation row.
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  // Resizable list pane width (px), draggable divider between 一覧 and 本文.
+  // Persisted so the chosen density sticks across sessions (geek寄りの調整)。
+  const [listWidth, setListWidth] = useState<number>(loadListWidth);
+  const resizeList = useCallback((deltaX: number) => {
+    setListWidth((w) => {
+      const next = Math.min(680, Math.max(300, w + deltaX));
+      try {
+        localStorage.setItem(LIST_WIDTH_KEY, String(next));
+      } catch {
+        /* private mode — width just won't persist */
+      }
+      return next;
+    });
+  }, []);
   const [loading, setLoading] = useState(true);
   /** Live revalidation in flight — drives the "更新中…" indicator even after the
    *  cache has painted (stale-while-revalidate), so 更新 gives visible feedback. */
@@ -950,7 +974,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onTrash={trash}
           onToggleStar={toggleStar}
           onRefresh={() => loadList(folder, account)}
+          width={listWidth}
         />
+      )}
+      {/* Draggable divider between 一覧 and 本文 — resize the list pane. Shown
+          only when both panes are up (mail view, not full-screen composing). */}
+      {view === "mail" && (!replying || composeMinimized) && (!compose || composeMinimized) && (
+        <ResizeHandle onResize={resizeList} />
       )}
       {/* Reader: shown when not composing, or behind the minimized dock. */}
       {view === "mail" && (!compose || composeMinimized) && (
