@@ -20,7 +20,7 @@ import type { Email, FolderView, Importance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, htmlToText, initials } from "./helpers";
 import { ThreadView } from "./ThreadView";
-import { QuotedText, splitQuotedReply } from "./QuotedText";
+import { QuotedText, segmentReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
 import { MeetingCard } from "./MeetingCard";
 import { AttachmentList } from "./AttachmentList";
@@ -118,7 +118,12 @@ export function EmailReader({
     // to text first; a normal plain-text body is used as-is.
     const plain =
       email.html || /<\/?[a-z][^>]*>/i.test(email.body) ? htmlToText(email.html || email.body) : email.body;
-    const { head } = splitQuotedReply(plain);
+    // Copy the new text only — all non-quote segments (keeps inline replies,
+    // drops quoted history), joined.
+    const head = segmentReply(plain)
+      .filter((s) => s.kind === "text")
+      .map((s) => s.body)
+      .join("\n\n");
     const text = (head.trim() || plain)
       .replace(/\r\n?/g, "\n")
       .replace(/[ \t 　]+\n/g, "\n")

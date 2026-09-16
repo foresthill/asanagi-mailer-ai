@@ -6,7 +6,7 @@ import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { displayName } from "./helpers";
 import { LinkedText } from "./LinkedText";
-import { splitQuotedReply } from "./QuotedText";
+import { segmentReply } from "./QuotedText";
 
 /**
  * LINE-style conversation rendering: own messages (state "sent") on the
@@ -112,12 +112,19 @@ export function ConversationBubbles({
 }
 
 function Bubble({ own, body, current }: { own: boolean; body: string; current?: boolean }) {
-  // Show only the new text; fold the quoted reply history (Original Message /
-  // From: header blocks / ">"-quotes / 日本語の引用書き出し) behind a toggle so
-  // the bubble doesn't balloon with the whole chain.
-  const { head, quoted } = splitQuotedReply(body);
-  const [open, setOpen] = useState(false);
-  const quotedLines = quoted ? quoted.split("\n").length : 0;
+  // Segment into new text + quoted blocks. Each quote block folds IN PLACE, so
+  // a reply written below a quoted line (inline reply) stays visible instead of
+  // being swallowed into the fold. Recognizes ">"-quotes, Original Message /
+  // From: header blocks and 日本語の引用書き出し.
+  const segs = segmentReply(body);
+  const [open, setOpen] = useState<Set<number>>(new Set());
+  const toggle = (i: number) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
 
   return (
     <div
@@ -132,39 +139,45 @@ function Bubble({ own, body, current }: { own: boolean; body: string; current?: 
         current && "ring-2 ring-amber-300/80 dark:ring-amber-300/40",
       )}
     >
-      {head && (
-        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-          <LinkedText text={head} />
-        </div>
-      )}
-      {quoted && (
-        <div className="my-1">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setOpen((v) => !v);
-            }}
-            className={cn(
-              "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors",
-              own ? "text-accent-fg/80 hover:bg-white/10" : "text-fg-subtle hover:bg-surface-2",
-            )}
-          >
-            {open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-            {open ? "引用をたたむ" : `引用（過去のやりとり）${quotedLines}行を表示`}
-          </button>
-          {open && (
-            <div
+      {segs.map((seg, i) => {
+        if (seg.kind === "text") {
+          return (
+            <div key={i} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+              <LinkedText text={seg.body} />
+            </div>
+          );
+        }
+        const expanded = open.has(i);
+        const lines = seg.body.split("\n").length;
+        return (
+          <div key={i} className="my-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggle(i);
+              }}
               className={cn(
-                "mt-1 whitespace-pre-wrap border-l-2 pl-2.5 text-[13px] leading-5 break-words [overflow-wrap:anywhere]",
-                own ? "border-white/40 text-accent-fg/85" : "border-border text-fg-muted",
+                "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors",
+                own ? "text-accent-fg/80 hover:bg-white/10" : "text-fg-subtle hover:bg-surface-2",
               )}
             >
-              <LinkedText text={quoted} />
-            </div>
-          )}
-        </div>
-      )}
-      {!head && !quoted && <div className="whitespace-pre-wrap" />}
+              {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+              {expanded ? "引用をたたむ" : `引用 ${lines}行を表示`}
+            </button>
+            {expanded && (
+              <div
+                className={cn(
+                  "mt-1 whitespace-pre-wrap border-l-2 pl-2.5 text-[13px] leading-5 break-words [overflow-wrap:anywhere]",
+                  own ? "border-white/40 text-accent-fg/85" : "border-border text-fg-muted",
+                )}
+              >
+                <LinkedText text={seg.body} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {segs.length === 0 && <div className="whitespace-pre-wrap" />}
     </div>
   );
 }
