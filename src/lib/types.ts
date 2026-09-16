@@ -209,6 +209,15 @@ export interface AISettings {
   judgmentModel?: string;
   /** API keys keyed by provider. Stored locally only. */
   keys?: Partial<Record<AIProvider, string>>;
+  /**
+   * Custom base URL for the `openai` provider — points at any OpenAI-compatible
+   * endpoint (e.g. a local/on-prem Ollama's `/v1`, http://localhost:11434/v1).
+   * Empty → the provider's default endpoint. Lets the mail AI run fully on-prem
+   * (bodies never leave the LAN). The `keys.openai` value, if set, is sent as the
+   * Bearer token (works with a reverse-proxy that gates Ollama); a bare local
+   * Ollama needs no key.
+   */
+  baseUrl?: string;
 }
 
 // ---------------------------------------------------------------------------

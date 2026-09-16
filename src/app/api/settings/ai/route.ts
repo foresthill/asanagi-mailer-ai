@@ -23,6 +23,7 @@ async function safeView() {
     provider: s.provider ?? "auto",
     model: s.model ?? "",
     judgmentModel: s.judgmentModel ?? "",
+    baseUrl: s.baseUrl ?? "",
     piiMask: s.piiMask ?? true,
     nerMask: s.nerMask ?? false,
     keys,
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
   }
   if (typeof body.model === "string") patch.model = body.model;
   if (typeof body.judgmentModel === "string") patch.judgmentModel = body.judgmentModel;
+  if (typeof body.baseUrl === "string") patch.baseUrl = body.baseUrl.trim();
   if (typeof body.piiMask === "boolean") patch.piiMask = body.piiMask;
   if (typeof body.nerMask === "boolean") patch.nerMask = body.nerMask;
   if (body.keys && typeof body.keys === "object") {

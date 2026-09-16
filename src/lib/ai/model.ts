@@ -47,6 +47,9 @@ export interface AIConfig {
   /** Model for 朝の一凪 / 重要度判定. Falls back to `model` when unset. */
   judgmentModel: string;
   apiKey?: string;
+  /** Custom OpenAI-compatible endpoint for the `openai` provider (e.g. Ollama's
+   *  /v1). Empty → provider default. Enables on-prem inference. */
+  baseUrl?: string;
   configured: boolean;
   /** Where the active key/provider came from, for UI transparency. */
   source: "settings" | "env";
@@ -98,16 +101,24 @@ export async function loadAIConfig(): Promise<AIConfig> {
   // Judgment model is opt-in; empty → same as the main model (no change).
   const judgmentModel = s.judgmentModel?.trim() || model;
   const apiKey = mergedKey(provider);
+  // baseUrl applies only to the openai provider (OpenAI-compatible endpoints
+  // like Ollama). Ignored for the others.
+  const baseUrl = provider === "openai" ? s.baseUrl?.trim() || undefined : undefined;
   const configured =
-    provider === "gateway" ? Boolean(apiKey || process.env.VERCEL_OIDC_TOKEN) : Boolean(apiKey);
+    provider === "gateway"
+      ? Boolean(apiKey || process.env.VERCEL_OIDC_TOKEN)
+      : // A custom OpenAI-compatible endpoint (e.g. a bare local Ollama) may need
+        // no key, so a set baseUrl counts as configured on its own.
+        Boolean(apiKey) || Boolean(baseUrl);
   const source: "settings" | "env" =
-    storedKey(provider) || explicitSetting || s.model?.trim() ? "settings" : "env";
+    storedKey(provider) || explicitSetting || s.model?.trim() || baseUrl ? "settings" : "env";
 
   return {
     provider,
     model,
     judgmentModel,
     apiKey,
+    baseUrl,
     configured,
     source,
     piiMask: s.piiMask ?? true,
@@ -121,7 +132,15 @@ export function resolveModel(cfg: AIConfig): LanguageModel {
     case "anthropic":
       return createAnthropic({ apiKey: cfg.apiKey })(cfg.model);
     case "openai":
-      return createOpenAI({ apiKey: cfg.apiKey })(cfg.model);
+      // A custom baseUrl targets any OpenAI-compatible server (e.g. Ollama's
+      // /v1). A bare local Ollama needs no key, but the SDK wants a non-empty
+      // apiKey, so fall back to a placeholder when a baseUrl is set. The
+      // key.openai value, when present, is sent as the Bearer token (works with
+      // a token-gating reverse proxy).
+      return createOpenAI({
+        apiKey: cfg.apiKey || (cfg.baseUrl ? "ollama" : undefined),
+        baseURL: cfg.baseUrl,
+      })(cfg.model);
     case "openrouter":
       return createOpenRouter({ apiKey: cfg.apiKey })(cfg.model);
     case "gateway":
