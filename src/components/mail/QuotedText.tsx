@@ -50,6 +50,56 @@ export function splitQuotedReply(text: string): { head: string; quoted: string }
   return { head, quoted };
 }
 
+export type ReplySegment = { kind: "text" | "quote"; body: string };
+
+/**
+ * Segment a plain-text body into visible new text and foldable quoted blocks,
+ * KEEPING interleaved (inline) replies visible. Unlike splitQuotedReply (one
+ * cut → head/tail), this folds each quoted block in place, so a reply written
+ * *below* a quoted line isn't swallowed into the fold (インライン返信で返答が
+ * 一緒に畳まれる問題の対策).
+ *
+ * Rules: a ">"-prefixed run is one quote block; a recognized history header
+ * (Original Message / From: / 日本語の引用書き出し …) folds from that line to
+ * EOF; blank lines don't switch mode.
+ */
+export function segmentReply(raw: string): ReplySegment[] {
+  const lines = raw.split("\n");
+  const segs: ReplySegment[] = [];
+  let buf: string[] = [];
+  let mode: "text" | "quote" = "text";
+  const flush = () => {
+    const joined = mode === "quote" ? buf.join("\n").replace(/^\s*>\s?/gm, "") : buf.join("\n");
+    const body = joined.replace(/^\n+/, "").replace(/\s+$/, "");
+    if (body) segs.push({ kind: mode, body });
+    buf = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === "") {
+      buf.push(line); // blanks stay in the current block, never switch mode
+      continue;
+    }
+    const isQuoteLine = /^\s*>/.test(line);
+    if (!isQuoteLine && isAttribution(line)) {
+      // A history header → everything from here to EOF is quoted history.
+      flush();
+      mode = "quote";
+      buf = lines.slice(i);
+      flush();
+      return segs;
+    }
+    const want: "text" | "quote" = isQuoteLine ? "quote" : "text";
+    if (want !== mode) {
+      flush();
+      mode = want;
+    }
+    buf.push(line);
+  }
+  flush();
+  return segs;
+}
+
 /**
  * Display-time tidy for plain-text bodies whose source lost line structure —
  * e.g. Google/Teams calendar invites cram "■URL: … ■会議 ID: … ■パスコード: …"
@@ -61,31 +111,57 @@ function tidyPlainBody(text: string): string {
   return text.replace(/([^\n])■/g, "$1\n■").replace(/\n{3,}/g, "\n\n");
 }
 
-/** Body text with the quoted history collapsed behind a "···" toggle.
+/** Body text with each quoted block collapsed behind a "···" toggle, in place —
+ *  new text written between/below quotes (inline replies) stays visible.
  *  `highlight` (search query) marks matches — set only when opened from search. */
 export function QuotedText({ text: raw, highlight }: { text: string; highlight?: string }) {
   const text = tidyPlainBody(raw);
   const terms = parseTerms(highlight);
-  const { head, quoted } = splitQuotedReply(text);
-  const [show, setShow] = useState(false);
+  const segs = segmentReply(text);
+  // Which quote segments are expanded (index into segs). Search → expand all.
+  const searching = terms.length > 0;
+  const [open, setOpen] = useState<Set<number>>(new Set());
+  const toggle = (i: number) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
 
-  if (!quoted) return <LinkedText text={text} highlight={terms} />;
+  if (!segs.some((s) => s.kind === "quote")) return <LinkedText text={text} highlight={terms} />;
 
   return (
     <>
-      {head && <LinkedText text={head} highlight={terms} />}
-      <button
-        onClick={() => setShow((s) => !s)}
-        title={show ? "引用（過去のやりとり）を隠す" : "引用（過去のやりとり）を表示"}
-        className="my-1.5 inline-flex items-center gap-1 rounded border border-border bg-surface-2 px-2 py-0.5 align-middle text-xs leading-none text-fg-subtle transition-colors hover:text-fg"
-      >
-        {show ? "引用を隠す" : "···"}
-      </button>
-      {show && (
-        <div className="mt-1 border-l-2 border-border pl-3 text-fg-muted">
-          <LinkedText text={quoted} highlight={terms} />
-        </div>
-      )}
+      {segs.map((seg, i) => {
+        if (seg.kind === "text") {
+          return (
+            <div key={i} className="whitespace-pre-wrap">
+              <LinkedText text={seg.body} highlight={terms} />
+            </div>
+          );
+        }
+        const expanded = searching || open.has(i);
+        const lines = seg.body.split("\n").length;
+        return (
+          <div key={i} className="my-1">
+            {!searching && (
+              <button
+                onClick={() => toggle(i)}
+                title={expanded ? "引用（過去のやりとり）を隠す" : "引用（過去のやりとり）を表示"}
+                className="inline-flex items-center gap-1 rounded border border-border bg-surface-2 px-2 py-0.5 align-middle text-xs leading-none text-fg-subtle transition-colors hover:text-fg"
+              >
+                {expanded ? "引用を隠す" : `··· 引用 ${lines}行`}
+              </button>
+            )}
+            {expanded && (
+              <div className="mt-1 whitespace-pre-wrap border-l-2 border-border pl-3 text-fg-muted">
+                <LinkedText text={seg.body} highlight={terms} />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }
