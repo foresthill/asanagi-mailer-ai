@@ -53,6 +53,14 @@ function loadListWidth(): number {
   return Number.isFinite(n) && n >= 300 && n <= 680 ? n : DEFAULT_LIST_WIDTH;
 }
 
+/** 画面レイアウト: classic=返信は占有 / geek=本文の右にAI補助を併置（多ペイン）。 */
+const LAYOUT_KEY = "asanagi:layout";
+type Layout = "classic" | "geek";
+function loadLayout(): Layout {
+  if (typeof window === "undefined") return "classic";
+  return localStorage.getItem(LAYOUT_KEY) === "geek" ? "geek" : "classic";
+}
+
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<FolderView>("inbox");
   // "mail" = folders; "contacts" = auto-derived address book (mini-CRM).
@@ -98,6 +106,19 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         localStorage.setItem(LIST_WIDTH_KEY, String(next));
       } catch {
         /* private mode — width just won't persist */
+      }
+      return next;
+    });
+  }, []);
+  // classic=返信は一覧+本文を占有 / geek=返信時も本文を残し右にAI補助を併置。
+  const [layout, setLayout] = useState<Layout>(loadLayout);
+  const toggleLayout = useCallback(() => {
+    setLayout((l) => {
+      const next: Layout = l === "geek" ? "classic" : "geek";
+      try {
+        localStorage.setItem(LAYOUT_KEY, next);
+      } catch {
+        /* private mode — preference just won't stick */
       }
       return next;
     });
@@ -911,6 +932,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         onOpenDrafts={() => setShowDrafts(true)}
         onOpenSweep={() => setShowSweep(true)}
         onCompose={() => openCompose("new", "plain")}
+        layout={layout}
+        onToggleLayout={toggleLayout}
       />
       {view === "contacts" && (!compose || composeMinimized) && (
         <ContactsView
@@ -982,8 +1005,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       {view === "mail" && (!replying || composeMinimized) && (!compose || composeMinimized) && (
         <ResizeHandle onResize={resizeList} />
       )}
-      {/* Reader: shown when not composing, or behind the minimized dock. */}
-      {view === "mail" && (!compose || composeMinimized) && (
+      {/* Reader: shown when not composing, or behind the minimized dock. In
+          geek layout it stays visible while replying so the composer docks to
+          the right (本文｜AI補助 併置). */}
+      {view === "mail" && (!compose || composeMinimized || layout === "geek") && (
         <EmailReader
           email={selected}
           thread={thread}
