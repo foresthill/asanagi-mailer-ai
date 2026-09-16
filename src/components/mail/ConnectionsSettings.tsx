@@ -18,6 +18,7 @@ interface View {
   provider: ProviderChoice;
   model: string;
   judgmentModel: string;
+  baseUrl: string;
   piiMask: boolean;
   nerMask: boolean;
   keys: Record<AIProvider, KeyStatus>;
@@ -63,6 +64,8 @@ export function ConnectionsSettings({
   const [provider, setProvider] = useState<ProviderChoice>("openrouter");
   const [model, setModel] = useState("");
   const [judgmentModel, setJudgmentModel] = useState("");
+  // OpenAI-compatible endpoint (e.g. Ollama /v1) — on-prem inference.
+  const [baseUrl, setBaseUrl] = useState("");
   // Keys the user typed this session (per provider). Empty string = clear.
   const [keyInputs, setKeyInputs] = useState<Partial<Record<AIProvider, string>>>({});
   const [test, setTest] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -79,6 +82,7 @@ export function ConnectionsSettings({
       setProvider(data.provider && data.provider !== "auto" ? data.provider : "openrouter");
       setModel(data.model ?? "");
       setJudgmentModel(data.judgmentModel ?? "");
+      setBaseUrl(data.baseUrl ?? "");
       setKeyInputs({});
     } finally {
       setLoading(false);
@@ -105,7 +109,7 @@ export function ConnectionsSettings({
     const res = await fetch("/api/settings/ai", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ provider, model, judgmentModel, keys }),
+      body: JSON.stringify({ provider, model, judgmentModel, baseUrl, keys }),
     });
     const data = (await res.json()) as View & { ok: boolean };
     setView(data);
@@ -250,6 +254,27 @@ export function ConnectionsSettings({
                 モデルIDは変わります。空欄なら既定値を使用。{selectedOpt ? "" : ""}
               </span>
             </label>
+
+            {/* Custom endpoint (OpenAI-compatible) — e.g. on-prem Ollama /v1.
+                Only meaningful for the openai provider. */}
+            {provider === "openai" && (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-fg-muted">
+                  エンドポイントURL（任意・OpenAI互換）
+                </span>
+                <input
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder="例: http://localhost:11434/v1（Ollama）"
+                  className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+                />
+                <span className="text-[11px] text-fg-subtle">
+                  空欄なら OpenAI 本家。社内 Ollama 等の OpenAI 互換サーバに向けると
+                  本文が社外に出ません。トークンで保護する場合は上の「APIキー」に入れると
+                  Bearer として送られます。
+                </span>
+              </label>
+            )}
 
             {/* Judgment model — cheap model for 朝の一凪 / 重要度判定 */}
             <label className="flex flex-col gap-1.5">
