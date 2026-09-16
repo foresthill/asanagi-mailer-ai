@@ -6,37 +6,16 @@ import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { displayName } from "./helpers";
 import { LinkedText } from "./LinkedText";
+import { splitQuotedReply } from "./QuotedText";
 
 /**
  * LINE-style conversation rendering: own messages (state "sent") on the
- * right, the other party on the left, with date dividers. Quoted reply
- * blocks (">" lines) are folded into a tap-to-expand toggle so bubbles stay
- * readable but nothing becomes unreachable (転送メールは全文が引用のため).
+ * right, the other party on the left, with date dividers. The quoted reply
+ * history (">" lines, "-----Original Message-----", "From:" header blocks,
+ * 日本語の引用書き出し …) is detected with the shared splitQuotedReply and
+ * folded into a tap-to-expand toggle, so a bubble shows only the NEW text and
+ * doesn't balloon with the whole forwarded chain (転送メールは全文が引用のため).
  */
-
-type Segment = { kind: "text" | "quote"; body: string };
-
-/** Split a body into alternating plain / quoted (">"-prefixed) segments. */
-function splitQuotes(body: string): Segment[] {
-  const segments: Segment[] = [];
-  let buf: string[] = [];
-  let quoting = false;
-  const flush = () => {
-    const text = buf.join("\n").trim();
-    if (text) segments.push({ kind: quoting ? "quote" : "text", body: text });
-    buf = [];
-  };
-  for (const line of body.split("\n")) {
-    const isQuote = /^\s*>/.test(line);
-    if (isQuote !== quoting) {
-      flush();
-      quoting = isQuote;
-    }
-    buf.push(isQuote ? line.replace(/^\s*>\s?/, "") : line);
-  }
-  flush();
-  return segments;
-}
 
 function dayKey(iso: string): string {
   const d = new Date(iso);
@@ -133,20 +112,19 @@ export function ConversationBubbles({
 }
 
 function Bubble({ own, body, current }: { own: boolean; body: string; current?: boolean }) {
-  const segments = splitQuotes(body);
-  const [open, setOpen] = useState<Set<number>>(new Set());
-  const toggle = (i: number) =>
-    setOpen((prev) => {
-      const next = new Set(prev);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
-      return next;
-    });
+  // Show only the new text; fold the quoted reply history (Original Message /
+  // From: header blocks / ">"-quotes / 日本語の引用書き出し) behind a toggle so
+  // the bubble doesn't balloon with the whole chain.
+  const { head, quoted } = splitQuotedReply(body);
+  const [open, setOpen] = useState(false);
+  const quotedLines = quoted ? quoted.split("\n").length : 0;
 
   return (
     <div
       className={cn(
-        "min-w-0 rounded-2xl px-3.5 py-2.5 text-sm leading-6",
+        // break-words / overflow-wrap: long URLs & addresses must wrap, not
+        // overflow the bubble (文字が突き抜ける問題).
+        "min-w-0 max-w-full overflow-hidden rounded-2xl px-3.5 py-2.5 text-sm leading-6 break-words [overflow-wrap:anywhere]",
         own
           ? "rounded-br-md bg-accent text-accent-fg"
           : "rounded-bl-md border border-border bg-surface text-fg/90",
@@ -154,47 +132,39 @@ function Bubble({ own, body, current }: { own: boolean; body: string; current?: 
         current && "ring-2 ring-amber-300/80 dark:ring-amber-300/40",
       )}
     >
-      {segments.map((seg, i) => {
-        if (seg.kind === "text") {
-          return (
-            <div key={i} className="whitespace-pre-wrap">
-              <LinkedText text={seg.body} />
-            </div>
-          );
-        }
-        const lines = seg.body.split("\n").length;
-        const expanded = open.has(i);
-        return (
-          <div key={i} className="my-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggle(i);
-              }}
+      {head && (
+        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          <LinkedText text={head} />
+        </div>
+      )}
+      {quoted && (
+        <div className="my-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((v) => !v);
+            }}
+            className={cn(
+              "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors",
+              own ? "text-accent-fg/80 hover:bg-white/10" : "text-fg-subtle hover:bg-surface-2",
+            )}
+          >
+            {open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+            {open ? "引用をたたむ" : `引用（過去のやりとり）${quotedLines}行を表示`}
+          </button>
+          {open && (
+            <div
               className={cn(
-                "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors",
-                own
-                  ? "text-accent-fg/80 hover:bg-white/10"
-                  : "text-fg-subtle hover:bg-surface-2",
+                "mt-1 whitespace-pre-wrap border-l-2 pl-2.5 text-[13px] leading-5 break-words [overflow-wrap:anywhere]",
+                own ? "border-white/40 text-accent-fg/85" : "border-border text-fg-muted",
               )}
             >
-              {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-              {expanded ? "引用をたたむ" : `引用 ${lines}行を表示`}
-            </button>
-            {expanded && (
-              <div
-                className={cn(
-                  "mt-1 whitespace-pre-wrap border-l-2 pl-2.5 text-[13px] leading-5",
-                  own ? "border-white/40 text-accent-fg/85" : "border-border text-fg-muted",
-                )}
-              >
-                <LinkedText text={seg.body} />
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {segments.length === 0 && <div className="whitespace-pre-wrap" />}
+              <LinkedText text={quoted} />
+            </div>
+          )}
+        </div>
+      )}
+      {!head && !quoted && <div className="whitespace-pre-wrap" />}
     </div>
   );
 }
