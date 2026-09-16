@@ -10,6 +10,7 @@ import {
   Sparkles,
   Clock,
   Settings,
+  PanelRight,
   Layers,
   AtSign,
   SquarePen,
@@ -50,6 +51,8 @@ export function Sidebar({
   onOpenSweep,
   onCompose,
   onSelectView,
+  layout,
+  onToggleLayout,
 }: {
   folder: FolderView;
   counts: Partial<Record<FolderView, number>>;
@@ -68,6 +71,9 @@ export function Sidebar({
   onOpenDrafts: () => void;
   onOpenSweep: () => void;
   onCompose: () => void;
+  /** 画面レイアウト: classic=返信は占有 / geek=本文の右にAI補助を併置。 */
+  layout: "classic" | "geek";
+  onToggleLayout: () => void;
 }) {
   return (
     <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface-2 px-3 py-4">
@@ -250,6 +256,27 @@ export function Sidebar({
               {aiConfigured ? "AI 接続済み" : "AIキー未設定（簡易モード）"}
             </span>
             <Settings className="size-3.5" />
+          </button>
+          {/* 画面レイアウト切替: geek=返信時に本文の右へAI補助を併置（多ペイン）。 */}
+          <button
+            onClick={onToggleLayout}
+            title={
+              layout === "geek"
+                ? "geekレイアウト（本文の右にAI補助を併置）— クリックでclassicに戻す"
+                : "geekレイアウトにする（返信を本文の右に併置）"
+            }
+            aria-pressed={layout === "geek"}
+            className={cn(
+              "mt-0.5 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors",
+              layout === "geek"
+                ? "bg-accent-soft text-accent"
+                : "text-fg-subtle hover:bg-surface hover:text-fg",
+            )}
+          >
+            <PanelRight className="size-3.5" />
+            <span className="flex-1 text-left">
+              {layout === "geek" ? "geek表示: 本文＋AI併置" : "geek表示にする"}
+            </span>
           </button>
         </div>
       </div>
