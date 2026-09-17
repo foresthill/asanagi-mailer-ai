@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { Email, FolderView, Importance } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 import { avatarColor, displayName, fullTime, htmlToText, initials } from "./helpers";
 import { ThreadView } from "./ThreadView";
 import { QuotedText, segmentReply } from "./QuotedText";
@@ -72,6 +73,7 @@ export function EmailReader({
    *  email was opened from search results. */
   highlight?: string;
 }) {
+  const { t } = useI18n();
   // Session-sticky preference: rich HTML (default) vs plain text.
   const [textMode, setTextMode] = useState(false);
   // 全画面（画面共有向け）＋本文の文字サイズ拡大。
@@ -96,7 +98,7 @@ export function EmailReader({
       <div className="grid flex-1 place-items-center bg-bg">
         <div className="flex flex-col items-center gap-3 text-fg-subtle">
           <Mail className="size-10 opacity-40" />
-          <p className="text-sm">メールを選択してください</p>
+          <p className="text-sm">{t("reader.empty")}</p>
         </div>
       </div>
     );

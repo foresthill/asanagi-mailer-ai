@@ -112,6 +112,13 @@ const ja: Dict = {
   "aria.replied": "返信済み",
   "aria.attachment": "添付あり",
   "aria.note": "メモあり",
+  // StorageMeter / Reader
+  "storage.label": "ローカルキャッシュ",
+  "storage.msgSuffix": "通",
+  "storage.tooltip.title": "ローカルキャッシュ（テキストのみ・添付なし）",
+  "storage.tooltip.empty": "(まだキャッシュなし)",
+  "storage.tooltip.retention": "保持上限: 各アカウント直近{n}通",
+  "reader.empty": "メールを選択してください",
 };
 
 const en: Dict = {
@@ -205,6 +212,13 @@ const en: Dict = {
   "aria.replied": "Replied",
   "aria.attachment": "Has attachment",
   "aria.note": "Has note",
+  // StorageMeter / Reader
+  "storage.label": "Local cache",
+  "storage.msgSuffix": " msgs",
+  "storage.tooltip.title": "Local cache (text only, no attachments)",
+  "storage.tooltip.empty": "(nothing cached yet)",
+  "storage.tooltip.retention": "Retention: latest {n} msgs per account",
+  "reader.empty": "Select an email",
 };
 
 // fr / zh: キー予約。未訳は en へフォールバック（順次追加）。

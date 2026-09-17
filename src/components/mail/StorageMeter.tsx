@@ -1,6 +1,7 @@
 "use client";
 
 import { Database } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export interface StorageInfo {
   fileBytes: number;
@@ -24,24 +25,27 @@ export function formatBytes(n: number): string {
  * Hover shows the per-account breakdown.
  */
 export function StorageMeter({ storage }: { storage: StorageInfo | null }) {
+  const { t } = useI18n();
   if (!storage) return null;
   const pct = Math.min(100, (storage.fileBytes / BAR_CAP_BYTES) * 100);
+  const msg = t("storage.msgSuffix");
   const breakdown = storage.perAccount
-    .map((a) => `${a.account}: ${a.count.toLocaleString()}通 (${formatBytes(a.bytes)})`)
+    .map((a) => `${a.account}: ${a.count.toLocaleString()}${msg} (${formatBytes(a.bytes)})`)
     .join("\n");
   const title = [
-    `ローカルキャッシュ（テキストのみ・添付なし）`,
-    breakdown || "(まだキャッシュなし)",
-    `保持上限: 各アカウント直近${storage.retentionPerAccount.toLocaleString()}通`,
+    t("storage.tooltip.title"),
+    breakdown || t("storage.tooltip.empty"),
+    t("storage.tooltip.retention").replace("{n}", storage.retentionPerAccount.toLocaleString()),
   ].join("\n");
 
   return (
     <div className="px-2 py-1.5" title={title}>
       <div className="flex items-center gap-1.5 text-[10px] text-fg-subtle">
         <Database className="size-3" />
-        <span className="flex-1">ローカルキャッシュ</span>
+        <span className="flex-1">{t("storage.label")}</span>
         <span className="tabular-nums">
-          {formatBytes(storage.fileBytes)}・{storage.totalMessages.toLocaleString()}通
+          {formatBytes(storage.fileBytes)}・{storage.totalMessages.toLocaleString()}
+          {msg}
         </span>
       </div>
       <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface">
