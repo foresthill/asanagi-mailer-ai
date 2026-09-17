@@ -743,9 +743,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     }
   };
 
-  // Search results stay ungrouped: they span folders and the user is
-  // locating a specific mail, not triaging conversations.
-  const rows = buildRows(searchResults ?? emails, grouping && searchResults === null);
+  // Group search hits by conversation too (会話グルーピングと同じトグルに従う): a
+  // thread with several matches shows as ONE row (件数付き) → 検索から会話を辿る際の
+  // 行ったり来たりを減らす。開くと ThreadView がスレッド全体を読み込む。
+  const rows = buildRows(searchResults ?? emails, grouping);
 
   // Bulk selection: rows are checked by representative id; an action expands
   // each checked row to its full conversation (ThreadRow.ids).
