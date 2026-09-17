@@ -120,6 +120,18 @@ export function HtmlMailView({
   const [showQuote, setShowQuote] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  // アプリのダーク状態(<html data-theme>)を監視し、iframe 内のメール本文も
+  // 一緒にダーク化する（HTMLメールは白前提だが、body 背景を指定していない
+  // 素朴なメールはそのまま暗転できる＝Apple Mail 的な扱い）。
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    const read = () => setDark(document.documentElement.dataset.theme === "dark");
+    read();
+    const obs = new MutationObserver(read);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+
   const { srcDoc, blockedImages, hasQuote } = useMemo(() => {
     const clean = DOMPurify.sanitize(html, {
       USE_PROFILES: { html: true },
@@ -151,22 +163,28 @@ export function HtmlMailView({
     // match inside the quote isn't hidden.
     const hasQuote = foldQuote(doc, showQuote || !!highlight?.trim());
 
+    // ライト/ダークで本文の地色・文字色・リンク色を切替。padding は両モードで
+    // ゆとりを持たせる（枠に文字がベタ付き＝「padding0」の見栄えを解消）。
+    const c = dark
+      ? { bg: "#15151a", fg: "#e6e6ea", link: "#8b7dff", quoteBar: "#3a3a44", quoteFg: "#9a9aa6", hl: "#8a6d3b" }
+      : { bg: "#ffffff", fg: "#2b2a28", link: "#5a52c7", quoteBar: "#ddd", quoteFg: "#666", hl: "#fde68a" };
     const body = doc.body.innerHTML;
     return {
       blockedImages: blocked,
       hasQuote,
       srcDoc: `<!doctype html><html><head><meta charset="utf-8"><base target="_blank">
 <style>
-  body { margin: 0; padding: 4px 2px; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
-         font-size: ${Math.round(15 * fontScale)}px; line-height: 1.7; color: #2b2a28; word-break: break-word; }
+  html { color-scheme: ${dark ? "dark" : "light"}; }
+  body { margin: 0; padding: 14px 16px; background: ${c.bg}; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+         font-size: ${Math.round(15 * fontScale)}px; line-height: 1.7; color: ${c.fg}; word-break: break-word; }
   img { max-width: 100%; height: auto; }
   table { max-width: 100%; }
-  a { color: #5a52c7; }
-  blockquote { border-left: 2px solid #ddd; margin-left: 0; padding-left: 1em; color: #666; }
-  mark.asanagi-hl { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }
+  a { color: ${c.link}; }
+  blockquote { border-left: 2px solid ${c.quoteBar}; margin-left: 0; padding-left: 1em; color: ${c.quoteFg}; }
+  mark.asanagi-hl { background: ${c.hl}; color: inherit; border-radius: 2px; padding: 0 1px; }
 </style></head><body>${body}</body></html>`,
     };
-  }, [html, showImages, fontScale, highlight, showQuote]);
+  }, [html, showImages, fontScale, highlight, showQuote, dark]);
 
   // Scroll only once per (html, highlight) — not on every image-toggle reload.
   const scrolledRef = useRef(false);
@@ -227,11 +245,8 @@ export function HtmlMailView({
         sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         title="メール本文"
         className={
-          // HTMLメールは白基調で作られているため、ダークでも白い「便箋」として
-          // 見せる（無理な反転はレイアウトを壊す）。枠を付けて意図的なカードに。
-          embedded
-            ? "w-full rounded-lg border border-border bg-white"
-            : "w-full rounded-lg border border-border bg-white"
+          // 本文の地色は iframe 内(srcDoc)で light/dark 切替。枠は token で揃える。
+          "w-full rounded-lg border border-border bg-surface"
         }
         style={{ height: 400 }}
       />
