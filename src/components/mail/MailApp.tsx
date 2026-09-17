@@ -142,16 +142,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       return next;
     });
   }, []);
-  const toggleLayout = useCallback(() => {
-    setLayout((l) => {
-      const next: Layout = l === "geek" ? "classic" : "geek";
-      try {
-        localStorage.setItem(LAYOUT_KEY, next);
-      } catch {
-        /* private mode — preference just won't stick */
-      }
-      return next;
-    });
+  const setLayoutMode = useCallback((next: Layout) => {
+    setLayout(next);
+    try {
+      localStorage.setItem(LAYOUT_KEY, next);
+    } catch {
+      /* private mode — preference just won't stick */
+    }
   }, []);
   const [loading, setLoading] = useState(true);
   /** Live revalidation in flight — drives the "更新中…" indicator even after the
@@ -1024,7 +1021,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         onOpenSweep={() => setShowSweep(true)}
         onCompose={() => openCompose("new", "plain")}
         layout={layout}
-        onToggleLayout={toggleLayout}
+        onSetLayout={setLayoutMode}
       />
       {view === "contacts" && (!compose || composeMinimized) && (
         <ContactsView

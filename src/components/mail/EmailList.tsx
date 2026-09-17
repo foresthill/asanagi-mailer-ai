@@ -262,6 +262,7 @@ export function EmailList({
     <EmailListItem
       key={row.email.id}
       row={row}
+      dense={horizontal} // 上下表示の上ペインは1行の密行で件数を稼ぐ
       matchQuery={searching ? searchQuery : undefined}
       active={row.email.id === selectedId}
       folder={folder}
@@ -521,6 +522,7 @@ function EmailListItem({
   selectionActive,
   accountLabel,
   matchQuery,
+  dense,
   onSelect,
   onToggleCheck,
   onArchive,
@@ -530,6 +532,8 @@ function EmailListItem({
   row: ThreadRow;
   active: boolean;
   folder: FolderView;
+  /** 1-line compact row (上下表示の上ペイン): sender · subject · time. */
+  dense?: boolean;
   /** Active search text → show which field(s) each hit matched. Undefined when
    *  not searching. */
   matchQuery?: string;
@@ -561,6 +565,102 @@ function EmailListItem({
   useEffect(() => {
     if (active) rowRef.current?.scrollIntoView({ block: "nearest" });
   }, [active]);
+
+  // Dense 1-line row for the 上下表示 top pane: 差出人 · 件名 · アイコン · 時刻。
+  // No avatar/preview so many more messages fit (件名が上にずらり)。
+  if (dense) {
+    return (
+      <div
+        ref={rowRef}
+        onClick={onSelect}
+        title={email.subject}
+        className={cn(
+          // Faint per-row rule (薄い罫線) for a scannable dense list.
+          "group relative flex cursor-pointer items-center gap-2 border-b border-border/60 px-2.5 py-1.5 transition-colors",
+          active ? "bg-accent-soft" : checked ? "bg-accent-soft/60" : "hover:bg-surface-2",
+        )}
+      >
+        <span
+          className={cn(
+            "size-1.5 shrink-0 rounded-full",
+            unread ? "bg-accent" : "bg-transparent",
+          )}
+        />
+        <span
+          className={cn(
+            "w-40 shrink-0 truncate text-xs",
+            unread ? "font-semibold text-fg" : "text-fg-muted",
+          )}
+        >
+          <Highlighted text={participants} terms={terms} />
+        </span>
+        {count > 1 && (
+          <span className="shrink-0 rounded-full bg-surface-2 px-1 text-[10px] font-semibold tabular-nums text-fg-muted">
+            {count}
+          </span>
+        )}
+        {email.importance === "high" && (
+          <span className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high">
+            重要
+          </span>
+        )}
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate text-sm",
+            unread ? "font-medium text-fg" : "text-fg-muted",
+          )}
+        >
+          <Highlighted text={email.subject} terms={terms} />
+        </span>
+        {/* Meta (time + status icons) — hidden on hover to reveal quick-actions. */}
+        <span className="flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle group-hover:hidden">
+          {starred && <Star className="size-3 fill-amber-400 text-amber-400" aria-label="スター付き" />}
+          {email.replied && <Reply className="size-3 text-accent" aria-label="返信済み" />}
+          {email.hasAttachment && <Paperclip className="size-3 text-fg-muted" aria-label="添付あり" />}
+          {hasNote && <NotebookPen className="size-3 text-amber-500" aria-label="メモあり" />}
+          <span className="tabular-nums">{relativeTime(email.date)}</span>
+        </span>
+        {/* Right-edge quick-actions (same set as the classic row). */}
+        <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleStar();
+            }}
+            title={email.starred ? "スターを外す (S)" : "スター/重要 (S)"}
+            className="grid size-6 place-items-center rounded-md text-fg-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
+          >
+            <Star className={cn("size-3.5", email.starred && "fill-amber-400 text-amber-400")} />
+          </button>
+          {folder !== "archived" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive();
+              }}
+              title={`アーカイブ${threadActionHint} (E)`}
+              className="grid size-6 place-items-center rounded-md text-fg-muted hover:bg-accent-soft hover:text-accent"
+            >
+              <Archive className="size-3.5" />
+            </button>
+          )}
+          {folder !== "trashed" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onTrash();
+              }}
+              title={`ゴミ箱へ${threadActionHint}`}
+              className="grid size-6 place-items-center rounded-md text-fg-muted hover:bg-high-soft hover:text-high"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          )}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={rowRef}
