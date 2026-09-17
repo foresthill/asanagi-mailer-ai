@@ -4,6 +4,7 @@
    Design tokens — a calm, focused mail surface (light + dark).
 --------------------------------------------------------------------------- */
 :root {
+  color-scheme: light;
   --bg: #f7f7f8;
   --surface: #ffffff;
   --surface-2: #fbfbfc;
@@ -21,8 +22,14 @@
   --shadow: 0 1px 2px rgba(17, 17, 26, 0.04), 0 8px 24px rgba(17, 17, 26, 0.06);
 }
 
+/* テーマの決まり方（[data-theme] は <html> に付与）:
+   - 未指定/"system" … OS 追従（下の media query が担当）
+   - "light" … 常にライト（media query から除外され :root の既定が残る）
+   - "dark"  … 常にダーク（明示ルールで上書き）
+   ダークのトークンは media query と明示ルールで同じ値を使う。 */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #0c0c0f;
     --surface: #141418;
     --surface-2: #1a1a1f;
@@ -39,6 +46,25 @@
     --low: #6a6a76;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c0c0f;
+  --surface: #141418;
+  --surface-2: #1a1a1f;
+  --border: #26262d;
+  --border-strong: #34343d;
+  --fg: #ececf1;
+  --fg-muted: #9a9aa6;
+  --fg-subtle: #6a6a76;
+  --accent: #8b7dff;
+  --accent-fg: #0c0c0f;
+  --accent-soft: #221f3a;
+  --high: #ff6369;
+  --high-soft: #2a1718;
+  --low: #6a6a76;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 @theme inline {
