@@ -580,12 +580,33 @@ function EmailListItem({
           active ? "bg-accent-soft" : checked ? "bg-accent-soft/60" : "hover:bg-surface-2",
         )}
       >
-        <span
-          className={cn(
-            "size-1.5 shrink-0 rounded-full",
-            unread ? "bg-accent" : "bg-transparent",
-          )}
-        />
+        {/* Unread dot ⇄ checkbox: hover or an active selection reveals the box
+            so 上下表示でもチェックして一括アーカイブ/削除できる。 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCheck();
+          }}
+          title={checked ? "選択を外す" : "選択する"}
+          className="relative flex size-4 shrink-0 items-center justify-center"
+        >
+          <span
+            className={cn(
+              "absolute size-1.5 rounded-full transition-opacity",
+              unread ? "bg-accent" : "bg-transparent",
+              showCheckbox ? "opacity-0" : "group-hover:opacity-0",
+            )}
+          />
+          <span
+            className={cn(
+              "absolute grid size-3.5 place-items-center rounded border transition-opacity",
+              checked ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface",
+              showCheckbox ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            )}
+          >
+            {checked && <Check className="size-2.5" />}
+          </span>
+        </button>
         <span
           className={cn(
             "w-40 shrink-0 truncate text-xs",
