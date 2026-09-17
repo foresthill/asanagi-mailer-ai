@@ -538,6 +538,23 @@ function ServerSearchButton({
   );
 }
 
+/**
+ * どのアカウント宛/発かを示す小さな色付きチップ（統合受信箱・送信箱で表示）。
+ * ラベルは @ の前だけに短縮（morioka / g1989n）。色はアカウント色で識別。
+ */
+function AccountChip({ account, label }: { account: string; label: string }) {
+  const short = label.split("@")[0] || label;
+  return (
+    <span
+      className="flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-medium text-fg-muted"
+      title={`アカウント: ${label}`}
+    >
+      <span className="size-1.5 rounded-full" style={{ background: avatarColor(account) }} />
+      <span className="max-w-[7rem] truncate">{short}</span>
+    </span>
+  );
+}
+
 function EmailListItem({
   row,
   active,
@@ -650,6 +667,7 @@ function EmailListItem({
         >
           <Highlighted text={participants} terms={terms} />
         </span>
+        {accountLabel && <AccountChip account={email.account ?? ""} label={accountLabel} />}
         {count > 1 && (
           <span className="shrink-0 rounded-full bg-surface-2 px-1 text-[10px] font-semibold tabular-nums text-fg-muted">
             {count}
@@ -783,6 +801,7 @@ function EmailListItem({
                 {count}
               </span>
             )}
+            {accountLabel && <AccountChip account={email.account ?? ""} label={accountLabel} />}
             <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle">
               {starred && (
                 <Star className="size-3 fill-amber-400 text-amber-400" aria-label="スター付き" />
@@ -845,18 +864,6 @@ function EmailListItem({
             <p className="min-w-0 flex-1 truncate text-xs text-fg-subtle">
               <Highlighted text={previewFor(email, terms)} terms={terms} />
             </p>
-            {accountLabel && (
-              <span
-                className="flex max-w-[40%] shrink-0 items-center gap-1 rounded-full border border-border bg-surface-2 px-1.5 py-px text-[10px] text-fg-muted"
-                title={`アカウント: ${accountLabel}`}
-              >
-                <span
-                  className="size-1.5 rounded-full"
-                  style={{ background: avatarColor(email.account ?? "") }}
-                />
-                <span className="truncate">{accountLabel}</span>
-              </span>
-            )}
           </div>
         </div>
       </div>
