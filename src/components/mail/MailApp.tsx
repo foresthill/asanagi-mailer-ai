@@ -759,6 +759,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     });
   }, []);
 
+  // Shift+click range: add every row between the anchor and the clicked row
+  // (連続選択)。EmailList が表示順の id 配列を渡してくる。
+  const selectRange = useCallback((ids: string[]) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return next;
+    });
+  }, []);
+
   const bulkAct = async (state: MailboxState, label: string) => {
     const ids = rows.filter((r) => checked.has(r.email.id)).flatMap((r) => r.ids);
     if (!ids.length) return;
@@ -965,6 +975,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       serverSearching={serverSearching}
       checkedIds={checked}
       onToggleCheck={toggleChecked}
+      onSelectRange={selectRange}
       onCheckAll={() => setChecked(new Set(rows.map((r) => r.email.id)))}
       onClearChecked={() => setChecked(new Set())}
       onBulkArchive={() => bulkAct("archived", "一括アーカイブしました")}

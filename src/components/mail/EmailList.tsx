@@ -177,6 +177,7 @@ export function EmailList({
   accountLabels,
   checkedIds,
   onToggleCheck,
+  onSelectRange,
   onCheckAll,
   onClearChecked,
   onBulkArchive,
@@ -223,6 +224,8 @@ export function EmailList({
   /** Bulk selection — row representative ids currently checked. */
   checkedIds: Set<string>;
   onToggleCheck: (repId: string) => void;
+  /** Shift+click 連続選択: アンカー〜クリック行の id をまとめて選択に加える。 */
+  onSelectRange: (repIds: string[]) => void;
   onCheckAll: () => void;
   onClearChecked: () => void;
   onBulkArchive: () => void;
@@ -250,6 +253,28 @@ export function EmailList({
   // 検索結果は横断のため軸グループ化しない（特定の1通を探す行為）。
   const effectiveAxis: GroupAxis = searching ? "none" : groupAxis;
   const sections = buildSections(rows, effectiveAxis, accountLabels);
+  // Shift+click 連続選択のアンカー（直前に触れた行の rep id）。
+  const anchorRef = useRef<string | null>(null);
+  // 表示順の rep id 列（範囲計算用。セクション表示でも見えている順に並べる）。
+  const orderedIds = (effectiveAxis === "none" ? rows : sections.flatMap((s) => s.rows)).map(
+    (r) => r.email.id,
+  );
+  // 通常クリック=トグル、Shift+クリック=アンカーからの範囲を選択に加える。
+  const handleToggleCheck = (id: string, shiftKey: boolean) => {
+    const anchor = anchorRef.current;
+    if (shiftKey && anchor && anchor !== id) {
+      const a = orderedIds.indexOf(anchor);
+      const b = orderedIds.indexOf(id);
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        onSelectRange(orderedIds.slice(lo, hi + 1));
+        anchorRef.current = id;
+        return;
+      }
+    }
+    onToggleCheck(id);
+    anchorRef.current = id;
+  };
   const toggleSection = (key: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -275,7 +300,7 @@ export function EmailList({
           : null
       }
       onSelect={() => onSelect(row.email.id)}
-      onToggleCheck={() => onToggleCheck(row.email.id)}
+      onToggleCheck={(shiftKey) => handleToggleCheck(row.email.id, shiftKey)}
       onArchive={() => onArchive(row.ids)}
       onTrash={() => onTrash(row.ids)}
       onToggleStar={() => onToggleStar(row.email.id)}
@@ -546,7 +571,8 @@ function EmailListItem({
   /** Origin account badge text (unified inbox only); null hides it. */
   accountLabel: string | null;
   onSelect: () => void;
-  onToggleCheck: () => void;
+  /** shiftKey は Shift+クリックの連続選択判定に使う。 */
+  onToggleCheck: (shiftKey: boolean) => void;
   onArchive: () => void;
   onTrash: () => void;
   onToggleStar: () => void;
@@ -594,9 +620,9 @@ function EmailListItem({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onToggleCheck();
+            onToggleCheck(e.shiftKey);
           }}
-          title={checked ? "選択を外す" : "選択する"}
+          title={checked ? "選択を外す" : "選択する（Shift+クリックで範囲選択）"}
           className="relative flex size-4 shrink-0 items-center justify-center"
         >
           <span
@@ -705,9 +731,9 @@ function EmailListItem({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onToggleCheck();
+            onToggleCheck(e.shiftKey);
           }}
-          title={checked ? "選択を外す (X)" : "選択する (X)"}
+          title={checked ? "選択を外す (X)" : "選択する (X)（Shift+クリックで範囲選択）"}
           className="relative mt-0.5 size-9 shrink-0"
         >
           <span
