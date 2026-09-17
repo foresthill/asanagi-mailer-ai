@@ -563,7 +563,16 @@ function EmailListItem({
   // "nearest" = a no-op when the row is already visible (normal clicks).
   const rowRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (active) rowRef.current?.scrollIntoView({ block: "nearest" });
+    // Bring the opened mail into view in both layouts (左右/上下). "nearest" is a
+    // no-op when already visible (normal clicks); when off-screen — e.g. after
+    // 「このメールを開く」や folder/layout 切替 — it scrolls it into view. A short
+    // delay lets a just-switched layout (上下の短い一覧) settle before measuring.
+    if (!active) return;
+    const t = setTimeout(
+      () => rowRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+      60,
+    );
+    return () => clearTimeout(t);
   }, [active]);
 
   // Dense 1-line row for the 上下表示 top pane: 差出人 · 件名 · アイコン · 時刻。
