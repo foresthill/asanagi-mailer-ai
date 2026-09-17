@@ -27,14 +27,17 @@ import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StorageMeter, type StorageInfo } from "./StorageMeter";
 import { ThemeToggle } from "./ThemeToggle";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+import { useI18n } from "@/lib/i18n";
 import type { AccountInfo } from "@/lib/email/accounts";
 
-const FOLDERS: { key: FolderView; label: string; icon: typeof Inbox }[] = [
-  { key: "inbox", label: "受信箱", icon: Inbox },
-  { key: "starred", label: "スター付き", icon: Star },
-  { key: "sent", label: "送信箱", icon: Send },
-  { key: "archived", label: "アーカイブ", icon: Archive },
-  { key: "trashed", label: "ゴミ箱", icon: Trash2 },
+// label はロケール別に t(`folder.${key}`) で解決する。
+const FOLDERS: { key: FolderView; icon: typeof Inbox }[] = [
+  { key: "inbox", icon: Inbox },
+  { key: "starred", icon: Star },
+  { key: "sent", icon: Send },
+  { key: "archived", icon: Archive },
+  { key: "trashed", icon: Trash2 },
 ];
 
 export function Sidebar({
@@ -80,9 +83,10 @@ export function Sidebar({
   layout: "classic" | "geek";
   onSetLayout: (l: "classic" | "geek") => void;
 }) {
+  const { t } = useI18n();
   // Account groups: "すべて（統合）" + each account. Folders hang under each.
   const groups = [
-    { key: "all", label: "すべて（統合）", icon: Layers },
+    { key: "all", label: t("account.all"), icon: Layers },
     ...accounts.map((a) => ({ key: a.key, label: a.address ?? a.label, icon: AtSign })),
   ];
   // Which account groups are expanded. Start with the active one (＋統合) open.
@@ -109,11 +113,11 @@ export function Sidebar({
 
       <button
         onClick={onCompose}
-        title="新規メールを作成 (C)"
+        title={t("sidebar.compose.title")}
         className="mb-2 flex items-center justify-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.01] active:scale-95"
       >
         <SquarePen className="size-4" />
-        作成
+        {t("sidebar.compose")}
       </button>
 
       <nav className="flex flex-col gap-0.5">
@@ -145,7 +149,7 @@ export function Sidebar({
                   </button>
                   {open && (
                     <div className="mb-1 ml-3 flex flex-col gap-0.5 border-l border-border pl-1.5">
-                      {FOLDERS.map(({ key, label, icon: Icon }) => {
+                      {FOLDERS.map(({ key, icon: Icon }) => {
                         const active = view === "mail" && account === g.key && folder === key;
                         // counts are only valid for the currently-loaded account.
                         const count = account === g.key ? counts[key] : undefined;
@@ -161,7 +165,7 @@ export function Sidebar({
                             )}
                           >
                             <Icon className={cn("size-4", active && "text-accent")} />
-                            <span className="flex-1 text-left">{label}</span>
+                            <span className="flex-1 text-left">{t(`folder.${key}`)}</span>
                             {count ? (
                               <span className="text-xs tabular-nums text-fg-subtle">{count}</span>
                             ) : null}
@@ -174,7 +178,7 @@ export function Sidebar({
               );
             })
           : // 単一アカウント: フォルダをそのまま並べる（従来どおり）
-            FOLDERS.map(({ key, label, icon: Icon }) => {
+            FOLDERS.map(({ key, icon: Icon }) => {
               const active = view === "mail" && folder === key;
               const count = counts[key];
               return (
@@ -189,7 +193,7 @@ export function Sidebar({
                   )}
                 >
                   <Icon className={cn("size-4", active && "text-accent")} />
-                  <span className="flex-1 text-left">{label}</span>
+                  <span className="flex-1 text-left">{t(`folder.${key}`)}</span>
                   {count ? (
                     <span className="text-xs tabular-nums text-fg-subtle">{count}</span>
                   ) : null}
@@ -207,11 +211,11 @@ export function Sidebar({
           )}
         >
           <Users className={cn("size-4", view === "contacts" && "text-accent")} />
-          <span className="flex-1 text-left">連絡先</span>
+          <span className="flex-1 text-left">{t("nav.contacts")}</span>
         </button>
         <button
           onClick={() => onSelectView("projects")}
-          title="メール履歴から抽出した案件の進捗・次アクション"
+          title={t("nav.projects.title")}
           className={cn(
             "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
             view === "projects"
@@ -220,11 +224,11 @@ export function Sidebar({
           )}
         >
           <FolderKanban className={cn("size-4", view === "projects" && "text-accent")} />
-          <span className="flex-1 text-left">プロジェクト</span>
+          <span className="flex-1 text-left">{t("nav.projects")}</span>
         </button>
         <button
           onClick={() => onSelectView("triage")}
-          title="AI判定の確認と是正（教師データ作り）"
+          title={t("nav.triage.title")}
           className={cn(
             "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
             view === "triage"
@@ -233,11 +237,11 @@ export function Sidebar({
           )}
         >
           <ListChecks className={cn("size-4", view === "triage" && "text-accent")} />
-          <span className="flex-1 text-left">仕分けレビュー</span>
+          <span className="flex-1 text-left">{t("nav.triage")}</span>
         </button>
         <button
           onClick={() => onSelectView("ailog")}
-          title="AIに送った内容・返答・コストのログ"
+          title={t("nav.ailog.title")}
           className={cn(
             "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
             view === "ailog"
@@ -246,7 +250,7 @@ export function Sidebar({
           )}
         >
           <ScrollText className={cn("size-4", view === "ailog" && "text-accent")} />
-          <span className="flex-1 text-left">AIログ</span>
+          <span className="flex-1 text-left">{t("nav.ailog")}</span>
         </button>
       </nav>
 
@@ -254,19 +258,19 @@ export function Sidebar({
       <div className="mt-2 border-t border-border pt-2">
         <button
           onClick={onOpenSweep}
-          title="朝の一凪（ひとなぎ）— 受信箱を一括判定して片付け推奨を表示（差出人・件名・冒頭のみで判定）"
+          title={t("nav.sweep.title")}
           className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg"
         >
           <Sunrise className="size-4" />
-          <span className="flex-1 text-left">朝の一凪</span>
+          <span className="flex-1 text-left">{t("nav.sweep")}</span>
         </button>
         <button
           onClick={onOpenDrafts}
-          title="保存した下書きを表示"
+          title={t("nav.drafts.title")}
           className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg"
         >
           <FileText className="size-4" />
-          <span className="flex-1 text-left">下書き</span>
+          <span className="flex-1 text-left">{t("nav.drafts")}</span>
           {draftsCount ? (
             <span className="rounded-full bg-accent-soft px-1.5 text-xs tabular-nums text-accent">
               {draftsCount}
@@ -275,11 +279,11 @@ export function Sidebar({
         </button>
         <button
           onClick={onOpenScheduled}
-          title="メール送信予定を表示"
+          title={t("nav.scheduled.title")}
           className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-fg-muted transition-colors hover:bg-surface hover:text-fg"
         >
           <Clock className="size-4" />
-          <span className="flex-1 text-left">予約送信</span>
+          <span className="flex-1 text-left">{t("nav.scheduled")}</span>
           {scheduledCount ? (
             <span className="rounded-full bg-accent-soft px-1.5 text-xs tabular-nums text-accent">
               {scheduledCount}
@@ -293,7 +297,7 @@ export function Sidebar({
         <div className="px-2">
           <button
             onClick={onOpenSettings}
-            title="AI 接続設定"
+            title={t("settings.title")}
             className={cn(
               "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors",
               aiConfigured
@@ -308,18 +312,18 @@ export function Sidebar({
               )}
             />
             <span className="flex-1 text-left">
-              {aiConfigured ? "AI 接続済み" : "AIキー未設定（簡易モード）"}
+              {aiConfigured ? t("settings.aiConnected") : t("settings.aiNotSet")}
             </span>
             <Settings className="size-3.5" />
           </button>
           {/* 表示切替: 左右(一覧|本文) / 上下(件名を上・本文を下) のセグメント。 */}
           <div className="mt-1 flex items-center gap-1.5 px-0.5 pt-1">
-            <span className="shrink-0 text-[10px] text-fg-subtle">表示</span>
+            <span className="shrink-0 text-[10px] text-fg-subtle">{t("view.label")}</span>
             <div className="flex flex-1 rounded-lg border border-border p-0.5">
               <button
                 onClick={() => onSetLayout("classic")}
                 aria-pressed={layout === "classic"}
-                title="左右表示: 一覧(左)｜本文(右)"
+                title={t("view.classic.title")}
                 className={cn(
                   "flex flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[11px] transition-colors",
                   layout === "classic"
@@ -328,12 +332,12 @@ export function Sidebar({
                 )}
               >
                 <PanelRight className="size-3" />
-                左右
+                {t("view.classic")}
               </button>
               <button
                 onClick={() => onSetLayout("geek")}
                 aria-pressed={layout === "geek"}
-                title="上下表示: 件名を上にずらり・本文を下に"
+                title={t("view.geek.title")}
                 className={cn(
                   "flex flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[11px] transition-colors",
                   layout === "geek"
@@ -342,12 +346,14 @@ export function Sidebar({
                 )}
               >
                 <PanelTop className="size-3" />
-                上下
+                {t("view.geek")}
               </button>
             </div>
           </div>
           {/* テーマ切替: システム(OS追従) / ライト / ダーク。 */}
           <ThemeToggle />
+          {/* 言語切替: 社内展開向け（日/英/仏/中）。 */}
+          <LanguageSwitcher />
         </div>
       </div>
     </aside>

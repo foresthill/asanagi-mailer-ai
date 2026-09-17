@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 type Theme = "system" | "light" | "dark";
 
@@ -26,6 +27,7 @@ function applyTheme(pref: Theme) {
  * 描画前に済ませている）。system の間は OS 変更に追従する。
  */
 export function ThemeToggle() {
+  const { t } = useI18n();
   const [theme, setTheme] = useState<Theme>("system");
 
   useEffect(() => {
@@ -65,14 +67,14 @@ export function ThemeToggle() {
   };
 
   const opts: { value: Theme; label: string; icon: typeof Sun }[] = [
-    { value: "system", label: "システム（OSに合わせる）", icon: Monitor },
-    { value: "light", label: "ライト", icon: Sun },
-    { value: "dark", label: "ダーク", icon: Moon },
+    { value: "system", label: t("theme.system"), icon: Monitor },
+    { value: "light", label: t("theme.light"), icon: Sun },
+    { value: "dark", label: t("theme.dark"), icon: Moon },
   ];
 
   return (
     <div className="mt-1 flex items-center gap-1.5 px-0.5">
-      <span className="shrink-0 text-[10px] text-fg-subtle">テーマ</span>
+      <span className="shrink-0 text-[10px] text-fg-subtle">{t("theme.label")}</span>
       <div className="flex flex-1 rounded-lg border border-border p-0.5">
         {opts.map(({ value, label, icon: Icon }) => (
           <button
