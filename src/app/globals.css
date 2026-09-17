@@ -2,8 +2,10 @@
 
 /* `dark:` ユーティリティを OS の prefers-color-scheme ではなく <html data-theme>
    に追従させる（手動トグルで dark: 系も一緒に切り替わるように）。テーマ適用時は
-   JS が system を解決して常に data-theme="light"|"dark" を具体値で載せる。 */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+   JS が system を解決して常に data-theme="light"|"dark" を具体値で載せる。
+   :is() を使い data-theme 分の詳細度を足す（:where だと 0 詳細度で、base の
+   bg-amber-50/50 等と同点になりソース順次第。:is で dark: を確実に勝たせる）。 */
+@custom-variant dark (&:is([data-theme="dark"] *, [data-theme="dark"]));
 
 /* ---------------------------------------------------------------------------
    Design tokens — a calm, focused mail surface (light + dark).
