@@ -10,42 +10,59 @@ import { useRef } from "react";
  */
 export function ResizeHandle({
   onResize,
-  title = "ドラッグで幅を変更",
+  orientation = "vertical",
+  title = orientation === "horizontal" ? "ドラッグで高さを変更" : "ドラッグで幅を変更",
 }: {
-  onResize: (deltaX: number) => void;
+  /** Drag delta along the resize axis (px): +x for vertical, +y for horizontal. */
+  onResize: (delta: number) => void;
+  /** "vertical" = a vertical bar resizing width (←→); "horizontal" = a horizontal
+   *  bar resizing height (↑↓). */
+  orientation?: "vertical" | "horizontal";
   title?: string;
 }) {
-  const lastX = useRef<number | null>(null);
+  const last = useRef<number | null>(null);
+  const horizontal = orientation === "horizontal";
 
   return (
     <div
       role="separator"
-      aria-orientation="vertical"
+      aria-orientation={orientation}
       title={title}
       onPointerDown={(e) => {
-        lastX.current = e.clientX;
+        last.current = horizontal ? e.clientY : e.clientX;
         e.currentTarget.setPointerCapture(e.pointerId);
       }}
       onPointerMove={(e) => {
-        if (lastX.current === null) return;
-        const dx = e.clientX - lastX.current;
-        if (dx !== 0) {
-          onResize(dx);
-          lastX.current = e.clientX;
+        if (last.current === null) return;
+        const cur = horizontal ? e.clientY : e.clientX;
+        const d = cur - last.current;
+        if (d !== 0) {
+          onResize(d);
+          last.current = cur;
         }
       }}
       onPointerUp={(e) => {
-        lastX.current = null;
+        last.current = null;
         try {
           e.currentTarget.releasePointerCapture(e.pointerId);
         } catch {
           /* capture may already be gone */
         }
       }}
-      className="group relative z-10 -mx-0.5 w-1.5 shrink-0 cursor-col-resize touch-none select-none bg-transparent"
+      className={
+        horizontal
+          ? "group relative z-10 -my-0.5 h-1.5 w-full shrink-0 cursor-row-resize touch-none select-none bg-transparent"
+          : "group relative z-10 -mx-0.5 w-1.5 shrink-0 cursor-col-resize touch-none select-none bg-transparent"
+      }
     >
       {/* Visible hairline that thickens/tints on hover & drag. */}
-      <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-colors group-hover:w-0.5 group-hover:bg-accent group-active:bg-accent" />
+      <span
+        className={
+          horizontal
+            ? "pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border transition-colors group-hover:h-0.5 group-hover:bg-accent group-active:bg-accent"
+            : "pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-colors group-hover:w-0.5 group-hover:bg-accent group-active:bg-accent"
+        }
+      />
     </div>
   );
 }

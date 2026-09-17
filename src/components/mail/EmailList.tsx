@@ -190,6 +190,8 @@ export function EmailList({
   onToggleStar,
   onRefresh,
   width,
+  horizontal,
+  height,
 }: {
   folder: FolderView;
   /** Conversation rows (1 row = 1 conversation when grouping is on). */
@@ -234,8 +236,13 @@ export function EmailList({
   onTrash: (ids: string[]) => void;
   onToggleStar: (id: string) => void;
   onRefresh: () => void;
-  /** Pixel width for the list pane (resizable layout). Omit → fixed 384px. */
+  /** Pixel width for the list pane (classic left column). Omit → fixed 384px. */
   width?: number;
+  /** Geek layout: render as a full-width TOP pane (件名がずらり) instead of a
+   *  left column. Height comes from `height`. */
+  horizontal?: boolean;
+  /** Pixel height when `horizontal` (geek top pane). */
+  height?: number;
 }) {
   const selectionActive = checkedIds.size > 0;
   // 折りたたんだセクションのキー（軸ごとに保持）。
@@ -276,10 +283,14 @@ export function EmailList({
 
   return (
     <div
-      style={width ? { width } : undefined}
+      style={horizontal ? { height } : width ? { width } : undefined}
       className={cn(
-        "flex shrink-0 flex-col border-r border-border bg-surface",
-        width ? "" : "w-[384px]",
+        "flex shrink-0 flex-col bg-surface",
+        horizontal
+          ? "w-full border-b border-border" // geek: top pane, full width
+          : width
+            ? "border-r border-border"
+            : "w-[384px] border-r border-border",
       )}
     >
       {selectionActive ? (
