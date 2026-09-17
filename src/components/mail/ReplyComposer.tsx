@@ -679,6 +679,9 @@ export function ReplyComposer({
           className="relative flex flex-1 flex-col overflow-hidden px-6 py-4"
           onDragOver={(e) => {
             if (richMode) return; // rich editor handles image drops itself
+            // Only react to FILE drags — a contact/text drag must not trigger the
+            // 「ここにドロップして添付」overlay（連絡先ドラッグで誤表示しない）。
+            if (!e.dataTransfer.types.includes("Files")) return;
             e.preventDefault();
             if (!dragging) setDragging(true);
           }}
