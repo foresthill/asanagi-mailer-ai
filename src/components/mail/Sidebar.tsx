@@ -26,6 +26,7 @@ import {
 import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StorageMeter, type StorageInfo } from "./StorageMeter";
+import { ThemeToggle } from "./ThemeToggle";
 import type { AccountInfo } from "@/lib/email/accounts";
 
 const FOLDERS: { key: FolderView; label: string; icon: typeof Inbox }[] = [
@@ -345,6 +346,8 @@ export function Sidebar({
               </button>
             </div>
           </div>
+          {/* テーマ切替: システム(OS追従) / ライト / ダーク。 */}
+          <ThemeToggle />
         </div>
       </div>
     </aside>

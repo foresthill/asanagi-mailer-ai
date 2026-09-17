@@ -16,7 +16,19 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        {/* 保存済みテーマ(light/dark)を描画前に <html> へ適用し、初回のちらつき
+            (FOUC)を防ぐ。system は属性なし＝OS追従。React管理外の属性なので
+            hydration mismatch にはならない。 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('asanagi:theme');if(t==='light'||t==='dark'){document.documentElement.dataset.theme=t;}}catch(e){}})();",
+          }}
+        />
+      </head>
       <body className="h-full">{children}</body>
     </html>
   );
