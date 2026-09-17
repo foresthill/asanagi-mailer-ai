@@ -11,6 +11,7 @@ import {
   Clock,
   Settings,
   PanelTop,
+  PanelRight,
   Layers,
   AtSign,
   SquarePen,
@@ -52,7 +53,7 @@ export function Sidebar({
   onCompose,
   onSelectView,
   layout,
-  onToggleLayout,
+  onSetLayout,
 }: {
   folder: FolderView;
   counts: Partial<Record<FolderView, number>>;
@@ -71,9 +72,9 @@ export function Sidebar({
   onOpenDrafts: () => void;
   onOpenSweep: () => void;
   onCompose: () => void;
-  /** 画面レイアウト: classic=一覧(左)｜本文(右) / geek=一覧(上)｜本文(下)。 */
+  /** 画面レイアウト: classic=左右(一覧|本文) / geek=上下(件名上・本文下)。 */
   layout: "classic" | "geek";
-  onToggleLayout: () => void;
+  onSetLayout: (l: "classic" | "geek") => void;
 }) {
   return (
     <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface-2 px-3 py-4">
@@ -257,27 +258,40 @@ export function Sidebar({
             </span>
             <Settings className="size-3.5" />
           </button>
-          {/* 画面レイアウト切替: geek=返信時に本文の右へAI補助を併置（多ペイン）。 */}
-          <button
-            onClick={onToggleLayout}
-            title={
-              layout === "geek"
-                ? "geekレイアウト（件名を上・本文を下の2段）— クリックでclassicに戻す"
-                : "geekレイアウトにする（件名を上に一覧・本文を下に表示）"
-            }
-            aria-pressed={layout === "geek"}
-            className={cn(
-              "mt-0.5 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors",
-              layout === "geek"
-                ? "bg-accent-soft text-accent"
-                : "text-fg-subtle hover:bg-surface hover:text-fg",
-            )}
-          >
-            <PanelTop className="size-3.5" />
-            <span className="flex-1 text-left">
-              {layout === "geek" ? "geek表示: 件名上・本文下" : "geek表示にする"}
-            </span>
-          </button>
+          {/* 表示切替: 左右(一覧|本文) / 上下(件名を上・本文を下) のセグメント。 */}
+          <div className="mt-1 flex items-center gap-1.5 px-0.5 pt-1">
+            <span className="shrink-0 text-[10px] text-fg-subtle">表示</span>
+            <div className="flex flex-1 rounded-lg border border-border p-0.5">
+              <button
+                onClick={() => onSetLayout("classic")}
+                aria-pressed={layout === "classic"}
+                title="左右表示: 一覧(左)｜本文(右)"
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[11px] transition-colors",
+                  layout === "classic"
+                    ? "bg-accent-soft font-medium text-accent"
+                    : "text-fg-subtle hover:text-fg",
+                )}
+              >
+                <PanelRight className="size-3" />
+                左右
+              </button>
+              <button
+                onClick={() => onSetLayout("geek")}
+                aria-pressed={layout === "geek"}
+                title="上下表示: 件名を上にずらり・本文を下に"
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[11px] transition-colors",
+                  layout === "geek"
+                    ? "bg-accent-soft font-medium text-accent"
+                    : "text-fg-subtle hover:text-fg",
+                )}
+              >
+                <PanelTop className="size-3" />
+                上下
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </aside>
