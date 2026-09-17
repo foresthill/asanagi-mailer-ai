@@ -20,25 +20,12 @@ import {
 } from "lucide-react";
 import type { Email, FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 import { avatarColor, initials, relativeTime } from "./helpers";
 import type { ThreadRow } from "./threadList";
 
-const FOLDER_LABEL: Record<FolderView, string> = {
-  inbox: "受信箱",
-  starred: "スター付き",
-  sent: "送信箱",
-  archived: "アーカイブ",
-  trashed: "ゴミ箱",
-};
-
 /** 一覧のグループ化軸（折りたたみセクション）。 */
 export type GroupAxis = "none" | "account" | "sender";
-
-const AXIS_LABEL: Record<GroupAxis, string> = {
-  none: "なし",
-  account: "アカウント",
-  sender: "送信者",
-};
 
 /** メールアドレスのドメイン部（送信者グループのキー）。 */
 function domainOf(email: string): string {
@@ -123,11 +110,12 @@ function matchedFields(email: Email, query?: string): string[] {
   };
   const people = (list?: { name?: string; email: string }[]) =>
     (list ?? []).map((a) => `${a.name ?? ""} ${a.email}`).join(" ");
+  // Returns match-field KEYS (translated at render via t(`match.${k}`)).
   const out: string[] = [];
-  if (hit(email.subject)) out.push("件名");
-  if (hit(email.body)) out.push("本文");
-  if (hit(`${email.from.name ?? ""} ${email.from.email}`)) out.push("差出人");
-  if (hit(`${people(email.to)} ${people(email.cc)}`)) out.push("宛先");
+  if (hit(email.subject)) out.push("subject");
+  if (hit(email.body)) out.push("body");
+  if (hit(`${email.from.name ?? ""} ${email.from.email}`)) out.push("from");
+  if (hit(`${people(email.to)} ${people(email.cc)}`)) out.push("to");
   return out;
 }
 
@@ -136,6 +124,7 @@ function buildSections(
   rows: ThreadRow[],
   axis: GroupAxis,
   accountLabels: Record<string, string> | null,
+  unknownLabel: string,
 ): { key: string; label: string; rows: ThreadRow[] }[] {
   if (axis === "none") return [{ key: "_all", label: "", rows }];
   const map = new Map<string, { key: string; label: string; rows: ThreadRow[] }>();
@@ -144,10 +133,10 @@ function buildSections(
     let label: string;
     if (axis === "account") {
       key = r.email.account ?? "";
-      label = (accountLabels && accountLabels[key]) || key || "(不明)";
+      label = (accountLabels && accountLabels[key]) || key || unknownLabel;
     } else {
       key = domainOf(r.email.from.email);
-      label = key || "(不明)";
+      label = key || unknownLabel;
     }
     const sec = map.get(key);
     if (sec) sec.rows.push(r);
@@ -247,12 +236,13 @@ export function EmailList({
   /** Pixel height when `horizontal` (geek top pane). */
   height?: number;
 }) {
+  const { t } = useI18n();
   const selectionActive = checkedIds.size > 0;
   // 折りたたんだセクションのキー（軸ごとに保持）。
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // 検索結果は横断のため軸グループ化しない（特定の1通を探す行為）。
   const effectiveAxis: GroupAxis = searching ? "none" : groupAxis;
-  const sections = buildSections(rows, effectiveAxis, accountLabels);
+  const sections = buildSections(rows, effectiveAxis, accountLabels, t("group.unknown"));
   // Shift+click 連続選択のアンカー（直前に触れた行の rep id）。
   const anchorRef = useRef<string | null>(null);
   // 表示順の rep id 列（範囲計算用。セクション表示でも見えている順に並べる）。
@@ -324,37 +314,40 @@ export function EmailList({
         <header className="flex items-center gap-1.5 px-4 pb-2 pt-5">
           <button
             onClick={onClearChecked}
-            title="選択を解除"
+            title={t("bulk.clear")}
             className="grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
           >
             <X className="size-4" />
           </button>
-          <span className="text-sm font-semibold tabular-nums">{checkedIds.size}件選択中</span>
+          <span className="text-sm font-semibold tabular-nums">
+            {checkedIds.size}
+            {t("bulk.selectedSuffix")}
+          </span>
           <button
             onClick={onCheckAll}
             className="rounded-md px-1.5 py-0.5 text-xs text-accent hover:bg-accent-soft"
           >
-            全選択
+            {t("bulk.selectAll")}
           </button>
           <span className="ml-auto flex items-center gap-1">
             {folder !== "archived" && folder !== "sent" && (
               <button
                 onClick={onBulkArchive}
-                title="選択した会話をすべてアーカイブ"
+                title={t("bulk.archive.title")}
                 className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-accent"
               >
                 <Archive className="size-3.5" />
-                アーカイブ
+                {t("action.archive")}
               </button>
             )}
             {folder !== "trashed" && (
               <button
                 onClick={onBulkTrash}
-                title="選択した会話をすべてゴミ箱へ"
+                title={t("bulk.trash.title")}
                 className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-high hover:text-high"
               >
                 <Trash2 className="size-3.5" />
-                ゴミ箱
+                {t("action.trash")}
               </button>
             )}
           </span>
@@ -362,30 +355,26 @@ export function EmailList({
       ) : (
         <header className="flex items-center gap-2 px-5 pb-2 pt-5">
           <h1 className="text-base font-semibold tracking-tight">
-            {searching ? "検索結果" : FOLDER_LABEL[folder]}
+            {searching ? t("list.searchResults") : t(`folder.${folder}`)}
           </h1>
           {!searching && (
             <>
               <button
                 onClick={onRefresh}
                 disabled={loading || refreshing}
-                title="更新"
+                title={t("list.refresh")}
                 className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-50"
               >
                 <RefreshCw className={cn("size-3.5", (loading || refreshing) && "animate-spin")} />
               </button>
               {refreshing && (
                 <span className="flex items-center text-[11px] text-fg-subtle" aria-live="polite">
-                  更新中…
+                  {t("list.refreshing")}
                 </span>
               )}
               <button
                 onClick={onToggleGrouping}
-                title={
-                  grouping
-                    ? "スレッド表示中（1会話=1行）— クリックで個別表示"
-                    : "個別表示中 — クリックでスレッド表示（1会話=1行）"
-                }
+                title={grouping ? t("list.thread.on") : t("list.thread.off")}
                 className={cn(
                   "grid size-6 place-items-center rounded-md transition-colors hover:bg-surface-2",
                   grouping ? "text-accent" : "text-fg-subtle hover:text-fg",
@@ -396,16 +385,19 @@ export function EmailList({
               {rows.length > 0 && (
                 <button
                   onClick={onCheckAll}
-                  title="一括選択（すべて選択）— 残すものだけ外して、まとめてアーカイブ/ゴミ箱へ"
+                  title={t("list.selectAll.title")}
                   className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-fg-subtle transition-colors hover:bg-surface-2 hover:text-accent"
                 >
                   <span className="grid size-3.5 place-items-center rounded-[3px] border border-current" />
-                  選択
+                  {t("list.select")}
                 </button>
               )}
             </>
           )}
-          <span className="ml-auto text-xs text-fg-subtle">{rows.length}件</span>
+          <span className="ml-auto text-xs text-fg-subtle">
+            {rows.length}
+            {t("list.countSuffix")}
+          </span>
         </header>
       )}
 
@@ -416,13 +408,13 @@ export function EmailList({
           <input
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="検索（件名・本文・差出人）"
+            placeholder={t("search.placeholder")}
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-subtle"
           />
           {searchQuery && (
             <button
               onClick={() => onSearchChange("")}
-              title="検索をクリア"
+              title={t("search.clear")}
               className="grid size-5 shrink-0 place-items-center rounded text-fg-subtle hover:text-fg"
             >
               <X className="size-3.5" />
@@ -434,7 +426,7 @@ export function EmailList({
       {/* グループ化軸: なし / アカウント別 / 送信者ドメイン別（折りたたみ表示）。 */}
       {!searching && (
         <div className="flex items-center gap-1.5 px-4 pb-2 text-[11px] text-fg-subtle">
-          <span>グループ:</span>
+          <span>{t("group.label")}</span>
           {(["none", "account", "sender"] as GroupAxis[]).map((a) => (
             <button
               key={a}
@@ -446,7 +438,7 @@ export function EmailList({
                   : "border-border hover:border-accent hover:text-accent",
               )}
             >
-              {AXIS_LABEL[a]}
+              {t(`group.${a}`)}
             </button>
           ))}
         </div>
@@ -463,14 +455,14 @@ export function EmailList({
               <Inbox className="size-8 opacity-50" />
               <p className="text-sm">
                 {searching && searchError
-                  ? "検索に失敗しました（時間をおいて再試行してください）"
+                  ? t("empty.searchFailed")
                   : searching
                     ? serverSearched
-                      ? "サーバ全履歴にも該当するメールがありません"
-                      : "該当するメールがありません（ローカルキャッシュ内を検索）"
+                      ? t("empty.serverSearched")
+                      : t("empty.searchLocal")
                     : folder === "inbox"
-                      ? "受信箱はすべて片付きました 🎉"
-                      : "ここには何もありません"}
+                      ? t("empty.inboxClean")
+                      : t("empty.folder")}
               </p>
               {searching && !serverSearched && (
                 <ServerSearchButton searching={serverSearching} onClick={onServerSearch} />
@@ -506,7 +498,7 @@ export function EmailList({
         {searching && rows.length > 0 && !loading && (
           <div className="flex justify-center py-3">
             {serverSearched ? (
-              <span className="text-[11px] text-fg-subtle">サーバ全履歴を含む結果です</span>
+              <span className="text-[11px] text-fg-subtle">{t("server.result")}</span>
             ) : (
               <ServerSearchButton searching={serverSearching} onClick={onServerSearch} />
             )}
@@ -525,15 +517,16 @@ function ServerSearchButton({
   searching: boolean;
   onClick: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <button
       onClick={onClick}
       disabled={searching}
-      title="キャッシュ外の過去メールも検索します（Gmailの検索演算子も使えます）"
+      title={t("server.search.title")}
       className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
     >
       {searching ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
-      {searching ? "サーバ全履歴を検索中…" : "サーバ全履歴を検索"}
+      {searching ? t("server.searching") : t("server.search")}
     </button>
   );
 }
@@ -594,10 +587,11 @@ function EmailListItem({
   onTrash: () => void;
   onToggleStar: () => void;
 }) {
+  const { t } = useI18n();
   const { email, count, participants, unread, starred } = row;
   const hits = matchedFields(email, matchQuery);
   const terms = searchTerms(matchQuery);
-  const threadActionHint = count > 1 ? `（会話${count}通すべて）` : "";
+  const threadActionHint = count > 1 ? t("row.threadAll").replace("{n}", String(count)) : "";
   // Sent mail: the avatar represents the recipient (the row shows "To: …").
   const face = email.state === "sent" && email.to[0] ? email.to[0] : email.from;
   const showCheckbox = checked || selectionActive;
@@ -639,7 +633,7 @@ function EmailListItem({
             e.stopPropagation();
             onToggleCheck(e.shiftKey);
           }}
-          title={checked ? "選択を外す" : "選択する（Shift+クリックで範囲選択）"}
+          title={checked ? t("row.check.off") : t("row.check.on")}
           className="relative flex size-4 shrink-0 items-center justify-center"
         >
           <span
@@ -675,7 +669,7 @@ function EmailListItem({
         )}
         {email.importance === "high" && (
           <span className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high">
-            重要
+            {t("importance.high")}
           </span>
         )}
         <span
@@ -688,10 +682,14 @@ function EmailListItem({
         </span>
         {/* Meta (time + status icons) — hidden on hover to reveal quick-actions. */}
         <span className="flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle group-hover:hidden">
-          {starred && <Star className="size-3 fill-amber-400 text-amber-400" aria-label="スター付き" />}
-          {email.replied && <Reply className="size-3 text-accent" aria-label="返信済み" />}
-          {email.hasAttachment && <Paperclip className="size-3 text-fg-muted" aria-label="添付あり" />}
-          {hasNote && <NotebookPen className="size-3 text-amber-500" aria-label="メモあり" />}
+          {starred && (
+            <Star className="size-3 fill-amber-400 text-amber-400" aria-label={t("aria.starred")} />
+          )}
+          {email.replied && <Reply className="size-3 text-accent" aria-label={t("aria.replied")} />}
+          {email.hasAttachment && (
+            <Paperclip className="size-3 text-fg-muted" aria-label={t("aria.attachment")} />
+          )}
+          {hasNote && <NotebookPen className="size-3 text-amber-500" aria-label={t("aria.note")} />}
           <span className="tabular-nums">{relativeTime(email.date)}</span>
         </span>
         {/* Right-edge quick-actions (same set as the classic row). */}
@@ -701,7 +699,7 @@ function EmailListItem({
               e.stopPropagation();
               onToggleStar();
             }}
-            title={email.starred ? "スターを外す (S)" : "スター/重要 (S)"}
+            title={email.starred ? t("row.star.off") : t("row.star.on")}
             className="grid size-6 place-items-center rounded-md text-fg-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
           >
             <Star className={cn("size-3.5", email.starred && "fill-amber-400 text-amber-400")} />
@@ -712,7 +710,7 @@ function EmailListItem({
                 e.stopPropagation();
                 onArchive();
               }}
-              title={`アーカイブ${threadActionHint} (E)`}
+              title={`${t("row.archive.title")}${threadActionHint} (E)`}
               className="grid size-6 place-items-center rounded-md text-fg-muted hover:bg-accent-soft hover:text-accent"
             >
               <Archive className="size-3.5" />
@@ -724,7 +722,7 @@ function EmailListItem({
                 e.stopPropagation();
                 onTrash();
               }}
-              title={`ゴミ箱へ${threadActionHint}`}
+              title={`${t("row.trash.title")}${threadActionHint}`}
               className="grid size-6 place-items-center rounded-md text-fg-muted hover:bg-high-soft hover:text-high"
             >
               <Trash2 className="size-3.5" />
@@ -751,7 +749,7 @@ function EmailListItem({
             e.stopPropagation();
             onToggleCheck(e.shiftKey);
           }}
-          title={checked ? "選択を外す (X)" : "選択する (X)（Shift+クリックで範囲選択）"}
+          title={checked ? t("row.check.off") : t("row.check.on")}
           className="relative mt-0.5 size-9 shrink-0"
         >
           <span
@@ -795,7 +793,7 @@ function EmailListItem({
             </span>
             {count > 1 && (
               <span
-                title={`この会話のメール ${count}通を1行に集約しています`}
+                title={t("list.threadCount.title").replace("{n}", String(count))}
                 className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold tabular-nums text-fg-muted"
               >
                 {count}
@@ -804,16 +802,16 @@ function EmailListItem({
             {accountLabel && <AccountChip account={email.account ?? ""} label={accountLabel} />}
             <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle">
               {starred && (
-                <Star className="size-3 fill-amber-400 text-amber-400" aria-label="スター付き" />
+                <Star className="size-3 fill-amber-400 text-amber-400" aria-label={t("aria.starred")} />
               )}
               {email.replied && (
-                <Reply className="size-3 text-accent" aria-label="返信済み" />
+                <Reply className="size-3 text-accent" aria-label={t("aria.replied")} />
               )}
               {email.hasAttachment && (
-                <Paperclip className="size-3 text-fg-muted" aria-label="添付ファイルあり" />
+                <Paperclip className="size-3 text-fg-muted" aria-label={t("aria.attachment")} />
               )}
               {hasNote && (
-                <NotebookPen className="size-3 text-amber-500" aria-label="自分用メモあり" />
+                <NotebookPen className="size-3 text-amber-500" aria-label={t("aria.note")} />
               )}
               {relativeTime(email.date)}
             </span>
@@ -821,18 +819,18 @@ function EmailListItem({
           <div className="mt-0.5 flex items-center gap-1.5">
             {email.importance === "high" && (
               <span
-                title="簡易判定: 重要（学習シグナル/キーワード。開くとAIが精密判定）"
+                title={t("importance.high.title")}
                 className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high"
               >
-                重要
+                {t("importance.high")}
               </span>
             )}
             {email.importance === "low" && (
               <span
-                title="簡易判定: 低（ニュースレター等。開くとAIが精密判定）"
+                title={t("importance.low.title")}
                 className="shrink-0 rounded bg-surface-2 px-1 text-[10px] text-fg-subtle"
               >
-                低
+                {t("importance.low")}
               </span>
             )}
             <p
@@ -849,14 +847,14 @@ function EmailListItem({
             {hits.length > 0 && (
               <span
                 className="flex shrink-0 items-center gap-1"
-                title={`一致: ${hits.join("・")}`}
+                title={`${t("match.label")}: ${hits.map((h) => t(`match.${h}`)).join(" / ")}`}
               >
                 {hits.map((h) => (
                   <span
                     key={h}
                     className="rounded bg-accent-soft px-1 py-px text-[10px] font-medium text-accent"
                   >
-                    {h}
+                    {t(`match.${h}`)}
                   </span>
                 ))}
               </span>
@@ -875,7 +873,7 @@ function EmailListItem({
             e.stopPropagation();
             onToggleStar();
           }}
-          title={email.starred ? "スターを外す (S)" : "スターを付ける (S)"}
+          title={email.starred ? t("row.star.off") : t("row.star.on")}
           className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
         >
           <Star className={cn("size-4", email.starred && "fill-amber-400 text-amber-400")} />
@@ -886,7 +884,7 @@ function EmailListItem({
               e.stopPropagation();
               onArchive();
             }}
-            title={`アーカイブ${threadActionHint} (E)`}
+            title={`${t("row.archive.title")}${threadActionHint} (E)`}
             className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-accent-soft hover:text-accent"
           >
             <Archive className="size-4" />
@@ -898,7 +896,7 @@ function EmailListItem({
               e.stopPropagation();
               onTrash();
             }}
-            title={`ゴミ箱へ${threadActionHint}`}
+            title={`${t("row.trash.title")}${threadActionHint}`}
             className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-high-soft hover:text-high"
           >
             <Trash2 className="size-4" />
