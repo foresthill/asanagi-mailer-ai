@@ -227,7 +227,11 @@ export function HtmlMailView({
         sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         title="メール本文"
         className={
-          embedded ? "w-full bg-white" : "w-full rounded-lg border border-border bg-white"
+          // HTMLメールは白基調で作られているため、ダークでも白い「便箋」として
+          // 見せる（無理な反転はレイアウトを壊す）。枠を付けて意図的なカードに。
+          embedded
+            ? "w-full rounded-lg border border-border bg-white"
+            : "w-full rounded-lg border border-border bg-white"
         }
         style={{ height: 400 }}
       />

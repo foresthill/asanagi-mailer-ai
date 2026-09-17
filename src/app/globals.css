@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* `dark:` ユーティリティを OS の prefers-color-scheme ではなく <html data-theme>
+   に追従させる（手動トグルで dark: 系も一緒に切り替わるように）。テーマ適用時は
+   JS が system を解決して常に data-theme="light"|"dark" を具体値で載せる。 */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ---------------------------------------------------------------------------
    Design tokens — a calm, focused mail surface (light + dark).
 --------------------------------------------------------------------------- */
@@ -22,13 +27,13 @@
   --shadow: 0 1px 2px rgba(17, 17, 26, 0.04), 0 8px 24px rgba(17, 17, 26, 0.06);
 }
 
-/* テーマの決まり方（[data-theme] は <html> に付与）:
-   - 未指定/"system" … OS 追従（下の media query が担当）
-   - "light" … 常にライト（media query から除外され :root の既定が残る）
-   - "dark"  … 常にダーク（明示ルールで上書き）
-   ダークのトークンは media query と明示ルールで同じ値を使う。 */
+/* テーマの決まり方（[data-theme] は JS が描画前に具体値で <html> に付与）:
+   - data-theme 未設定（JS前/無効時のみ）… OS 追従（この media query が担当）
+   - data-theme="dark" … ダーク（下の明示ルール）
+   - data-theme="light" … ライト（:root の既定）
+   ダークのトークンは media fallback と明示ルールで同じ値。 */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme]) {
     color-scheme: dark;
     --bg: #0c0c0f;
     --surface: #141418;

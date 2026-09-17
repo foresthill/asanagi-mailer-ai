@@ -8,18 +8,22 @@ type Theme = "system" | "light" | "dark";
 
 const KEY = "asanagi:theme";
 
-/** <html data-theme> に反映（system は属性を外して OS 追従）。color-scheme も
- *  トークン側で切り替わるので、ここは属性の付け外しだけでよい。 */
-function applyTheme(theme: Theme) {
+/** 好み(system/light/dark)を「具体値」へ解決して <html data-theme> に反映。
+ *  system は OS を見て解決。data-theme を常に light|dark の具体値にすることで、
+ *  token だけでなく dark: ユーティリティも追従する（globals.css の @custom-variant）。 */
+function applyTheme(pref: Theme) {
   const el = document.documentElement;
-  if (theme === "system") delete el.dataset.theme;
-  else el.dataset.theme = theme;
+  const dark =
+    pref === "dark" ||
+    (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  el.dataset.theme = dark ? "dark" : "light";
 }
 
 /**
- * テーマ切替（システム / ライト / ダーク）。初回描画は system 固定で SSR と一致
- * させ、マウント後に保存値へ寄せる（実際の見た目は layout のインラインscriptが
- * 描画前に適用済みなので、ここはUIの選択状態を合わせるだけ）。
+ * テーマ切替（システム / ライト / ダーク）。UI は「好み」を保持し、実際の見た目は
+ * それを解決した data-theme（具体値）で決まる。初回描画は system 固定で SSR と
+ * 一致させ、マウント後に保存値へ寄せる（適用自体は layout のインラインscriptが
+ * 描画前に済ませている）。system の間は OS 変更に追従する。
  */
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("system");
@@ -34,6 +38,20 @@ export function ThemeToggle() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTheme(saved);
+    // system の間は OS のダーク切替に追従して data-theme を解決し直す。
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+      let cur: Theme = "system";
+      try {
+        const v = localStorage.getItem(KEY);
+        if (v === "light" || v === "dark" || v === "system") cur = v;
+      } catch {
+        // noop
+      }
+      if (cur === "system") applyTheme("system");
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   const choose = (t: Theme) => {

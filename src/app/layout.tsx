@@ -19,13 +19,15 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       suppressHydrationWarning
     >
       <head>
-        {/* 保存済みテーマ(light/dark)を描画前に <html> へ適用し、初回のちらつき
-            (FOUC)を防ぐ。system は属性なし＝OS追従。React管理外の属性なので
-            hydration mismatch にはならない。 */}
+        {/* 保存済みの好み(system/light/dark)を描画前に「具体値」へ解決して
+            <html data-theme> に適用し、初回のちらつき(FOUC)を防ぐ。system は
+            OSを見て light/dark に解決。data-theme を常に具体値にすることで、
+            token だけでなく dark: ユーティリティも一緒に切り替わる（@custom-variant
+            dark 参照）。React管理外の属性なので hydration mismatch にはならない。 */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){try{var t=localStorage.getItem('asanagi:theme');if(t==='light'||t==='dark'){document.documentElement.dataset.theme=t;}}catch(e){}})();",
+              "(function(){try{var p=localStorage.getItem('asanagi:theme')||'system';var d=p==='dark'||(p!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();",
           }}
         />
       </head>
