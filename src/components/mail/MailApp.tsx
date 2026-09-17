@@ -443,9 +443,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setChecked(new Set());
   };
 
-  const changeAccount = (key: string) => {
+  // Sidebar: pick an account AND folder together (folders nested per account).
+  // Both state updates are batched → the [folder, account] effect loads once.
+  const changeAccountFolder = (key: string, f: FolderView) => {
     if (!confirmDiscard()) return;
+    setView("mail");
     setAccount(key);
+    setFolder(f);
     setSearchQuery("");
     setSearchResults(null);
     setSelectedId(null);
@@ -1014,7 +1018,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           setView(v);
           setCompose(null);
         }}
-        onSelectAccount={changeAccount}
+        onSelectAccountFolder={changeAccountFolder}
         onOpenSettings={() => setShowSettings(true)}
         onOpenScheduled={() => setShowScheduled(true)}
         onOpenDrafts={() => setShowDrafts(true)}

@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import {
   Archive,
+  ChevronRight,
   Inbox,
   Sunrise,
   Send,
@@ -45,7 +47,7 @@ export function Sidebar({
   storage,
   view,
   onSelect,
-  onSelectAccount,
+  onSelectAccountFolder,
   onOpenSettings,
   onOpenScheduled,
   onOpenDrafts,
@@ -66,7 +68,8 @@ export function Sidebar({
   view: "mail" | "contacts" | "triage" | "ailog" | "projects";
   onSelect: (f: FolderView) => void;
   onSelectView: (v: "mail" | "contacts" | "triage" | "ailog" | "projects") => void;
-  onSelectAccount: (key: string) => void;
+  /** Pick an account AND folder together (folders nested per account). */
+  onSelectAccountFolder: (key: string, f: FolderView) => void;
   onOpenSettings: () => void;
   onOpenScheduled: () => void;
   onOpenDrafts: () => void;
@@ -76,8 +79,23 @@ export function Sidebar({
   layout: "classic" | "geek";
   onSetLayout: (l: "classic" | "geek") => void;
 }) {
+  // Account groups: "すべて（統合）" + each account. Folders hang under each.
+  const groups = [
+    { key: "all", label: "すべて（統合）", icon: Layers },
+    ...accounts.map((a) => ({ key: a.key, label: a.address ?? a.label, icon: AtSign })),
+  ];
+  // Which account groups are expanded. Start with the active one (＋統合) open.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([account, "all"]));
+  const toggleGroup = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   return (
-    <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface-2 px-3 py-4">
+    <aside className="flex w-56 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border bg-surface-2 px-3 py-4">
       <div className="mb-4 flex items-center gap-2 px-2">
         <div className="grid size-7 place-items-center rounded-lg bg-accent text-accent-fg">
           <Sparkles className="size-4" />
@@ -98,28 +116,86 @@ export function Sidebar({
       </button>
 
       <nav className="flex flex-col gap-0.5">
-        {FOLDERS.map(({ key, label, icon: Icon }) => {
-          const active = view === "mail" && folder === key;
-          const count = counts[key];
-          return (
-            <button
-              key={key}
-              onClick={() => onSelect(key)}
-              className={cn(
-                "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-                active
-                  ? "bg-accent-soft font-medium text-fg"
-                  : "text-fg-muted hover:bg-surface hover:text-fg",
-              )}
-            >
-              <Icon className={cn("size-4", active && "text-accent")} />
-              <span className="flex-1 text-left">{label}</span>
-              {count ? (
-                <span className="text-xs tabular-nums text-fg-subtle">{count}</span>
-              ) : null}
-            </button>
-          );
-        })}
+        {accounts.length > 1
+          ? // 複数アカウント: フォルダを各アカウント配下に入れ子（開閉トグル）
+            groups.map((g) => {
+              const open = expanded.has(g.key);
+              const GroupIcon = g.icon;
+              const activeGroup = view === "mail" && account === g.key;
+              return (
+                <div key={g.key}>
+                  <button
+                    onClick={() => toggleGroup(g.key)}
+                    aria-expanded={open}
+                    title={g.label}
+                    className={cn(
+                      "group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors",
+                      activeGroup ? "text-fg" : "text-fg-muted hover:bg-surface hover:text-fg",
+                    )}
+                  >
+                    <ChevronRight
+                      className={cn(
+                        "size-3.5 shrink-0 text-fg-subtle transition-transform",
+                        open && "rotate-90",
+                      )}
+                    />
+                    <GroupIcon className={cn("size-4 shrink-0", activeGroup && "text-accent")} />
+                    <span className="flex-1 truncate text-left text-[13px]">{g.label}</span>
+                  </button>
+                  {open && (
+                    <div className="mb-1 ml-3 flex flex-col gap-0.5 border-l border-border pl-1.5">
+                      {FOLDERS.map(({ key, label, icon: Icon }) => {
+                        const active = view === "mail" && account === g.key && folder === key;
+                        // counts are only valid for the currently-loaded account.
+                        const count = account === g.key ? counts[key] : undefined;
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => onSelectAccountFolder(g.key, key)}
+                            className={cn(
+                              "group flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
+                              active
+                                ? "bg-accent-soft font-medium text-fg"
+                                : "text-fg-muted hover:bg-surface hover:text-fg",
+                            )}
+                          >
+                            <Icon className={cn("size-4", active && "text-accent")} />
+                            <span className="flex-1 text-left">{label}</span>
+                            {count ? (
+                              <span className="text-xs tabular-nums text-fg-subtle">{count}</span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          : // 単一アカウント: フォルダをそのまま並べる（従来どおり）
+            FOLDERS.map(({ key, label, icon: Icon }) => {
+              const active = view === "mail" && folder === key;
+              const count = counts[key];
+              return (
+                <button
+                  key={key}
+                  onClick={() => onSelect(key)}
+                  className={cn(
+                    "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                    active
+                      ? "bg-accent-soft font-medium text-fg"
+                      : "text-fg-muted hover:bg-surface hover:text-fg",
+                  )}
+                >
+                  <Icon className={cn("size-4", active && "text-accent")} />
+                  <span className="flex-1 text-left">{label}</span>
+                  {count ? (
+                    <span className="text-xs tabular-nums text-fg-subtle">{count}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+        <div className="my-1 border-t border-border" />
         <button
           onClick={() => onSelectView("contacts")}
           className={cn(
@@ -173,29 +249,6 @@ export function Sidebar({
         </button>
       </nav>
 
-      {/* Accounts: unified vs per-account view. Hidden when only one account. */}
-      {accounts.length > 1 && (
-        <div className="mt-2 border-t border-border pt-2">
-          <p className="px-2.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-            アカウント
-          </p>
-          <AccountButton
-            icon={Layers}
-            label="すべて（統合）"
-            active={account === "all"}
-            onClick={() => onSelectAccount("all")}
-          />
-          {accounts.map((a) => (
-            <AccountButton
-              key={a.key}
-              icon={AtSign}
-              label={a.address ?? a.label}
-              active={account === a.key}
-              onClick={() => onSelectAccount(a.key)}
-            />
-          ))}
-        </div>
-      )}
 
       <div className="mt-2 border-t border-border pt-2">
         <button
@@ -295,30 +348,5 @@ export function Sidebar({
         </div>
       </div>
     </aside>
-  );
-}
-
-function AccountButton({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: typeof Layers;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-colors",
-        active ? "bg-accent-soft font-medium text-fg" : "text-fg-muted hover:bg-surface hover:text-fg",
-      )}
-    >
-      <Icon className={cn("size-3.5", active && "text-accent")} />
-      <span className="flex-1 truncate text-left">{label}</span>
-    </button>
   );
 }
