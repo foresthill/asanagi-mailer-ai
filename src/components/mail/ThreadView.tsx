@@ -8,6 +8,7 @@ import {
   MessageCircle,
   Paperclip,
   Rows3,
+  Sparkles,
 } from "lucide-react";
 import type { Email, Attachment } from "@/lib/types";
 import type { ComposeAI, ComposeKind } from "./compose";
@@ -27,6 +28,17 @@ import { HtmlMailView } from "./HtmlMailView";
  * The choice is a personal preference, so it persists across emails and
  * sessions (localStorage) — default is the classic mailer card view.
  */
+/** Shape returned by /api/ai/thread-digest (kept local to avoid importing a
+ *  server route into a client component). */
+interface ThreadDigest {
+  summary: string;
+  decisions: string[];
+  open: string[];
+  nextActions: string[];
+  keyDates: string[];
+  participants: string[];
+}
+
 const VIEW_PREF_KEY = "asanagi:thread-view";
 
 function loadViewPref(): "cards" | "chat" {
@@ -150,6 +162,78 @@ export function ThreadView({
       return next;
     });
 
+  // 経緯ダイジェスト（AI要約）— クリック時だけ実行（自動生成しない＝勝手に課金しない）。
+  const [digest, setDigest] = useState<ThreadDigest | null>(null);
+  const [digesting, setDigesting] = useState(false);
+  const [digestError, setDigestError] = useState<string | null>(null);
+  const runDigest = async () => {
+    setDigesting(true);
+    setDigestError(null);
+    try {
+      const res = await fetch("/api/ai/thread-digest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "要約に失敗しました");
+      setDigest(data.digest as ThreadDigest);
+    } catch (e) {
+      setDigestError(e instanceof Error ? e.message : "要約に失敗しました");
+    } finally {
+      setDigesting(false);
+    }
+  };
+
+  const digestSection = messages.length > 1 && (
+    <div>
+      {!digest && (
+        <button
+          onClick={runDigest}
+          disabled={digesting}
+          title="この会話の経緯をAIが要約（本文はPIIマスクして送信）"
+          className="flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent transition hover:opacity-90 disabled:opacity-60"
+        >
+          {digesting ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+          {digesting ? "経緯を要約中…" : "この会話の経緯を要約"}
+        </button>
+      )}
+      {digestError && <p className="mt-1 text-xs text-high">{digestError}</p>}
+      {digest && (
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-[var(--shadow)]">
+          <div className="mb-2 flex items-center gap-1.5">
+            <Sparkles className="size-4 text-accent" />
+            <span className="text-sm font-semibold">経緯ダイジェスト</span>
+            <button
+              onClick={runDigest}
+              disabled={digesting}
+              className="ml-auto text-[11px] text-fg-subtle hover:text-fg disabled:opacity-60"
+            >
+              {digesting ? "…" : "再生成"}
+            </button>
+            <button
+              onClick={() => setDigest(null)}
+              className="text-[11px] text-fg-subtle hover:text-fg"
+            >
+              閉じる
+            </button>
+          </div>
+          {digest.summary && (
+            <p className="whitespace-pre-wrap text-sm leading-6 text-fg/90">{digest.summary}</p>
+          )}
+          <DigestList label="決定事項" items={digest.decisions} />
+          <DigestList label="未決・宿題" items={digest.open} />
+          <DigestList label="次アクション" items={digest.nextActions} />
+          <DigestList label="キー日付" items={digest.keyDates} />
+          <DigestList label="登場人物" items={digest.participants} />
+          <p className="mt-3 text-[10px] text-fg-subtle">
+            AIが会話を要約（PIIはマスクして送信）。重要な点は原文でご確認ください。
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   const switcher = (
     <div className="flex items-center gap-1">
       <span className="mr-1 text-xs text-fg-subtle">{messages.length}通の会話</span>
@@ -172,6 +256,7 @@ export function ThreadView({
     return (
       <div className="mt-6 flex flex-col gap-3">
         <div className="flex justify-end">{switcher}</div>
+        {digestSection}
         <ConversationBubbles messages={messages} selectedId={selectedId} />
       </div>
     );
@@ -180,6 +265,7 @@ export function ThreadView({
   return (
     <div className="mt-6 flex flex-col gap-3">
       <div className="flex justify-end">{switcher}</div>
+      {digestSection}
       {messages.map((m) => {
         const name = displayName(m.from);
         const expanded = open.has(m.id);
@@ -320,6 +406,24 @@ export function ThreadView({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** A labelled bullet list in the digest card; renders nothing when empty. */
+function DigestList({ label, items }: { label: string; items: string[] }) {
+  if (!items?.length) return null;
+  return (
+    <div className="mt-2.5">
+      <p className="text-[11px] font-semibold text-fg-muted">{label}</p>
+      <ul className="mt-0.5 flex flex-col gap-0.5">
+        {items.map((it, i) => (
+          <li key={i} className="flex gap-1.5 text-[13px] text-fg/90">
+            <span className="text-accent">・</span>
+            <span className="min-w-0">{it}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -32,6 +32,7 @@ function parseAudit(
 
 const KIND_LABEL: Record<string, string> = {
   reply: "返信生成",
+  digest: "経緯要約",
   suggest: "添削",
   classify: "重要度判定",
   sweep: "朝の一凪",
