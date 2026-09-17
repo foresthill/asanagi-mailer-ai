@@ -10,7 +10,7 @@ import {
   Sparkles,
   Clock,
   Settings,
-  PanelRight,
+  PanelTop,
   Layers,
   AtSign,
   SquarePen,
@@ -71,7 +71,7 @@ export function Sidebar({
   onOpenDrafts: () => void;
   onOpenSweep: () => void;
   onCompose: () => void;
-  /** 画面レイアウト: classic=返信は占有 / geek=本文の右にAI補助を併置。 */
+  /** 画面レイアウト: classic=一覧(左)｜本文(右) / geek=一覧(上)｜本文(下)。 */
   layout: "classic" | "geek";
   onToggleLayout: () => void;
 }) {
@@ -262,8 +262,8 @@ export function Sidebar({
             onClick={onToggleLayout}
             title={
               layout === "geek"
-                ? "geekレイアウト（本文の右にAI補助を併置）— クリックでclassicに戻す"
-                : "geekレイアウトにする（返信を本文の右に併置）"
+                ? "geekレイアウト（件名を上・本文を下の2段）— クリックでclassicに戻す"
+                : "geekレイアウトにする（件名を上に一覧・本文を下に表示）"
             }
             aria-pressed={layout === "geek"}
             className={cn(
@@ -273,9 +273,9 @@ export function Sidebar({
                 : "text-fg-subtle hover:bg-surface hover:text-fg",
             )}
           >
-            <PanelRight className="size-3.5" />
+            <PanelTop className="size-3.5" />
             <span className="flex-1 text-left">
-              {layout === "geek" ? "geek表示: 本文＋AI併置" : "geek表示にする"}
+              {layout === "geek" ? "geek表示: 件名上・本文下" : "geek表示にする"}
             </span>
           </button>
         </div>

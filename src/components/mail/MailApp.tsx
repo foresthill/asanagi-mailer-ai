@@ -53,7 +53,16 @@ function loadListWidth(): number {
   return Number.isFinite(n) && n >= 300 && n <= 680 ? n : DEFAULT_LIST_WIDTH;
 }
 
-/** 画面レイアウト: classic=返信は占有 / geek=本文の右にAI補助を併置（多ペイン）。 */
+/** geekレイアウトで一覧(上)の高さ（ドラッグで可変・px）。 */
+const LIST_HEIGHT_KEY = "asanagi:list-height";
+const DEFAULT_LIST_HEIGHT = 260;
+function loadListHeight(): number {
+  if (typeof window === "undefined") return DEFAULT_LIST_HEIGHT;
+  const n = Number(localStorage.getItem(LIST_HEIGHT_KEY));
+  return Number.isFinite(n) && n >= 140 && n <= 700 ? n : DEFAULT_LIST_HEIGHT;
+}
+
+/** 画面レイアウト: classic=一覧(左)｜本文(右) / geek=一覧(上)｜本文(下)。 */
 const LAYOUT_KEY = "asanagi:layout";
 type Layout = "classic" | "geek";
 function loadLayout(): Layout {
@@ -96,9 +105,21 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // Bulk selection — keyed by row representative id; actions apply to every
   // mail of each checked conversation row.
   const [checked, setChecked] = useState<Set<string>>(new Set());
-  // Resizable list pane width (px), draggable divider between 一覧 and 本文.
-  // Persisted so the chosen density sticks across sessions (geek寄りの調整)。
-  const [listWidth, setListWidth] = useState<number>(loadListWidth);
+  // UI layout prefs. Initialised to SSR-safe defaults; the persisted values are
+  // applied after mount (below) — reading localStorage during init would make
+  // the server HTML and first client render disagree (hydration mismatch).
+  // classic = 一覧(左)｜本文(右)・幅可変 / geek = 一覧(上)｜本文(下)・高さ可変。
+  const [layout, setLayout] = useState<Layout>("classic");
+  const [listWidth, setListWidth] = useState<number>(DEFAULT_LIST_WIDTH); // classic: 一覧の幅
+  const [listHeight, setListHeight] = useState<number>(DEFAULT_LIST_HEIGHT); // geek: 一覧の高さ
+  useEffect(() => {
+    // Apply persisted prefs on the client only (post-hydration).
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setLayout(loadLayout());
+    setListWidth(loadListWidth());
+    setListHeight(loadListHeight());
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
   const resizeList = useCallback((deltaX: number) => {
     setListWidth((w) => {
       const next = Math.min(680, Math.max(300, w + deltaX));
@@ -110,8 +131,17 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       return next;
     });
   }, []);
-  // classic=返信は一覧+本文を占有 / geek=返信時も本文を残し右にAI補助を併置。
-  const [layout, setLayout] = useState<Layout>(loadLayout);
+  const resizeListHeight = useCallback((deltaY: number) => {
+    setListHeight((h) => {
+      const next = Math.min(700, Math.max(140, h + deltaY));
+      try {
+        localStorage.setItem(LIST_HEIGHT_KEY, String(next));
+      } catch {
+        /* private mode — height just won't persist */
+      }
+      return next;
+    });
+  }, []);
   const toggleLayout = useCallback(() => {
     setLayout((l) => {
       const next: Layout = l === "geek" ? "classic" : "geek";
@@ -908,6 +938,67 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, selectedId, selected, folder, replying, view, openCompose]);
 
+  // Defined once, placed differently per layout: classic = 一覧(左)｜本文(右)、
+  // geek = 一覧(上)｜本文(下)。EmailList adapts via horizontal/width/height.
+  const emailListEl = (
+    <EmailList
+      folder={folder}
+      rows={rows}
+      loading={loading && searchResults === null}
+      refreshing={refreshing && searchResults === null}
+      selectedId={selectedId}
+      searchQuery={searchQuery}
+      searching={searchResults !== null}
+      searchError={searchError}
+      grouping={grouping}
+      groupAxis={groupAxis}
+      noteIds={noteIds}
+      onChangeGroupAxis={changeGroupAxis}
+      accountLabels={
+        accounts.length > 1 && (account === "all" || searchResults !== null)
+          ? Object.fromEntries(accounts.map((a) => [a.key, a.address ?? a.label]))
+          : null
+      }
+      serverSearched={serverSearched}
+      serverSearching={serverSearching}
+      checkedIds={checked}
+      onToggleCheck={toggleChecked}
+      onCheckAll={() => setChecked(new Set(rows.map((r) => r.email.id)))}
+      onClearChecked={() => setChecked(new Set())}
+      onBulkArchive={() => bulkAct("archived", "一括アーカイブしました")}
+      onBulkTrash={() => bulkAct("trashed", "一括でゴミ箱に移動しました")}
+      onServerSearch={searchServer}
+      onSearchChange={setSearchQuery}
+      onToggleGrouping={toggleGrouping}
+      onSelect={selectEmail}
+      onArchive={archive}
+      onTrash={trash}
+      onToggleStar={toggleStar}
+      onRefresh={() => loadList(folder, account)}
+      width={listWidth}
+      horizontal={layout === "geek"}
+      height={listHeight}
+    />
+  );
+  const readerEl = (
+    <EmailReader
+      email={selected}
+      thread={thread}
+      folder={folder}
+      classifying={classifying}
+      onArchive={() => selected && archive([selected.id])}
+      onTrash={() => selected && trash([selected.id])}
+      onRestore={() => selected && restore([selected.id])}
+      onReply={openCompose}
+      onReplyMessage={replyToMessage}
+      onToggleStar={() => selected && toggleStar(selected.id)}
+      onImportanceFeedback={onImportanceFeedback}
+      onNoteSaved={loadNoteIds}
+      highlight={searchResults !== null ? searchQuery : undefined}
+      onOpenMessage={selectEmail}
+    />
+  );
+
   return (
     <div className="flex h-full">
       <Sidebar
@@ -960,71 +1051,24 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           }}
         />
       )}
-      {view === "mail" && (!replying || composeMinimized) && (
-        <EmailList
-          folder={folder}
-          rows={rows}
-          loading={loading && searchResults === null}
-          refreshing={refreshing && searchResults === null}
-          selectedId={selectedId}
-          searchQuery={searchQuery}
-          searching={searchResults !== null}
-          searchError={searchError}
-          grouping={grouping}
-          groupAxis={groupAxis}
-          noteIds={noteIds}
-          onChangeGroupAxis={changeGroupAxis}
-          accountLabels={
-            // Show the origin badge when rows can mix accounts:
-            // unified inbox, or search results (always cross-account).
-            accounts.length > 1 && (account === "all" || searchResults !== null)
-              ? Object.fromEntries(accounts.map((a) => [a.key, a.address ?? a.label]))
-              : null
-          }
-          serverSearched={serverSearched}
-          serverSearching={serverSearching}
-          checkedIds={checked}
-          onToggleCheck={toggleChecked}
-          onCheckAll={() => setChecked(new Set(rows.map((r) => r.email.id)))}
-          onClearChecked={() => setChecked(new Set())}
-          onBulkArchive={() => bulkAct("archived", "一括アーカイブしました")}
-          onBulkTrash={() => bulkAct("trashed", "一括でゴミ箱に移動しました")}
-          onServerSearch={searchServer}
-          onSearchChange={setSearchQuery}
-          onToggleGrouping={toggleGrouping}
-          onSelect={selectEmail}
-          onArchive={archive}
-          onTrash={trash}
-          onToggleStar={toggleStar}
-          onRefresh={() => loadList(folder, account)}
-          width={listWidth}
-        />
+      {/* classic: 一覧(左)｜本文(右)・幅ドラッグ可変 */}
+      {view === "mail" && layout === "classic" && (
+        <>
+          {(!replying || composeMinimized) && emailListEl}
+          {(!replying || composeMinimized) && (!compose || composeMinimized) && (
+            <ResizeHandle onResize={resizeList} />
+          )}
+          {(!compose || composeMinimized) && readerEl}
+        </>
       )}
-      {/* Draggable divider between 一覧 and 本文 — resize the list pane. Shown
-          only when both panes are up (mail view, not full-screen composing). */}
-      {view === "mail" && (!replying || composeMinimized) && (!compose || composeMinimized) && (
-        <ResizeHandle onResize={resizeList} />
-      )}
-      {/* Reader: shown when not composing, or behind the minimized dock. In
-          geek layout it stays visible while replying so the composer docks to
-          the right (本文｜AI補助 併置). */}
-      {view === "mail" && (!compose || composeMinimized || layout === "geek") && (
-        <EmailReader
-          email={selected}
-          thread={thread}
-          folder={folder}
-          classifying={classifying}
-          onArchive={() => selected && archive([selected.id])}
-          onTrash={() => selected && trash([selected.id])}
-          onRestore={() => selected && restore([selected.id])}
-          onReply={openCompose}
-          onReplyMessage={replyToMessage}
-          onToggleStar={() => selected && toggleStar(selected.id)}
-          onImportanceFeedback={onImportanceFeedback}
-          onNoteSaved={loadNoteIds}
-          highlight={searchResults !== null ? searchQuery : undefined}
-          onOpenMessage={selectEmail}
-        />
+      {/* geek: 一覧(上・件名がずらり)｜本文(下)・高さドラッグ可変。返信中(占有)は
+          この段を退避し composer が受け持つ（v1）。 */}
+      {view === "mail" && layout === "geek" && (!replying || composeMinimized) && (
+        <div className="flex min-w-0 flex-1 flex-col">
+          {emailListEl}
+          <ResizeHandle orientation="horizontal" onResize={resizeListHeight} />
+          {(!compose || composeMinimized) && readerEl}
+        </div>
       )}
       {/* Composer: stays mounted while minimized so the draft is preserved. */}
       {compose && (
