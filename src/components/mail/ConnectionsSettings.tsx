@@ -454,6 +454,7 @@ function AiUsageSection() {
   const usd = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`);
   const KIND_LABEL: Record<string, string> = {
     reply: "返信生成",
+    digest: "経緯要約",
     suggest: "添削",
     classify: "重要度判定",
     sweep: "朝の一凪",
