@@ -492,6 +492,30 @@ export function contactTimeline(email: string, limit = 200): Email[] {
   return rows.map(rowToEmail);
 }
 
+/**
+ * 会社（ドメイン）単位の全履歴: 同じ @domain の誰か（from / to / cc）が絡む
+ * メールを時系列で。同じ要件で担当が複数に分かれても1画面で辿れる（相手軸の集約）。
+ */
+export function contactTimelineByDomain(domain: string, limit = 400): Email[] {
+  const like = `%@${domain.toLowerCase()}`;
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM messages
+       WHERE LOWER(from_email) LIKE ?
+          OR EXISTS (
+            SELECT 1 FROM json_each(messages.to_json) j
+            WHERE LOWER(json_extract(j.value, '$.email')) LIKE ?
+          )
+          OR EXISTS (
+            SELECT 1 FROM json_each(messages.cc_json) j
+            WHERE LOWER(json_extract(j.value, '$.email')) LIKE ?
+          )
+       ORDER BY date ASC LIMIT ?`,
+    )
+    .all(like, like, like, limit) as Record<string, unknown>[];
+  return rows.map(rowToEmail);
+}
+
 // ---------------------------------------------------------------------------
 // Judgment log — every AI/heuristic importance call, plus the user's verdict.
 // This is the supervised-learning seed (docs/02): corrections feed the live

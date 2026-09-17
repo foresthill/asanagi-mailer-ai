@@ -26,13 +26,37 @@ export function ContactPage({
 }) {
   const [messages, setMessages] = useState<Email[] | null>(null);
   const [learned, setLearned] = useState<{ importance: Importance; weight: number } | null>(null);
+  // person = このアドレスだけ / company = 同じ会社（@domain の全員）の全履歴。
+  // 同じ要件で担当が複数に分かれても1画面で辿れるように（相手軸の集約）。
+  const [scope, setScope] = useState<"person" | "company">("person");
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const domain = contact.email.split("@")[1] ?? "";
+  // フリーメールは「会社」ではないので会社集約を出さない（誤って gmail 全員を束ねない）。
+  const canCompany =
+    !!domain &&
+    !new Set([
+      "gmail.com",
+      "yahoo.co.jp",
+      "yahoo.com",
+      "outlook.com",
+      "outlook.jp",
+      "hotmail.com",
+      "icloud.com",
+      "me.com",
+      "docomo.ne.jp",
+      "ezweb.ne.jp",
+      "au.com",
+      "softbank.ne.jp",
+      "proton.me",
+    ]).has(domain.toLowerCase());
 
   useEffect(() => {
     let active = true;
     (async () => {
       setMessages(null);
-      const res = await fetch(`/api/contacts/${encodeURIComponent(contact.email)}`);
+      const qs = scope === "company" ? "?scope=company" : "";
+      const res = await fetch(`/api/contacts/${encodeURIComponent(contact.email)}${qs}`);
       const data = await res.json();
       if (!active) return;
       setMessages(data.messages ?? []);
@@ -41,7 +65,13 @@ export function ContactPage({
     return () => {
       active = false;
     };
-  }, [contact.email]);
+  }, [contact.email, scope]);
+
+  // フリーメールなら会社スコープに残らない（別の人へ切替時など）。
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!canCompany && scope === "company") setScope("person");
+  }, [canCompany, scope]);
 
   useEffect(() => {
     // Latest message in view, chat-style.
@@ -73,6 +103,34 @@ export function ContactPage({
             {contact.email}・受信 {contact.received} / 送信 {contact.sent}
           </p>
         </div>
+        {canCompany && (
+          <div className="flex shrink-0 rounded-lg border border-border p-0.5 text-xs">
+            <button
+              onClick={() => setScope("person")}
+              aria-pressed={scope === "person"}
+              title="このアドレスとの履歴だけ"
+              className={
+                scope === "person"
+                  ? "rounded-md bg-accent-soft px-2.5 py-1 font-medium text-accent"
+                  : "rounded-md px-2.5 py-1 text-fg-subtle hover:text-fg"
+              }
+            >
+              この人
+            </button>
+            <button
+              onClick={() => setScope("company")}
+              aria-pressed={scope === "company"}
+              title={`@${domain} の全員（担当が分かれても1画面で辿る）`}
+              className={
+                scope === "company"
+                  ? "rounded-md bg-accent-soft px-2.5 py-1 font-medium text-accent"
+                  : "rounded-md px-2.5 py-1 text-fg-subtle hover:text-fg"
+              }
+            >
+              会社全体
+            </button>
+          </div>
+        )}
         <button
           onClick={() => onComposeTo({ name: contact.name, email: contact.email })}
           className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95"
