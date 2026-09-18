@@ -23,13 +23,23 @@ fn start_server(handle: &tauri::AppHandle) {
         .map(|p| p.to_path_buf())
         .unwrap_or(resource_dir);
 
-    match std::process::Command::new("node")
-        .arg(&server_js)
+    let mut cmd = std::process::Command::new("node");
+    cmd.arg(&server_js)
         .env("PORT", SERVER_PORT.to_string())
         .env("HOSTNAME", "127.0.0.1")
-        .current_dir(&server_root)
-        .spawn()
-    {
+        .current_dir(&server_root);
+
+    // .data（トークン・SQLite・設定）は設置先(読み取り専用のことがある)ではなく
+    // OSのユーザーアプリデータ領域へ書く。Nodeサーバは ASANAGI_DATA_DIR を尊重する。
+    if let Ok(data_dir) = handle.path().app_data_dir() {
+        if let Err(e) = std::fs::create_dir_all(&data_dir) {
+            log::warn!("could not create data dir {}: {e}", data_dir.display());
+        }
+        cmd.env("ASANAGI_DATA_DIR", &data_dir);
+        log::info!("ASANAGI_DATA_DIR = {}", data_dir.display());
+    }
+
+    match cmd.spawn() {
         Ok(_) => log::info!("started standalone server: {}", server_js.display()),
         Err(e) => log::error!("failed to start server ({}): {e}", server_js.display()),
     }
