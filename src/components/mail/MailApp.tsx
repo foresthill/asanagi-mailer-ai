@@ -999,6 +999,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onSetSearchMode={setSearchMode}
       searchDigest={searchDigest}
       onRunSearchDigest={runSearchDigest}
+      searchCorpus={searchResults ?? []}
       grouping={grouping}
       groupAxis={groupAxis}
       noteIds={noteIds}
