@@ -10,6 +10,24 @@ Asanagi は Next.js/Node アプリです。デスクトップ版は **Tauri（�
 - 将来 Node バイナリを sidecar 同梱すれば Node 不要インストーラにできる（第二版候補）。
 - 実装済み配線: `src-tauri/src/lib.rs`（サーバ起動＋窓ナビゲート）、`npm run build:standalone`（→ `.next-standalone/standalone`）、`tauri.conf.json` の `bundle.resources`（standalone を `server/` として同梱）、`src-tauri/splash/`（起動スプラッシュ）、`tauri-plugin-updater` 配線。
 
+## 最短で使える／配布する（優先ルート）
+
+**A. 今すぐ使う（ビルド・署名・リリース不要）** — Linux の CTO 環境で:
+```bash
+git clone https://github.com/foresthill/asanagi-mailer-ai.git   # リポジトリは public
+cd asanagi-mailer-ai && npm install
+npm run build:standalone && PORT=3100 node .next-standalone/standalone/server.js
+# → http://localhost:3100（要 Node.js 24）
+```
+
+**B. Release から AppImage を落とせるようにする** — Linux バンドルは mac から作れないため CI が最短。
+`.github/workflows/desktop.yml` を用意済み。**タグを push すると ubuntu で AppImage/.deb をビルドし Release に添付**します:
+```bash
+git tag app-v0.1.0 && git push origin app-v0.1.0
+```
+（または GitHub の Actions 画面 → "Desktop build (Linux)" → Run workflow）
+→ 完了後、リポジトリの Releases に AppImage が並び、CTO はそこからダウンロード。初回は署名なし・自動更新オフ（下記で有効化）。
+
 ## 前提ツール
 
 - **Rust**（`rustup`）— `cargo` が必要。
