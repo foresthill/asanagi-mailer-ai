@@ -39,7 +39,10 @@ async function getPipe(): Promise<NerPipe> {
       // Weights live inside the project (.data is gitignored) — never re-fetched
       // once cached, and never leave the device.
       env.allowLocalModels = false;
-      env.cacheDir = path.join(process.cwd(), ".data", "hf-cache");
+      // Desktop(Tauri)では ASANAGI_DATA_DIR（書込可能なアプリデータ領域）配下に。
+      // dev/web は従来どおり ./.data（挙動不変）。
+      const dataDir = process.env.ASANAGI_DATA_DIR || path.join(process.cwd(), ".data");
+      env.cacheDir = path.join(dataDir, "hf-cache");
       const pipe = await pipeline("token-classification", MODEL);
       return pipe as unknown as NerPipe;
     })();
