@@ -4,7 +4,7 @@
 // The desktop build uses a separate distDir (.next-standalone) so it never
 // clobbers the running `next dev` (.next).
 // https://nextjs.org/docs/app/api-reference/config/next-config-js/output
-import { cp, access, rm } from "node:fs/promises";
+import { cp, access, rm, lstat } from "node:fs/promises";
 import path from "node:path";
 
 const DIST = ".next-standalone"; // must match next.config.ts distDir
@@ -54,13 +54,30 @@ const PRUNE_MODULES = [
   "sharp",
   "@emnapi",
 ];
-const modules = path.join(standalone, "node_modules");
+// lstat-based existence: catches symlinks too (a dangling symlink fails `access`,
+// so it would be skipped — but Next links the nested copy to the top-level one,
+// and leaving that link dangling breaks Tauri's resource bundling).
+async function lexists(p) {
+  try {
+    await lstat(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+// Next puts node_modules both at the root and inside the nested distDir output.
+const MODULE_ROOTS = [
+  path.join(standalone, "node_modules"),
+  path.join(standalone, DIST, "node_modules"),
+];
 let pruned = 0;
-for (const pkg of PRUNE_MODULES) {
-  const p = path.join(modules, pkg);
-  if (await exists(p)) {
-    await rm(p, { recursive: true, force: true });
-    pruned++;
+for (const root of MODULE_ROOTS) {
+  for (const pkg of PRUNE_MODULES) {
+    const p = path.join(root, pkg);
+    if (await lexists(p)) {
+      await rm(p, { recursive: true, force: true });
+      pruned++;
+    }
   }
 }
 
