@@ -667,6 +667,15 @@ export interface AiUsageStats {
     inputTokens: number;
     outputTokens: number;
   }[];
+  /** Per day (YYYY-MM-DD, UTC) × model, last 30 days — for the daily cost chart
+   *  (pricing is per model, so daily USD must be summed per model). */
+  byDayModel: {
+    day: string;
+    model: string;
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+  }[];
 }
 
 /** A single logged AI call (audit log — see AIログ view). */
@@ -800,11 +809,30 @@ export function aiUsageStats(): AiUsageStats {
     outputTokens: Number(r.output),
   }));
 
+  const byDayModel = (
+    d
+      .prepare(
+        `SELECT substr(created_at, 1, 10) AS day, model, COUNT(*) AS calls,
+                COALESCE(SUM(input_tokens), 0) AS input,
+                COALESCE(SUM(output_tokens), 0) AS output
+         FROM ai_usage WHERE created_at >= ?
+         GROUP BY day, model ORDER BY day ASC`,
+      )
+      .all(since) as { day: string; model: string | null; calls: number; input: number; output: number }[]
+  ).map((r) => ({
+    day: String(r.day),
+    model: r.model ?? "(不明)",
+    calls: Number(r.calls),
+    inputTokens: Number(r.input),
+    outputTokens: Number(r.output),
+  }));
+
   return {
     total: { calls: Number(total.calls), inputTokens: Number(total.input), outputTokens: Number(total.output) },
     recent: { calls: Number(recent.calls), inputTokens: Number(recent.input), outputTokens: Number(recent.output) },
     byModel: group("model") as AiUsageStats["byModel"],
     byKind: group("kind") as AiUsageStats["byKind"],
     byKindModel,
+    byDayModel,
   };
 }

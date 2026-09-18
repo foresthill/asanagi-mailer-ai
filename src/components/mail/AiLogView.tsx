@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ScrollText, Loader2, ChevronRight } from "lucide-react";
 import { relativeTime } from "./helpers";
+import { CostDashboard } from "./CostDashboard";
 
 interface AiLogEntry {
   id: number;
@@ -74,6 +75,8 @@ export function AiLogView() {
         この端末が<strong>実際にAIへ送った内容</strong>（PIIマスク有効時は匿名化後＝端末から出た形そのまま）と返答を、
         新しい順に記録しています。すべて<strong>端末内のみ</strong>に保存（直近2,000件）。
       </p>
+
+      <CostDashboard />
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-2">

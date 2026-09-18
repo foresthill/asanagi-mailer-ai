@@ -12,6 +12,22 @@ export async function GET() {
   let totalEstUsd: number | null = null;
   let byModel: (typeof stats.byModel[number] & { estUsd?: number })[] = stats.byModel;
   let byKind: (typeof stats.byKind[number] & { estUsd?: number })[] = stats.byKind;
+
+  // 日次集計（トークンは常に、USDは価格取得できたときのみ）。日ごとに複数モデルを合算。
+  const dailyMap = new Map<
+    string,
+    { day: string; calls: number; inputTokens: number; outputTokens: number; estUsd: number | null }
+  >();
+  for (const dm of stats.byDayModel) {
+    const cur =
+      dailyMap.get(dm.day) ??
+      { day: dm.day, calls: 0, inputTokens: 0, outputTokens: 0, estUsd: null };
+    cur.calls += dm.calls;
+    cur.inputTokens += dm.inputTokens;
+    cur.outputTokens += dm.outputTokens;
+    dailyMap.set(dm.day, cur);
+  }
+
   try {
     const prices = await openRouterPrices();
     const cost = (inTok: number, outTok: number, model: string) =>
@@ -40,9 +56,26 @@ export async function GET() {
     byKind = stats.byKind.map((k) =>
       kindPriced.has(k.kind) ? { ...k, estUsd: kindUsd.get(k.kind) } : k,
     );
+
+    // 日次USD: (日×モデル)を価格付けして日ごとに合算。
+    for (const dm of stats.byDayModel) {
+      const c = cost(dm.inputTokens, dm.outputTokens, dm.model);
+      if (c == null) continue;
+      const cur = dailyMap.get(dm.day);
+      if (cur) cur.estUsd = (cur.estUsd ?? 0) + c;
+    }
   } catch {
     /* offline or API change — show tokens only */
   }
 
-  return NextResponse.json({ ...stats, byModel, byKind, totalEstUsd, pricingSource: "openrouter" });
+  const daily = [...dailyMap.values()].sort((a, b) => a.day.localeCompare(b.day));
+
+  return NextResponse.json({
+    ...stats,
+    byModel,
+    byKind,
+    daily,
+    totalEstUsd,
+    pricingSource: "openrouter",
+  });
 }
