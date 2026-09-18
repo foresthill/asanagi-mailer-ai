@@ -165,6 +165,7 @@ export function EmailList({
   onSetSearchMode,
   searchDigest,
   onRunSearchDigest,
+  searchCorpus,
   grouping,
   groupAxis,
   noteIds,
@@ -212,6 +213,8 @@ export function EmailList({
   searchDigest: "loading" | "error" | SearchDigest | null;
   /** ヒット群から経緯をまとめる（AIモードのボタン）。 */
   onRunSearchDigest: () => void;
+  /** 検索ヒット全件（flat）— 根拠メールの件名引き用（スレッド集約の裏も引ける）。 */
+  searchCorpus: Email[];
   /** スレッド表示（1会話=1行）が有効か。検索結果では常に個別表示。 */
   grouping: boolean;
   /** セクション分けの軸（なし/アカウント別/送信者ドメイン別）。 */
@@ -489,7 +492,12 @@ export function EmailList({
             hitCount={rows.length}
             onRun={onRunSearchDigest}
             onSelect={onSelect}
-            emailById={new Map(rows.map((r) => [r.email.id, r.email]))}
+            emailById={
+              new Map(
+                // ヒット全件（flat）優先で索引。無ければ代表行から補完。
+                [...rows.map((r) => r.email), ...searchCorpus].map((e) => [e.id, e]),
+              )
+            }
           />
         )}
         {loading ? (
