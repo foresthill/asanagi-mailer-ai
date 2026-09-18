@@ -43,7 +43,9 @@ jobs:
           workspaces: src-tauri
 
       - name: Install JS deps
-        run: npm ci
+        # npm ci はロックの厳密一致を要求（optional依存の欠けで失敗するため）
+        # ビルド用途では reconcile する npm install を使う。
+        run: npm install --no-audit --no-fund
 
       # tauri build が conf の beforeBuildCommand(build:standalone)を実行し、
       # .next-standalone を bundle.resources として同梱する。
