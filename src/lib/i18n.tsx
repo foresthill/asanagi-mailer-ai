@@ -126,6 +126,22 @@ const ja: Dict = {
   "storage.tooltip.empty": "(まだキャッシュなし)",
   "storage.tooltip.retention": "保持上限: 各アカウント直近{n}通",
   "reader.empty": "メールを選択してください",
+  // 検索モード / AIナレッジ
+  "search.mode.keyword": "キーワード",
+  "search.mode.ai": "AI",
+  "search.mode.keyword.title": "キーワードで一覧を絞り込む",
+  "search.mode.ai.title": "ヒットしたメール群からAIが経緯をまとめる",
+  "aisearch.run": "AIで経緯をまとめる",
+  "aisearch.count": "{n}件から",
+  "aisearch.loading": "経緯をまとめています…",
+  "aisearch.error": "経緯を作成できませんでした",
+  "aisearch.retry": "再試行",
+  "aisearch.heading": "AIによる経緯",
+  "aisearch.regenerate": "作り直す",
+  "aisearch.timeline": "時系列",
+  "aisearch.points": "押さえどころ",
+  "aisearch.sources": "根拠メール",
+  "aisearch.empty": "先にキーワードで検索すると、その結果から経緯をまとめられます。",
 };
 
 const en: Dict = {
@@ -233,6 +249,22 @@ const en: Dict = {
   "storage.tooltip.empty": "(nothing cached yet)",
   "storage.tooltip.retention": "Retention: latest {n} msgs per account",
   "reader.empty": "Select an email",
+  // Search modes / AI knowledge
+  "search.mode.keyword": "Keyword",
+  "search.mode.ai": "AI",
+  "search.mode.keyword.title": "Filter the list by keyword",
+  "search.mode.ai.title": "Let AI summarize the story from the matched emails",
+  "aisearch.run": "Summarize with AI",
+  "aisearch.count": "from {n}",
+  "aisearch.loading": "Summarizing…",
+  "aisearch.error": "Couldn't build the summary",
+  "aisearch.retry": "Retry",
+  "aisearch.heading": "AI summary",
+  "aisearch.regenerate": "Regenerate",
+  "aisearch.timeline": "Timeline",
+  "aisearch.points": "Key points",
+  "aisearch.sources": "Source emails",
+  "aisearch.empty": "Search by keyword first, then summarize the results.",
 };
 
 // fr / zh: キー予約。未訳は en へフォールバック（順次追加）。
@@ -343,6 +375,22 @@ const fr: Dict = {
   "storage.tooltip.empty": "(rien en cache)",
   "storage.tooltip.retention": "Conservation : {n} derniers messages par compte",
   "reader.empty": "Sélectionnez un e-mail",
+  // Modes de recherche / connaissance IA
+  "search.mode.keyword": "Mot-clé",
+  "search.mode.ai": "IA",
+  "search.mode.keyword.title": "Filtrer la liste par mot-clé",
+  "search.mode.ai.title": "Laisser l'IA résumer le contexte à partir des e-mails trouvés",
+  "aisearch.run": "Résumer avec l'IA",
+  "aisearch.count": "sur {n}",
+  "aisearch.loading": "Résumé en cours…",
+  "aisearch.error": "Impossible de créer le résumé",
+  "aisearch.retry": "Réessayer",
+  "aisearch.heading": "Résumé IA",
+  "aisearch.regenerate": "Regénérer",
+  "aisearch.timeline": "Chronologie",
+  "aisearch.points": "Points clés",
+  "aisearch.sources": "E-mails sources",
+  "aisearch.empty": "Cherchez d'abord par mot-clé, puis résumez les résultats.",
 };
 
 const zh: Dict = {

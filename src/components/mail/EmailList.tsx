@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Reply,
   Search,
+  Sparkles,
   Star,
   X,
 } from "lucide-react";
@@ -23,6 +24,9 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { avatarColor, initials, relativeTime } from "./helpers";
 import type { ThreadRow } from "./threadList";
+import type { SearchDigest } from "@/app/api/ai/search-digest/route";
+
+export type SearchMode = "keyword" | "ai";
 
 /** 一覧のグループ化軸（折りたたみセクション）。 */
 export type GroupAxis = "none" | "account" | "sender";
@@ -157,6 +161,10 @@ export function EmailList({
   selectedId,
   searchQuery,
   searching,
+  searchMode,
+  onSetSearchMode,
+  searchDigest,
+  onRunSearchDigest,
   grouping,
   groupAxis,
   noteIds,
@@ -197,6 +205,13 @@ export function EmailList({
   searchQuery: string;
   /** True while the list shows search results instead of the folder. */
   searching: boolean;
+  /** 検索モード: keyword=一覧絞り込み / ai=ヒット群から経緯をまとめる。 */
+  searchMode: SearchMode;
+  onSetSearchMode: (m: SearchMode) => void;
+  /** AI検索の経緯（"loading"/"error"/結果/null）。 */
+  searchDigest: "loading" | "error" | SearchDigest | null;
+  /** ヒット群から経緯をまとめる（AIモードのボタン）。 */
+  onRunSearchDigest: () => void;
   /** スレッド表示（1会話=1行）が有効か。検索結果では常に個別表示。 */
   grouping: boolean;
   /** セクション分けの軸（なし/アカウント別/送信者ドメイン別）。 */
@@ -421,6 +436,28 @@ export function EmailList({
             </button>
           )}
         </div>
+        {/* 検索モード: キーワード（一覧絞り込み）/ AI（経緯をまとめる）。 */}
+        {searchQuery.trim() && (
+          <div className="mt-2 flex w-fit rounded-lg border border-border p-0.5 text-xs">
+            {(["keyword", "ai"] as SearchMode[]).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => onSetSearchMode(mode)}
+                aria-pressed={searchMode === mode}
+                title={t(`search.mode.${mode}.title`)}
+                className={cn(
+                  "flex items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-colors",
+                  searchMode === mode
+                    ? "bg-accent-soft text-accent"
+                    : "text-fg-subtle hover:text-fg",
+                )}
+              >
+                {mode === "ai" && <Sparkles className="size-3" />}
+                {t(`search.mode.${mode}`)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* グループ化軸: なし / アカウント別 / 送信者ドメイン別（折りたたみ表示）。 */}
@@ -445,6 +482,16 @@ export function EmailList({
       )}
 
       <div className="flex-1 overflow-y-auto px-2 pb-4">
+        {/* AI検索: ヒット群からまとめた「経緯」を一覧の上に。根拠メールは下にずらり。 */}
+        {searching && searchMode === "ai" && (
+          <SearchDigestPanel
+            digest={searchDigest}
+            hitCount={rows.length}
+            onRun={onRunSearchDigest}
+            onSelect={onSelect}
+            emailById={new Map(rows.map((r) => [r.email.id, r.email]))}
+          />
+        )}
         {loading ? (
           <div className="grid h-40 place-items-center text-fg-subtle">
             <Loader2 className="size-5 animate-spin" />
@@ -528,6 +575,149 @@ function ServerSearchButton({
       {searching ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
       {searching ? t("server.searching") : t("server.search")}
     </button>
+  );
+}
+
+/**
+ * AI検索の「経緯」パネル（一覧の上）。ヒット群からAIがまとめた要約＋時系列＋要点と、
+ * 根拠になったメール（クリックで原文へ）を表示。実際のソース一覧は下の行がそのまま。
+ */
+function SearchDigestPanel({
+  digest,
+  hitCount,
+  onRun,
+  onSelect,
+  emailById,
+}: {
+  digest: "loading" | "error" | SearchDigest | null;
+  hitCount: number;
+  onRun: () => void;
+  onSelect: (id: string) => void;
+  emailById: Map<string, Email>;
+}) {
+  const { t } = useI18n();
+  if (hitCount === 0) return null;
+
+  if (digest === null) {
+    return (
+      <div className="mx-1 mb-2 rounded-xl border border-accent/30 bg-accent-soft/40 p-2.5">
+        <button
+          onClick={onRun}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-fg transition-transform hover:scale-[1.01] active:scale-95"
+        >
+          <Sparkles className="size-4" />
+          {t("aisearch.run")}
+          <span className="text-xs opacity-80">
+            {t("aisearch.count").replace("{n}", String(hitCount))}
+          </span>
+        </button>
+      </div>
+    );
+  }
+
+  if (digest === "loading") {
+    return (
+      <div className="mx-1 mb-2 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft/40 p-3 text-sm text-accent">
+        <Loader2 className="size-4 animate-spin" />
+        {t("aisearch.loading")}
+      </div>
+    );
+  }
+
+  if (digest === "error") {
+    return (
+      <div className="mx-1 mb-2 flex items-center gap-2 rounded-xl border border-high/40 bg-high-soft p-3 text-sm text-high">
+        <span className="flex-1">{t("aisearch.error")}</span>
+        <button
+          onClick={onRun}
+          className="rounded-md border border-high/40 px-2 py-1 text-xs hover:bg-high/10"
+        >
+          {t("aisearch.retry")}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-1 mb-2 rounded-xl border border-accent/30 bg-surface p-3.5 shadow-sm">
+      <div className="mb-2 flex items-center gap-1.5">
+        <Sparkles className="size-3.5 text-accent" />
+        <span className="text-xs font-semibold text-accent">{t("aisearch.heading")}</span>
+        <button
+          onClick={onRun}
+          title={t("aisearch.regenerate")}
+          className="ml-auto grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-accent"
+        >
+          <RefreshCw className="size-3.5" />
+        </button>
+      </div>
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{digest.summary}</p>
+
+      {digest.timeline.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-[11px] font-semibold text-fg-muted">
+            {t("aisearch.timeline")}
+          </div>
+          <ul className="flex flex-col gap-1">
+            {digest.timeline.map((tl, i) => (
+              <li key={i} className="flex gap-2 text-xs">
+                <span className="shrink-0 rounded bg-surface-2 px-1.5 py-0.5 font-medium tabular-nums text-fg-muted">
+                  {tl.when}
+                </span>
+                <span className="text-fg-muted">{tl.what}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {digest.points.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-[11px] font-semibold text-fg-muted">{t("aisearch.points")}</div>
+          <ul className="flex flex-col gap-1">
+            {digest.points.map((p, i) => (
+              <li key={i} className="flex gap-1.5 text-xs text-fg-muted">
+                <span className="text-accent">•</span>
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {digest.sources.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-[11px] font-semibold text-fg-muted">
+            {t("aisearch.sources")}
+          </div>
+          <div className="flex flex-col gap-1">
+            {digest.sources.map((s, i) => {
+              const e = emailById.get(s.id);
+              return (
+                <button
+                  key={`${s.id}-${i}`}
+                  onClick={() => onSelect(s.id)}
+                  className="group flex items-start gap-2 rounded-lg border border-border px-2 py-1.5 text-left transition-colors hover:border-accent"
+                >
+                  <span
+                    className="mt-0.5 grid size-5 shrink-0 place-items-center rounded text-[9px] font-semibold text-white"
+                    style={{ background: avatarColor(e?.from.email ?? s.id) }}
+                  >
+                    {e ? initials(e.from) : "?"}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium text-fg">
+                      {e?.subject || "(メール)"}
+                    </span>
+                    <span className="block truncate text-[11px] text-fg-subtle">{s.reason}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
