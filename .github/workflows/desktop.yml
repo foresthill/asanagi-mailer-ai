@@ -1,0 +1,62 @@
+name: Desktop build (Linux)
+
+# CTO向けに Linux アプリ(AppImage/.deb)を CI でビルドし、Release に添付する。
+# macOS からは Linux バンドルを作れないため CI が最短。
+# 起動: タグ push（例 `app-v0.1.0`）または Actions 画面の「Run workflow」。
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "app-v*"
+
+permissions:
+  contents: write # Release 作成・アップロードに必要
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build deps (Tauri v2)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev \
+            build-essential \
+            libfuse2 \
+            file
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install JS deps
+        run: npm ci
+
+      # tauri build が conf の beforeBuildCommand(build:standalone)を実行し、
+      # .next-standalone を bundle.resources として同梱する。
+      - name: Build desktop bundle + publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('app-v0.0.0-dev-{0}', github.run_number) }}
+          releaseName: "Asanagi Desktop ${{ github.ref_type == 'tag' && github.ref_name || 'dev build' }}"
+          releaseBody: |
+            Linux デスクトップビルド（AppImage / .deb）。
+            要件: 実行マシンに Node.js 24（node:sqlite 安定版）。初回は Gmail 再認証と AI キー入力が必要。
+            自動アップデートは未設定（署名鍵の設定後に有効化・docs/DESKTOP.md 参照）。
+          releaseDraft: false
+          prerelease: true
