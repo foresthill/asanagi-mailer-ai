@@ -53,6 +53,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GitHub runner は FUSE が使えず linuxdeploy(AppImage)が失敗するため、
+          # AppImage を extract して実行させる（AppImageビルドの定番回避）。
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          NO_STRIP: "1"
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('app-v0.0.0-dev-{0}', github.run_number) }}
           releaseName: "Asanagi Desktop ${{ github.ref_type == 'tag' && github.ref_name || 'dev build' }}"
