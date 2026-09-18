@@ -68,19 +68,20 @@ export function ColorPreset() {
             key={value}
             onClick={() => choose(value)}
             aria-pressed={preset === value}
+            aria-label={label}
             title={title}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1 rounded-md px-1 py-1 text-[10px] transition-colors",
-              preset === value
-                ? "bg-accent-soft font-medium text-accent"
-                : "text-fg-subtle hover:text-fg",
+              "flex flex-1 items-center justify-center rounded-md py-1.5 transition-colors",
+              preset === value ? "bg-accent-soft" : "hover:bg-surface",
             )}
           >
             <span
-              className="size-2.5 shrink-0 rounded-full ring-1 ring-black/10"
+              className={cn(
+                "size-3.5 shrink-0 rounded-full ring-1 ring-black/10 transition-transform",
+                preset === value ? "scale-110 ring-2 ring-accent/40" : "opacity-80",
+              )}
               style={{ background: SWATCH[value] }}
             />
-            {label}
           </button>
         ))}
       </div>
