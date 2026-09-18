@@ -27,6 +27,7 @@ import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StorageMeter, type StorageInfo } from "./StorageMeter";
 import { ThemeToggle } from "./ThemeToggle";
+import { ColorPreset } from "./ColorPreset";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useI18n } from "@/lib/i18n";
 import type { AccountInfo } from "@/lib/email/accounts";
@@ -352,6 +353,8 @@ export function Sidebar({
           </div>
           {/* テーマ切替: システム(OS追従) / ライト / ダーク。 */}
           <ThemeToggle />
+          {/* テーマ色: アイリス(標準) / 朝凪(エメラルドブルー) / レトロ(セピア)。 */}
+          <ColorPreset />
           {/* 言語切替: 社内展開向け（日/英/仏/中）。 */}
           <LanguageSwitcher />
         </div>

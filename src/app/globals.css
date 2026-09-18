@@ -74,6 +74,58 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
+/* ---------------------------------------------------------------------------
+   カラープリセット（[data-preset] を <html> に付与・JSが描画前に適用）。
+   既定は iris（現行の紫・data-preset なし）。プリセットはアクセント色などの
+   トークンだけを上書きし、light/dark それぞれに値を持つ。
+   詳細度: :root[data-preset=x][data-theme=y] = (0,3,0) で base(:root=0,1,0 /
+   [data-theme]=0,2,0) を確実に上書きする。
+--------------------------------------------------------------------------- */
+
+/* 朝凪 — エメラルドブルー（アプリ名の由来。凪いだ水面の青緑）。 */
+:root[data-preset="asanagi"][data-theme="light"] {
+  --accent: #0891b2;
+  --accent-fg: #ffffff;
+  --accent-soft: #d6f3f8;
+}
+:root[data-preset="asanagi"][data-theme="dark"] {
+  --accent: #34d0e0;
+  --accent-fg: #04262d;
+  --accent-soft: #0c2e35;
+}
+
+/* レトロ — セピア/温かみ（背景を白でなくクリーム/黄みに、アクセントは焦げ茶橙）。 */
+:root[data-preset="retro"][data-theme="light"] {
+  --bg: #f8f3e8;
+  --surface: #fffdf6;
+  --surface-2: #f2ebd9;
+  --border: #e6dcc4;
+  --border-strong: #d6c9a8;
+  --fg: #2d2716;
+  --fg-muted: #6a5d43;
+  --fg-subtle: #988a68;
+  --accent: #b25a17;
+  --accent-fg: #ffffff;
+  --accent-soft: #f0e2c8;
+  --high: #c0392b;
+  --high-soft: #f6e3dd;
+}
+:root[data-preset="retro"][data-theme="dark"] {
+  --bg: #15120b;
+  --surface: #1d190f;
+  --surface-2: #231d10;
+  --border: #322b1b;
+  --border-strong: #40381f;
+  --fg: #ede4d1;
+  --fg-muted: #b0a17e;
+  --fg-subtle: #7c7051;
+  --accent: #e0912f;
+  --accent-fg: #15120b;
+  --accent-soft: #2a2311;
+  --high: #ff7a6b;
+  --high-soft: #2e1613;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
