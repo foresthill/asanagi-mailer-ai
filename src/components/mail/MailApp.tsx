@@ -27,6 +27,7 @@ import type { AccountInfo } from "@/lib/email/accounts";
 import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from "./compose";
 import { buildRows } from "./threadList";
 import type { GroupAxis } from "./EmailList";
+import type { SearchDigest } from "@/app/api/ai/search-digest/route";
 
 /** スレッド表示（1会話=1行）の永続化キー。既定はON。 */
 const GROUPING_PREF_KEY = "asanagi:list-grouping";
@@ -98,6 +99,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   /** True when the last search request failed (vs genuinely 0 hits) — so the UI
    *  shows an error instead of a misleading「該当なし」when the server errors. */
   const [searchError, setSearchError] = useState(false);
+  // 検索モード: keyword=そのまま一覧 / ai=ヒット群から経緯をAIがまとめる。
+  const [searchMode, setSearchMode] = useState<"keyword" | "ai">("keyword");
+  // AI検索の経緯（要約＋時系列＋要点＋根拠メール）。"loading"/"error"/結果/null。
+  const [searchDigest, setSearchDigest] = useState<
+    "loading" | "error" | SearchDigest | null
+  >(null);
   // Gmail-style flat conversation rows (docs/04 §1.6); off = 1 mail = 1 row.
   const [grouping, setGrouping] = useState(loadGroupingPref);
   // Section grouping axis (none / by account / by sender domain).
@@ -504,6 +511,32 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       setServerSearching(false);
     }
   }, [searchQuery, serverSearching]);
+
+  // AI検索: 現在のヒット群から「経緯」をAIがまとめる（クリック時だけ＝勝手に課金しない）。
+  const runSearchDigest = useCallback(async () => {
+    const q = searchQuery.trim();
+    const msgs = searchResults;
+    if (!q || !msgs?.length) return;
+    setSearchDigest("loading");
+    try {
+      const res = await fetch("/api/ai/search-digest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: q, messages: msgs }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      setSearchDigest(data.digest ?? "error");
+    } catch {
+      setSearchDigest("error");
+    }
+  }, [searchQuery, searchResults]);
+
+  // 検索語が変われば経緯はやり直し（古い経緯を残さない）。
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSearchDigest(null);
+  }, [searchQuery]);
 
   // Surface the result of the Gmail OAuth round-trip (?gmail= / ?gmail_error=).
   useEffect(() => {
@@ -962,6 +995,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       searchQuery={searchQuery}
       searching={searchResults !== null}
       searchError={searchError}
+      searchMode={searchMode}
+      onSetSearchMode={setSearchMode}
+      searchDigest={searchDigest}
+      onRunSearchDigest={runSearchDigest}
       grouping={grouping}
       groupAxis={groupAxis}
       noteIds={noteIds}
