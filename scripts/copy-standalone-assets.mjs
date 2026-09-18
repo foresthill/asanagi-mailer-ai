@@ -4,7 +4,7 @@
 // The desktop build uses a separate distDir (.next-standalone) so it never
 // clobbers the running `next dev` (.next).
 // https://nextjs.org/docs/app/api-reference/config/next-config-js/output
-import { cp, access } from "node:fs/promises";
+import { cp, access, rm } from "node:fs/promises";
 import path from "node:path";
 
 const DIST = ".next-standalone"; // must match next.config.ts distDir
@@ -40,3 +40,42 @@ if (await exists(path.join(root, "public"))) {
 }
 
 console.log(`[copy-standalone-assets] copied static + public into ${DIST}/standalone`);
+
+// Slim the desktop bundle: local NER (@huggingface/transformers + onnxruntime)
+// weighs hundreds of MB and is opt-in — structured PII masking works without it,
+// and NER load failures are swallowed (see lib/ai/pii.ts / ner.ts). Drop it from
+// the standalone output so the installer stays small. (next.config
+// outputFileTracingExcludes crashes Turbopack in 16.2.7, so we prune here.)
+const PRUNE_MODULES = [
+  "@huggingface",
+  "onnxruntime-node",
+  "onnxruntime-web",
+  "onnxruntime-common",
+  "sharp",
+  "@emnapi",
+];
+const modules = path.join(standalone, "node_modules");
+let pruned = 0;
+for (const pkg of PRUNE_MODULES) {
+  const p = path.join(modules, pkg);
+  if (await exists(p)) {
+    await rm(p, { recursive: true, force: true });
+    pruned++;
+  }
+}
+
+// Next's file tracing over-copies the project root into the standalone output.
+// Strip what the Node server never needs — critically `.data` (contains OAuth
+// tokens / BYOK keys and the local DB: must never ship in a distributed bundle),
+// plus the Rust build dir and VCS/source. The server's runtime `.data` is
+// created fresh at ASANAGI_DATA_DIR (or cwd). Keep `.next-standalone/` (the
+// compiled server output) and node_modules.
+const PRUNE_ROOT = [".data", ".git", "src-tauri", "src", "docs", "tsconfig.tsbuildinfo"];
+for (const name of PRUNE_ROOT) {
+  const p = path.join(standalone, name);
+  if (await exists(p)) {
+    await rm(p, { recursive: true, force: true });
+    pruned++;
+  }
+}
+console.log(`[copy-standalone-assets] pruned ${pruned} item(s) for a smaller, secret-free desktop bundle`);
