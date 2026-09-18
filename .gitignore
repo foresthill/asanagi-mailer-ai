@@ -47,3 +47,5 @@ next-env.d.ts
 # Playwright / browser test artifacts
 .playwright-mcp/
 *.png
+# ただし Tauri のアプリアイコンは成果物ではなくビルド必須ソースなので追跡する
+!src-tauri/icons/*.png
