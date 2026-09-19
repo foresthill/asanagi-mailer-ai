@@ -15,8 +15,9 @@ import {
   ZoomOut,
   Copy,
   Check,
+  PenLine,
 } from "lucide-react";
-import type { Email, FolderView, Importance } from "@/lib/types";
+import type { Email, FolderView, Importance, SavedDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { avatarColor, displayName, fullTime, htmlToText, initials } from "./helpers";
@@ -46,6 +47,8 @@ export function EmailReader({
   onNoteSaved,
   onOpenMessage,
   highlight,
+  draft,
+  onResumeDraft,
 }: {
   email: Email | null;
   /** Conversation containing the email (oldest first); null while loading. */
@@ -67,6 +70,10 @@ export function EmailReader({
   /** Search query to highlight in the plain-text body — set only when the
    *  email was opened from search results. */
   highlight?: string;
+  /** A saved draft for THIS conversation (surfaced as「続きを書く」). */
+  draft?: SavedDraft;
+  /** Resume that draft in the composer. */
+  onResumeDraft?: (d: SavedDraft) => void;
 }) {
   const { t } = useI18n();
   // Session-sticky preference: rich HTML (default) vs plain text.
@@ -211,6 +218,24 @@ export function EmailReader({
           <AiReplyButton onReply={replyAndExitFullscreen} />
         </div>
       </div>
+
+      {/* この会話に保存済みの下書き → ワンクリックで続きを書く（Gmail的）。 */}
+      {draft && onResumeDraft && (
+        <button
+          onClick={() => onResumeDraft(draft)}
+          title={t("draft.resume")}
+          className="flex w-full items-center gap-2 border-b border-amber-300/40 bg-amber-50/60 px-5 py-2 text-left text-xs text-amber-800 transition-colors hover:bg-amber-100/70 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20"
+        >
+          <PenLine className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">
+            {t("draft.inThread")}
+            {draft.subject ? `：${draft.subject}` : ""}
+          </span>
+          <span className="shrink-0 font-medium underline underline-offset-2">
+            {t("draft.resume")}
+          </span>
+        </button>
+      )}
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-8 py-7">

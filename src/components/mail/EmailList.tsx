@@ -12,6 +12,7 @@ import {
   Layers,
   NotebookPen,
   Paperclip,
+  PenLine,
   RefreshCw,
   Reply,
   Search,
@@ -169,6 +170,7 @@ export function EmailList({
   grouping,
   groupAxis,
   noteIds,
+  draftThreadIds,
   onChangeGroupAxis,
   serverSearched,
   serverSearching,
@@ -221,6 +223,8 @@ export function EmailList({
   groupAxis: GroupAxis;
   /** 自分用メモがあるメールIDの集合（📝インジケータ用）。 */
   noteIds: Set<string>;
+  /** 下書きが紐づく会話(threadId)の集合（✏️インジケータ用）。 */
+  draftThreadIds: Set<string>;
   onChangeGroupAxis: (axis: GroupAxis) => void;
   /** 今回の検索語でサーバ全履歴検索を実行済みか（#40）。 */
   serverSearched: boolean;
@@ -300,6 +304,7 @@ export function EmailList({
       active={row.email.id === selectedId}
       folder={folder}
       hasNote={noteIds.has(row.email.id)}
+      hasDraft={draftThreadIds.has(row.email.threadId)}
       checked={checkedIds.has(row.email.id)}
       selectionActive={selectionActive}
       accountLabel={
@@ -751,6 +756,7 @@ function EmailListItem({
   active,
   folder,
   hasNote,
+  hasDraft,
   checked,
   selectionActive,
   accountLabel,
@@ -772,6 +778,8 @@ function EmailListItem({
   matchQuery?: string;
   /** This email has a private note (自分用メモ) → show the 📝 badge. */
   hasNote: boolean;
+  /** この会話に未送信の下書きがある（✏️インジケータ）。 */
+  hasDraft?: boolean;
   /** This row is in the bulk selection. */
   checked: boolean;
   /** Any row is checked → checkboxes stay visible on every row. */
@@ -888,6 +896,7 @@ function EmailListItem({
             <Paperclip className="size-3 text-fg-muted" aria-label={t("aria.attachment")} />
           )}
           {hasNote && <NotebookPen className="size-3 text-amber-500" aria-label={t("aria.note")} />}
+          {hasDraft && <PenLine className="size-3 text-amber-600" aria-label={t("draft.badge")} />}
           <span className="tabular-nums">{relativeTime(email.date)}</span>
         </span>
         {/* Right-edge quick-actions (same set as the classic row). */}
@@ -1010,6 +1019,9 @@ function EmailListItem({
               )}
               {hasNote && (
                 <NotebookPen className="size-3 text-amber-500" aria-label={t("aria.note")} />
+              )}
+              {hasDraft && (
+                <PenLine className="size-3 text-amber-600" aria-label={t("draft.badge")} />
               )}
               {relativeTime(email.date)}
             </span>
