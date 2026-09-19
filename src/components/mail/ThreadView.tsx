@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   ChevronDown,
+  List,
   Loader2,
   MessageCircle,
   Paperclip,
@@ -41,9 +42,12 @@ interface ThreadDigest {
 
 const VIEW_PREF_KEY = "asanagi:thread-view";
 
-function loadViewPref(): "cards" | "chat" {
+type ViewMode = "cards" | "chat" | "outline";
+
+function loadViewPref(): ViewMode {
   if (typeof window === "undefined") return "cards";
-  return localStorage.getItem(VIEW_PREF_KEY) === "chat" ? "chat" : "cards";
+  const v = localStorage.getItem(VIEW_PREF_KEY);
+  return v === "chat" || v === "outline" ? v : "cards";
 }
 
 /** Full To/Cc/Bcc with addresses, for the recipient line's hover tooltip. */
@@ -82,7 +86,7 @@ export function ThreadView({
   highlight?: string;
 }) {
   const lastId = messages[messages.length - 1]?.id;
-  const [view, setView] = useState<"cards" | "chat">(loadViewPref);
+  const [view, setView] = useState<ViewMode>(loadViewPref);
   const [open, setOpen] = useState<Set<string>>(
     () => new Set([selectedId, lastId].filter(Boolean) as string[]),
   );
@@ -160,13 +164,25 @@ export function ThreadView({
     return () => clearTimeout(t);
   }, [selectedId, messages.length, view]);
 
-  const changeView = (v: "cards" | "chat") => {
+  const changeView = (v: ViewMode) => {
     setView(v);
     try {
       localStorage.setItem(VIEW_PREF_KEY, v);
     } catch {
       /* private mode etc. — preference just won't stick */
     }
+  };
+
+  // アウトラインの行を押したら、そのメールへ「飛ぶ」: カード表示に切り替えて該当を
+  // 展開し、即座にスクロール。全体像→気になる1通、を最短で辿れるように。
+  const jumpTo = (id: string) => {
+    changeView("cards");
+    setOpen((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+    setTimeout(() => {
+      document
+        .getElementById(`thread-msg-${id}`)
+        ?.scrollIntoView({ block: "start", behavior: "auto" });
+    }, 60);
   };
 
   const toggle = (id: string) =>
@@ -264,8 +280,63 @@ export function ThreadView({
         active={view === "chat"}
         onClick={() => changeView("chat")}
       />
+      <ModeButton
+        icon={List}
+        label="アウトライン"
+        active={view === "outline"}
+        onClick={() => changeView("outline")}
+      />
     </div>
   );
+
+  if (view === "outline") {
+    return (
+      <div className="mt-6 flex flex-col gap-3">
+        <div className="flex justify-end">{switcher}</div>
+        {digestSection}
+        {/* 全体像を一覧で: 1通=1行（差出人・重要度・冒頭・添付・時刻）。押すと
+            カード表示に切り替わり、その1通へ即ジャンプして開く。 */}
+        <div className="overflow-hidden rounded-xl border border-border bg-surface">
+          {messages.map((m, i) => {
+            const name = m.state === "sent" ? "自分" : displayName(m.from);
+            const current = m.id === selectedId;
+            return (
+              <button
+                key={m.id}
+                onClick={() => jumpTo(m.id)}
+                title={m.subject}
+                className={cn(
+                  "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors",
+                  i > 0 && "border-t border-border/60",
+                  current ? "bg-amber-50/60 dark:bg-amber-400/10" : "hover:bg-surface-2",
+                )}
+              >
+                <span
+                  className="grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
+                  style={{ background: avatarColor(m.from.email) }}
+                >
+                  {m.state === "sent" ? "自" : initials(m.from)}
+                </span>
+                <span className="w-28 shrink-0 truncate text-xs font-medium">{name}</span>
+                {m.importance === "high" && (
+                  <span className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high">
+                    重要
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">
+                  {m.snippet || m.subject}
+                </span>
+                {m.hasAttachment && <Paperclip className="size-3 shrink-0 text-fg-subtle" />}
+                <span className="shrink-0 text-[11px] tabular-nums text-fg-subtle">
+                  {fullTime(m.date)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   if (view === "chat") {
     return (
@@ -295,6 +366,7 @@ export function ThreadView({
         return (
           <div
             key={m.id}
+            id={`thread-msg-${m.id}`}
             ref={current ? currentRef : undefined}
             className={cn(
               "rounded-xl border transition-colors scroll-mt-4",
