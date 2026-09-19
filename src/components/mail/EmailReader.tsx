@@ -30,11 +30,6 @@ import { PrivateNote } from "./PrivateNote";
 import { ReplyButton, AiReplyButton } from "./ReplyButtons";
 import type { ComposeAI, ComposeKind } from "./compose";
 
-const IMPORTANCE_LABEL: Record<Importance, string> = {
-  high: "重要",
-  normal: "通常",
-  low: "低",
-};
 
 export function EmailReader({
   email,
@@ -155,18 +150,18 @@ export function EmailReader({
         {/* ① 仕分け */}
         <IconBtn
           icon={Star}
-          title={email.starred ? "スターを外す (S)" : "スターを付ける (S)"}
+          title={email.starred ? t("row.star.off") : t("row.star.on")}
           onClick={onToggleStar}
           active={email.starred}
           tone="star"
         />
         {folder !== "archived" && folder !== "sent" && (
-          <IconBtn icon={Archive} title="アーカイブ" onClick={onArchive} />
+          <IconBtn icon={Archive} title={t("action.archive")} onClick={onArchive} />
         )}
         {folder !== "trashed" ? (
-          <IconBtn icon={Trash2} title="ゴミ箱" onClick={onTrash} tone="danger" />
+          <IconBtn icon={Trash2} title={t("action.trash")} onClick={onTrash} tone="danger" />
         ) : (
-          <IconBtn icon={RotateCcw} title="受信箱に戻す" onClick={onRestore} />
+          <IconBtn icon={RotateCcw} title={t("reader.restore")} onClick={onRestore} />
         )}
 
         <Divider />
@@ -174,7 +169,7 @@ export function EmailReader({
         {/* ② 表示 */}
         <IconBtn
           icon={copied ? Check : Copy}
-          title={copied ? "コピーしました" : "本文をコピー（引用部分は除く）"}
+          title={copied ? t("reader.copied") : t("reader.copy")}
           onClick={copyBody}
           tone={copied ? "ok" : undefined}
         />
@@ -182,14 +177,14 @@ export function EmailReader({
           <button
             onClick={zoomOut}
             disabled={zoom <= 0.8}
-            title="文字を小さく"
+            title={t("reader.zoomOut")}
             className="grid size-6 place-items-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40"
           >
             <ZoomOut className="size-3.5" />
           </button>
           <button
             onClick={() => setZoom(1)}
-            title="文字サイズをリセット"
+            title={t("reader.zoomReset")}
             className="min-w-[2.5rem] rounded px-1 text-center text-[11px] tabular-nums text-fg-muted hover:bg-surface-2 hover:text-fg"
           >
             {Math.round(zoom * 100)}%
@@ -197,7 +192,7 @@ export function EmailReader({
           <button
             onClick={zoomIn}
             disabled={zoom >= 2.5}
-            title="文字を大きく"
+            title={t("reader.zoomIn")}
             className="grid size-6 place-items-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40"
           >
             <ZoomIn className="size-3.5" />
@@ -205,7 +200,7 @@ export function EmailReader({
         </div>
         <IconBtn
           icon={fullscreen ? Minimize2 : Maximize2}
-          title={fullscreen ? "全画面を解除 (Esc)" : "全画面表示（画面共有向け）"}
+          title={fullscreen ? t("reader.fullscreen.off") : t("reader.fullscreen.on")}
           onClick={() => setFullscreen((v) => !v)}
           active={fullscreen}
         />
@@ -299,7 +294,7 @@ export function EmailReader({
                     onClick={() => setTextMode(false)}
                   />
                   <BodyModeButton
-                    label="テキスト"
+                    label={t("reader.textMode")}
                     active={textMode}
                     onClick={() => setTextMode(true)}
                   />
@@ -356,12 +351,13 @@ function ImportanceBar({
   classifying: boolean;
   onFeedback: (i: Importance) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="mt-5 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5">
       <Sparkles className="size-3.5 text-accent" />
       {classifying ? (
         <span className="flex items-center gap-1.5 text-xs text-fg-muted">
-          <Loader2 className="size-3 animate-spin" /> 重要度を判定中…
+          <Loader2 className="size-3 animate-spin" /> {t("reader.classifying")}
         </span>
       ) : email.importance ? (
         <>
@@ -375,21 +371,21 @@ function ImportanceBar({
                   : "bg-accent-soft text-accent",
             )}
           >
-            {IMPORTANCE_LABEL[email.importance]}
+            {t(`importance.${email.importance}`)}
           </span>
           {email.importanceReason && (
             <span className="text-xs text-fg-muted">{email.importanceReason}</span>
           )}
         </>
       ) : (
-        <span className="text-xs text-fg-subtle">重要度は未判定</span>
+        <span className="text-xs text-fg-subtle">{t("reader.importanceUnknown")}</span>
       )}
 
       <div className="ml-auto flex items-center gap-1">
-        <span className="mr-1 text-[11px] text-fg-subtle">学習:</span>
-        <FeedbackChip label="重要" onClick={() => onFeedback("high")} />
-        <FeedbackChip label="通常" onClick={() => onFeedback("normal")} />
-        <FeedbackChip label="低" onClick={() => onFeedback("low")} />
+        <span className="mr-1 text-[11px] text-fg-subtle">{t("reader.learn")}</span>
+        <FeedbackChip label={t("importance.high")} onClick={() => onFeedback("high")} />
+        <FeedbackChip label={t("importance.normal")} onClick={() => onFeedback("normal")} />
+        <FeedbackChip label={t("importance.low")} onClick={() => onFeedback("low")} />
       </div>
     </div>
   );
