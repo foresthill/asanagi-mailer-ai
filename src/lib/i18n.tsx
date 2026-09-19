@@ -173,6 +173,10 @@ const ja: Dict = {
   // ReplyComposer（作成）
   "composer.preset.polite": "もっと丁寧に",
   "composer.thinking": "考え中…",
+  "draft.inThread": "この会話の下書きがあります",
+  "draft.resume": "続きを書く",
+  "draft.badge": "下書きあり",
+  "draft.updated": "更新",
   "composer.accountChangedWarn": "別アカウントから送るため、このメールは元のスレッドには連なりません（新規メール扱い）。",
   "composer.cancelWriteSelf": "中止して自分で書く",
   "composer.makingSuggestion": "提案を作成中…",
@@ -409,6 +413,10 @@ const en: Dict = {
   // ReplyComposer（作成）
   "composer.preset.polite": "More polite",
   "composer.thinking": "Thinking…",
+  "draft.inThread": "You have a draft for this conversation",
+  "draft.resume": "Continue writing",
+  "draft.badge": "Has a draft",
+  "draft.updated": "updated",
   "composer.accountChangedWarn": "Sent from a different account, so this won't join the original thread (treated as a new message).",
   "composer.cancelWriteSelf": "Cancel and write it myself",
   "composer.makingSuggestion": "Making a suggestion…",
@@ -648,6 +656,10 @@ const fr: Dict = {
   // ReplyComposer（作成）
   "composer.preset.polite": "Plus poli",
   "composer.thinking": "Réflexion…",
+  "draft.inThread": "Vous avez un brouillon pour cette conversation",
+  "draft.resume": "Continuer",
+  "draft.badge": "Brouillon",
+  "draft.updated": "modifié",
   "composer.accountChangedWarn": "Envoyé depuis un autre compte : ce message ne rejoindra pas le fil d'origine (traité comme un nouveau message).",
   "composer.cancelWriteSelf": "Annuler et écrire moi-même",
   "composer.makingSuggestion": "Création de la suggestion…",

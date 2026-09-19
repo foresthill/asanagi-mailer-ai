@@ -181,6 +181,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [counts, setCounts] = useState<Partial<Record<FolderView, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
   const [draftsCount, setDraftsCount] = useState(0);
+  // 実際の下書き一覧（メールから「続きを書く」で呼び出す・一覧に📝を出すため）。
+  const [drafts, setDrafts] = useState<SavedDraft[]>([]);
   // Email ids that have a private note (自分用メモ) — for the list 📝 badge.
   const [noteIds, setNoteIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
@@ -200,7 +202,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     try {
       const res = await fetch("/api/drafts");
       const data = await res.json();
-      setDraftsCount((data.drafts ?? []).length);
+      const list = (data.drafts ?? []) as SavedDraft[];
+      setDraftsCount(list.length);
+      setDrafts(list);
     } catch {
       /* count badge is non-critical */
     }
@@ -985,6 +989,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   // Defined once, placed differently per layout: classic = 一覧(左)｜本文(右)、
   // geek = 一覧(上)｜本文(下)。EmailList adapts via horizontal/width/height.
+  // 下書きの紐付け: 会話(threadId)単位で「この会話に下書きあり」を判定。
+  const draftThreadIds = new Set(
+    drafts.map((d) => d.threadId).filter((x): x is string => Boolean(x)),
+  );
+  const matchingDraft = selected?.threadId
+    ? drafts.find((d) => d.threadId === selected.threadId)
+    : undefined;
+
   const emailListEl = (
     <EmailList
       folder={folder}
@@ -1003,6 +1015,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       grouping={grouping}
       groupAxis={groupAxis}
       noteIds={noteIds}
+      draftThreadIds={draftThreadIds}
       onChangeGroupAxis={changeGroupAxis}
       accountLabels={
         accounts.length > 1 && (account === "all" || searchResults !== null)
@@ -1047,6 +1060,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
       onOpenMessage={selectEmail}
+      draft={matchingDraft}
+      onResumeDraft={openDraft}
     />
   );
 
