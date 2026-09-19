@@ -151,10 +151,12 @@ export function ThreadView({
       // Wait until the anchor is actually in the DOM (messages may still be
       // loading) — only then count it as scrolled so we don't retry forever.
       if (currentRef.current) {
-        currentRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
+        // Instant jump ("ピッと") — smooth scrolling across a long thread feels
+        // slow; snap straight to the opened message instead.
+        currentRef.current.scrollIntoView({ block: "start", behavior: "auto" });
         scrolledFor.current = selectedId;
       }
-    }, 80); // let the reader's enter animation settle first
+    }, 30); // brief tick so the just-rendered anchor is measurable
     return () => clearTimeout(t);
   }, [selectedId, messages.length, view]);
 

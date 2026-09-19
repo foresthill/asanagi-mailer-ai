@@ -780,10 +780,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     }
   };
 
-  // Group search hits by conversation too (会話グルーピングと同じトグルに従う): a
-  // thread with several matches shows as ONE row (件数付き) → 検索から会話を辿る際の
-  // 行ったり来たりを減らす。開くと ThreadView がスレッド全体を読み込む。
-  const rows = buildRows(searchResults ?? emails, grouping);
+  // 検索結果はグルーピングしない（1ヒット=1行）。まとめると代表＝最新メール（＝自分の
+  // 返信になりがち）が前面に出て、クリックしたいヒット本体が裏に隠れてしまうため。
+  // 「一覧で見えているメール＝クリックで開くメール」の WYSIWYG を検索で担保する。
+  // 通常フォルダはトグルどおり会話グルーピング。
+  const rows = buildRows(searchResults ?? emails, searchResults !== null ? false : grouping);
 
   // Bulk selection: rows are checked by representative id; an action expands
   // each checked row to its full conversation (ThreadRow.ids).

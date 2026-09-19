@@ -41,8 +41,9 @@ export function ConversationBubbles({
   const selectedRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const t = setTimeout(() => {
-      selectedRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-    }, 80);
+      // Instant jump ("ピッと") to the opened message — no long smooth scroll.
+      selectedRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
+    }, 30);
     return () => clearTimeout(t);
   }, [selectedId, messages.length]);
   // Per-message: show the full recipient list (vs truncated to one line).

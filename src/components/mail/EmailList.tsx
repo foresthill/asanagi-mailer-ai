@@ -312,7 +312,7 @@ export function EmailList({
           ? (accountLabels[row.email.account] ?? row.email.account)
           : null
       }
-      onSelect={() => onSelect(row.openId)}
+      onSelect={() => onSelect(row.email.id)}
       onToggleCheck={(shiftKey) => handleToggleCheck(row.email.id, shiftKey)}
       onArchive={() => onArchive(row.ids)}
       onTrash={() => onTrash(row.ids)}
