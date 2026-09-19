@@ -56,6 +56,8 @@ export function SweepDialog({
   const [revealed, setRevealed] = useState(0);
   /** AI判定が使えずキーワード判定にフォールバックした場合の注意書き。 */
   const [warning, setWarning] = useState<string | null>(null);
+  /** 分割判定の残りが流れ込んでいる最中か（最初の結果は出つつ後続を待つ）。 */
+  const [streaming, setStreaming] = useState(false);
   /** 朝の一凪の累計AIコスト（接続設定と同じ /api/ai/usage の sweep 分）。 */
   const [sweepCost, setSweepCost] = useState<{
     calls: number;
@@ -66,46 +68,84 @@ export function SweepDialog({
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    // List payloads only — from/subject/snippet (no bodies).
+    const payload = emails.map((e) => ({
+      id: e.id,
+      from: e.from,
+      subject: e.subject,
+      snippet: e.snippet,
+    }));
+    // 一括ではなく小分けにして並行判定し、届いた塊から順に表示する（大きな一括
+    // 呼び出しの長い待ちを避け、非同期に結果が流れ込む体感に）。各呼び出しも軽い。
+    const CHUNK = 15;
+    const chunks: (typeof payload)[] = [];
+    for (let i = 0; i < payload.length; i += CHUNK) chunks.push(payload.slice(i, i + CHUNK));
+
+    if (chunks.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
+    }
+
+    let remaining = chunks.length;
+    let anyWarning = false;
+    let anyError = false;
+    setStreaming(true);
+
+    const finishCost = async () => {
       try {
-        const res = await fetch("/api/ai/sweep", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            // List payloads only — from/subject/snippet (no bodies).
-            emails: emails.map((e) => ({
-              id: e.id,
-              from: e.from,
-              subject: e.subject,
-              snippet: e.snippet,
-            })),
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data.error ? `判定に失敗しました: ${data.error}` : "判定に失敗しました");
-        }
-        if (!active) return;
-        const list = (data.items ?? []) as SweepItem[];
-        setItems(list);
-        setActions(Object.fromEntries(list.map((i) => [i.id, i.action])));
-        if (data.warning) setWarning(data.warning as string);
-        // This run's usage is logged server-side during the POST above —
-        // fetch the cumulative 朝の一凪 cost so it's visible right here.
-        try {
-          const u = await fetch("/api/ai/usage");
-          const ud = await u.json();
-          const k = (ud.byKind ?? []).find((x: { kind: string }) => x.kind === "sweep");
-          if (active && k) setSweepCost(k);
-        } catch {
-          /* cost line is informational */
-        }
-      } catch (e) {
-        if (active) setError(e instanceof Error ? e.message : "判定に失敗しました");
-      } finally {
-        if (active) setLoading(false);
+        const u = await fetch("/api/ai/usage");
+        const ud = await u.json();
+        const k = (ud.byKind ?? []).find((x: { kind: string }) => x.kind === "sweep");
+        if (active && k) setSweepCost(k);
+      } catch {
+        /* cost line is informational */
       }
-    })();
+    };
+
+    for (const chunk of chunks) {
+      (async () => {
+        try {
+          const res = await fetch("/api/ai/sweep", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ emails: chunk }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!active) return;
+          if (res.ok) {
+            const list = (data.items ?? []) as SweepItem[];
+            if (list.length) {
+              setItems((prev) => [...prev, ...list]);
+              setActions((prev) => ({
+                ...prev,
+                ...Object.fromEntries(list.map((i) => [i.id, i.action])),
+              }));
+            }
+            if (data.warning) anyWarning = true;
+          } else {
+            anyError = true;
+          }
+        } catch {
+          anyError = true;
+        } finally {
+          if (!active) return;
+          setLoading(false); // 最初に返った塊で一覧を出す
+          remaining -= 1;
+          if (remaining === 0) {
+            setStreaming(false);
+            if (anyWarning) setWarning("一部はAI判定が使えず、簡易判定（無料）で表示しています。");
+            // 全部失敗かつ結果ゼロのときだけエラー表示（部分成功は一覧を優先）。
+            setItems((cur) => {
+              if (anyError && cur.length === 0) setError("判定に失敗しました");
+              return cur;
+            });
+            void finishCost();
+          }
+        }
+      })();
+    }
+
     return () => {
       active = false;
     };
@@ -430,10 +470,12 @@ export function SweepDialog({
                   );
                 })}
               </div>
-              {revealed < ordered.length && (
+              {(revealed < ordered.length || streaming) && (
                 <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-fg-subtle">
                   <Sparkles className="size-3 animate-pulse text-accent" />
-                  受信箱を整えています… {revealed}/{ordered.length}
+                  {streaming
+                    ? `受信箱を整えています… ${ordered.length}件（続けて判定中）`
+                    : `受信箱を整えています… ${revealed}/${ordered.length}`}
                 </p>
               )}
             </>
