@@ -156,6 +156,20 @@ const ja: Dict = {
   "reader.classifying": "重要度を判定中…",
   "reader.importanceUnknown": "重要度は未判定",
   "reader.learn": "学習:",
+  // ReplyButtons（返信/転送）
+  "reply.reply": "返信",
+  "reply.replyAll": "全員に返信",
+  "reply.forward": "転送",
+  "reply.ai": "AIで返信",
+  "reply.aiAll": "AIで全員に返信",
+  "reply.aiForward": "AIで転送",
+  "reply.reply.title": "自分で書く返信 (Shift+R)",
+  "reply.more.title": "全員に返信・転送",
+  "reply.replyAll.title": "全員に返信 — 差出人＋To＋CCを引継ぎ (A)",
+  "reply.forward.title": "転送 (F)",
+  "reply.ai.title": "AIが返信の下書きを作成 (R)",
+  "reply.aiMore.title": "その他のAI返信",
+  "reply.aiForward.title": "AIが要点まとめ付きの転送文を下書き",
 };
 
 const en: Dict = {
@@ -293,6 +307,20 @@ const en: Dict = {
   "reader.classifying": "Judging importance…",
   "reader.importanceUnknown": "Importance not judged yet",
   "reader.learn": "Learn:",
+  // ReplyButtons
+  "reply.reply": "Reply",
+  "reply.replyAll": "Reply all",
+  "reply.forward": "Forward",
+  "reply.ai": "AI reply",
+  "reply.aiAll": "AI reply all",
+  "reply.aiForward": "AI forward",
+  "reply.reply.title": "Write your own reply (Shift+R)",
+  "reply.more.title": "Reply all / forward",
+  "reply.replyAll.title": "Reply all — keeps From + To + CC (A)",
+  "reply.forward.title": "Forward (F)",
+  "reply.ai.title": "AI drafts a reply (R)",
+  "reply.aiMore.title": "More AI replies",
+  "reply.aiForward.title": "AI drafts a forward with a summary",
 };
 
 // fr / zh: キー予約。未訳は en へフォールバック（順次追加）。
@@ -433,6 +461,20 @@ const fr: Dict = {
   "reader.classifying": "Évaluation de l'importance…",
   "reader.importanceUnknown": "Importance non évaluée",
   "reader.learn": "Apprendre :",
+  // ReplyButtons
+  "reply.reply": "Répondre",
+  "reply.replyAll": "Répondre à tous",
+  "reply.forward": "Transférer",
+  "reply.ai": "Répondre (IA)",
+  "reply.aiAll": "Répondre à tous (IA)",
+  "reply.aiForward": "Transférer (IA)",
+  "reply.reply.title": "Écrire soi-même la réponse (Shift+R)",
+  "reply.more.title": "Répondre à tous / transférer",
+  "reply.replyAll.title": "Répondre à tous — conserve De + À + Cc (A)",
+  "reply.forward.title": "Transférer (F)",
+  "reply.ai.title": "L'IA rédige une réponse (R)",
+  "reply.aiMore.title": "Autres réponses IA",
+  "reply.aiForward.title": "L'IA rédige un transfert avec résumé",
 };
 
 const zh: Dict = {
