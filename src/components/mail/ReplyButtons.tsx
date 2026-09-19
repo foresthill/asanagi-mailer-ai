@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, Forward, Reply, ReplyAll, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 import type { ComposeAI, ComposeKind } from "./compose";
 
 /**
@@ -14,21 +15,22 @@ import type { ComposeAI, ComposeKind } from "./compose";
 
 /** Plain reply as a split button — 返信 primary, 全員に返信/転送 in a menu. */
 export function ReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: ComposeAI) => void }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
       <div className="flex items-center overflow-hidden rounded-lg border border-border bg-surface">
         <button
           onClick={() => onReply("reply", "plain")}
-          title="自分で書く返信 (Shift+R)"
+          title={t("reply.reply.title")}
           className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
         >
           <Reply className="size-4" />
-          返信
+          {t("reply.reply")}
         </button>
         <button
           onClick={() => setOpen((v) => !v)}
-          title="全員に返信・転送"
+          title={t("reply.more.title")}
           className="grid h-full place-items-center border-l border-border px-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
         >
           <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
@@ -43,22 +45,22 @@ export function ReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: Co
                 setOpen(false);
                 onReply("replyAll", "plain");
               }}
-              title="全員に返信 — 差出人＋To＋CCを引継ぎ (A)"
+              title={t("reply.replyAll.title")}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-accent-soft hover:text-accent"
             >
               <ReplyAll className="size-4" />
-              全員に返信
+              {t("reply.replyAll")}
             </button>
             <button
               onClick={() => {
                 setOpen(false);
                 onReply("forward", "plain");
               }}
-              title="転送 (F)"
+              title={t("reply.forward.title")}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-accent-soft hover:text-accent"
             >
               <Forward className="size-4" />
-              転送
+              {t("reply.forward")}
             </button>
           </div>
         </>
@@ -69,21 +71,22 @@ export function ReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: Co
 
 /** Primary AI action with a small menu: AIで返信 (default) / AIで全員に返信 / AIで転送. */
 export function AiReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: ComposeAI) => void }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
       <div className="flex items-center overflow-hidden rounded-lg bg-accent shadow-sm">
         <button
           onClick={() => onReply("reply", "ai")}
-          title="AIが返信の下書きを作成 (R)"
+          title={t("reply.ai.title")}
           className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-accent-fg transition-opacity hover:opacity-90"
         >
           <Sparkles className="size-4" />
-          AIで返信
+          {t("reply.ai")}
         </button>
         <button
           onClick={() => setOpen((v) => !v)}
-          title="その他のAI返信"
+          title={t("reply.aiMore.title")}
           className="grid h-full place-items-center border-l border-white/25 px-1.5 text-accent-fg transition-opacity hover:opacity-90"
         >
           <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
@@ -101,18 +104,18 @@ export function AiReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: 
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-accent-soft hover:text-accent"
             >
               <ReplyAll className="size-4" />
-              AIで全員に返信
+              {t("reply.aiAll")}
             </button>
             <button
               onClick={() => {
                 setOpen(false);
                 onReply("forward", "ai");
               }}
-              title="AIが要点まとめ付きの転送文を下書き"
+              title={t("reply.aiForward.title")}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-accent-soft hover:text-accent"
             >
               <Forward className="size-4" />
-              AIで転送
+              {t("reply.aiForward")}
             </button>
           </div>
         </>
