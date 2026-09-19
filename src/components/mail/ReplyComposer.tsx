@@ -24,6 +24,7 @@ import { AttachmentButton, AttachmentChips, fileToOutgoingAttachment } from "./A
 import { ATTACHMENT_TOTAL_CAP, totalAttachmentBytes } from "@/lib/attachments";
 import { plainTextToHtml, wrapHtmlBody, quoteBlock, extractInlineImages } from "@/lib/html-mail";
 import { formatBytes } from "./StorageMeter";
+import { useI18n } from "@/lib/i18n";
 import type { OutgoingAttachment } from "@/lib/types";
 import { buildSegments, pendingCount } from "@/lib/diff";
 import { DraftEditor, type DraftEditorHandle } from "./tiptap/DraftEditor";
@@ -39,7 +40,15 @@ import {
 } from "./compose";
 import type { AccountInfo } from "@/lib/email/accounts";
 
-const QUICK_PROMPTS = ["もっと丁寧に", "もっと短く", "カジュアルに", "英語にして", "感謝を加えて"];
+// 表示＝AIへ送る命令を兼ねる。ロケール別に t() で解決した文字列をそのまま指示に使う
+// （AIは各言語の指示を解釈する）。
+const QUICK_PROMPT_KEYS = [
+  "composer.preset.polite",
+  "composer.preset.shorter",
+  "composer.preset.casual",
+  "composer.preset.english",
+  "composer.preset.thanks",
+] as const;
 
 // AIアシスタントの指示入力での送信キー設定（端末に保存）。
 // true: Enter=送信 / Shift+Enter=改行。 false(既定): Enter=改行 / Shift+Enter=送信。
@@ -84,6 +93,7 @@ export function ReplyComposer({
   onMinimize?: () => void;
   onRestore?: () => void;
 }) {
+  const { t } = useI18n();
   // Which account to send from. Defaults to the conversation's account (reply)
   // or the active account (new mail); user can switch when 2+ are configured.
   const [account, setAccount] = useState<string | undefined>(
@@ -188,7 +198,7 @@ export function ReplyComposer({
             // Conversation so far (oldest first) — drafting context.
             history: init.history,
             guidance: isForward
-              ? "このメールを第三者へ転送するための短い前置き文だけを書いてください。要点の簡潔なまとめ（2〜3行）を含め、宛名・署名・元メールの再掲は不要です。"
+              ? t("composer.ai.forwardIntro")
               : undefined,
           }),
         });
@@ -206,13 +216,13 @@ export function ReplyComposer({
           // AI生成が失敗（クレジット切れ等で500）でも、引用付きの定型文を必ず
           // 用意して手書きできるようにする（引用が消える問題の修正）。
           setInitialDraft(isForward ? init.body : withQuote(init.body));
-          if (data.error) setNote("AIの下書きを生成できませんでした。引用はそのまま、手書きでどうぞ。");
+          if (data.error) setNote(t("composer.toast.genFailed"));
         }
       } catch (e) {
         // Cancelled or failed → fall back to the plain template (editable).
         if (active) {
           setInitialDraft(isForward ? init.body : withQuote(init.body));
-          if ((e as Error).name === "AbortError") setNote("生成を中止しました（手書きでどうぞ）");
+          if ((e as Error).name === "AbortError") setNote(t("composer.toast.genCancelled"));
         }
       } finally {
         if (active) setGenerating(false);
@@ -234,7 +244,7 @@ export function ReplyComposer({
   async function runSuggestRich(instruction: string) {
     const current = richEditorRef.current?.getText() ?? richText;
     if (!current.trim()) {
-      setNote("本文がありません");
+      setNote(t("composer.toast.noBody"));
       return;
     }
     const ctrl = new AbortController();
@@ -250,18 +260,18 @@ export function ReplyComposer({
         body: JSON.stringify({ email: init.source, draft: current, instruction, subject }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "提案の生成に失敗しました");
+      if (!res.ok) throw new Error(data.error ?? t("composer.toast.suggestFailed"));
       const revised: string = data.revised ?? current;
       if (typeof data.subject === "string" && data.subject && !subject.trim()) {
         setSubject(data.subject);
       }
       const changed = revised.trim() !== current.trim();
       setHistory((h) => [...h, { id: `t${h.length}`, instruction, scope: "whole", count: changed ? 1 : 0 }]);
-      if (!changed) setNote(data.ai === false ? "AIキー未設定のため変更なし" : "変更はありませんでした");
+      if (!changed) setNote(data.ai === false ? t("composer.toast.noKeyNoChange") : t("composer.toast.noChange"));
       else setRichProposal(revised);
     } catch (e) {
       setNote(
-        (e as Error).name === "AbortError" ? "提案を中止しました" : "提案の生成に失敗しました",
+        (e as Error).name === "AbortError" ? t("composer.toast.suggestCancelled") : t("composer.toast.suggestFailed"),
       );
     } finally {
       setBusy(false);
@@ -272,7 +282,7 @@ export function ReplyComposer({
   function applyRichProposal() {
     if (richProposal == null) return;
     const hasImg = (richEditorRef.current?.getHtml() ?? "").includes("<img");
-    if (hasImg && !window.confirm("画像と書式は簡素化されます。AIの提案を適用しますか？")) return;
+    if (hasImg && !window.confirm(t("composer.confirm.simplify"))) return;
     richEditorRef.current?.setHtml(wrapHtmlBody(plainTextToHtml(richProposal)));
     setRichText(richProposal);
     setRichProposal(null);
@@ -290,7 +300,7 @@ export function ReplyComposer({
     const { head, tail } = splitQuotedDraft(body, init.quote ?? "");
     // 選択範囲が引用文の中なら、添削しない（自分の文章を選ぶよう促す）。
     if (sel && tail && !head.includes(sel)) {
-      setNote("引用部分は添削できません（自分が書いた文章を選択してください）");
+      setNote(t("composer.toast.quoteNoEdit"));
       return;
     }
     const ctrl = new AbortController();
@@ -312,7 +322,7 @@ export function ReplyComposer({
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "提案の生成に失敗しました");
+      if (!res.ok) throw new Error(data.error ?? t("composer.toast.suggestFailed"));
       const revisedHead: string = data.revised ?? head;
       // 引用文をそのまま末尾に再結合（AIは引用文に一切触れていない）。
       const revised: string = tail
@@ -330,20 +340,20 @@ export function ReplyComposer({
       if (changes === 0) {
         setNote(
           data.ai === false
-            ? "AIキー未設定のため変更なし"
+            ? t("composer.toast.noKeyNoChange")
             : proposedSubject
-              ? "件名を提案しました（本文は変更なし）"
-              : "変更はありませんでした",
+              ? t("composer.toast.subjectSuggested")
+              : t("composer.toast.noChange"),
         );
       } else {
-        if (proposedSubject) setNote("件名も提案しました（変更できます）");
+        if (proposedSubject) setNote(t("composer.toast.subjectAlsoSuggested"));
         editorRef.current?.loadReview(segs);
       }
     } catch (e) {
       setNote(
         (e as Error).name === "AbortError"
-          ? "提案を中止しました"
-          : `提案の生成に失敗しました${(e as Error).message && (e as Error).message !== "提案の生成に失敗しました" ? `: ${(e as Error).message}` : ""}`,
+          ? t("composer.toast.suggestCancelled")
+          : `${t("composer.toast.suggestFailed")}${(e as Error).message && (e as Error).message !== t("composer.toast.suggestFailed") ? `: ${(e as Error).message}` : ""}`,
       );
     } finally {
       setBusy(false);
@@ -385,9 +395,9 @@ export function ReplyComposer({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.subject) setSubject(data.subject);
-      else setSendError(data.error ?? "件名の生成に失敗しました");
+      else setSendError(data.error ?? t("composer.toast.subjectFailed"));
     } catch {
-      setSendError("件名の生成に失敗しました");
+      setSendError(t("composer.toast.subjectFailed"));
     } finally {
       setSubjectBusy(false);
     }
@@ -450,12 +460,14 @@ export function ReplyComposer({
       const added = await Promise.all(Array.from(files).map(fileToOutgoingAttachment));
       const next = [...attachments, ...added];
       if (totalAttachmentBytes(next) > ATTACHMENT_TOTAL_CAP) {
-        setSendError(`添付の合計が上限(${formatBytes(ATTACHMENT_TOTAL_CAP)})を超えます`);
+        setSendError(
+          `${t("composer.attachOverCap.pre")}${formatBytes(ATTACHMENT_TOTAL_CAP)}${t("composer.attachOverCap.post")}`,
+        );
         return;
       }
       setAttachments(next);
     } catch {
-      setSendError("ファイルの読み込みに失敗しました");
+      setSendError(t("composer.toast.fileReadFailed"));
     }
   }
 
@@ -483,13 +495,13 @@ export function ReplyComposer({
         body: JSON.stringify({ id: init.draftId, ...outgoing() }),
       });
       if (!res.ok) {
-        setSendError("下書きの保存に失敗しました");
+        setSendError(t("composer.toast.draftSaveFailed"));
         setSavingDraft(false);
         return;
       }
       onSavedDraft();
     } catch {
-      setSendError("下書きの保存に失敗しました");
+      setSendError(t("composer.toast.draftSaveFailed"));
       setSavingDraft(false);
     }
   }
@@ -502,9 +514,9 @@ export function ReplyComposer({
     const head = splitQuotedDraft(msg.body, init.quote ?? "").head;
     const attachmentCount = msg.attachments?.length ?? 0;
     const warnings: string[] = [];
-    if (!subject.trim()) warnings.push("件名が空です");
+    if (!subject.trim()) warnings.push(t("composer.toast.subjectEmpty"));
     if (/添付|attach/i.test(head) && attachmentCount === 0) {
-      warnings.push("本文に「添付」とありますが、添付ファイルがありません");
+      warnings.push(t("composer.toast.attachMentionNoFile"));
     }
     setConfirm({
       from: fromAccount?.address
@@ -531,7 +543,7 @@ export function ReplyComposer({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         // 送信失敗は下書きを残したまま赤バナーで明示（消えるalertにしない）。
-        setSendError(data.error ?? "送信に失敗しました");
+        setSendError(data.error ?? t("composer.toast.sendFailed"));
         if (data.needsReauth) onNeedsReauth(); // 接続設定を開いて再認証へ
         setSending(false);
         return;
@@ -541,7 +553,7 @@ export function ReplyComposer({
       await discardSavedDraft(); // 送れたら下書きは消す
       onSent("sent");
     } catch {
-      setSendError("送信に失敗しました（ネットワークを確認してください）");
+      setSendError(t("composer.toast.sendFailedNet"));
       setSending(false);
     }
   }
@@ -558,7 +570,7 @@ export function ReplyComposer({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setSendError(data.error ?? "予約に失敗しました");
+        setSendError(data.error ?? t("composer.toast.scheduleFailed"));
         if (data.needsReauth) onNeedsReauth();
         setSending(false);
         return;
@@ -566,7 +578,7 @@ export function ReplyComposer({
       await discardSavedDraft(); // 予約できたら下書きは消す
       onSent("scheduled");
     } catch {
-      setSendError("予約に失敗しました（ネットワークを確認してください）");
+      setSendError(t("composer.toast.scheduleFailedNet"));
       setSending(false);
     }
   }
@@ -606,14 +618,14 @@ export function ReplyComposer({
           </span>
           <button
             onClick={onRestore}
-            title="元に戻す"
+            title={t("composer.restore")}
             className="grid size-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
           >
             <Maximize2 className="size-4" />
           </button>
           <button
             onClick={onClose}
-            title="破棄して閉じる"
+            title={t("composer.discardClose")}
             className="grid size-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
           >
             <X className="size-4" />
@@ -628,7 +640,7 @@ export function ReplyComposer({
           <h2 className="shrink-0 text-sm font-semibold">{composeTitle(init)}</h2>
           {accounts.length > 0 && (
             <span className="flex min-w-0 items-center gap-1.5 text-xs text-fg-subtle">
-              <span className="shrink-0">送信元:</span>
+              <span className="shrink-0">{t("composer.from")}</span>
               {accounts.length > 1 ? (
                 <select
                   value={account ?? ""}
@@ -655,7 +667,7 @@ export function ReplyComposer({
             {onMinimize && (
               <button
                 onClick={onMinimize}
-                title="最小化（メールを見ながら作成）"
+                title={t("composer.minimize")}
                 className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
               >
                 <Minimize2 className="size-4" />
@@ -671,7 +683,7 @@ export function ReplyComposer({
         </div>
         {accountChanged && (
           <div className="border-b border-border bg-amber-500/10 px-5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
-            別アカウントから送るため、このメールは元のスレッドには連なりません（新規メール扱い）。
+            {t("composer.accountChangedWarn")}
           </div>
         )}
 
@@ -699,7 +711,7 @@ export function ReplyComposer({
         >
           {dragging && !richMode && (
             <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-accent bg-accent-soft/80 text-sm font-medium text-accent">
-              ここにドロップして添付
+              {t("composer.dropToAttach")}
             </div>
           )}
           <RecipientFields values={recipients} onChange={setRecipients} disabled={sending} />
@@ -707,14 +719,14 @@ export function ReplyComposer({
             <input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="件名（空でも送信できます）"
+              placeholder={t("composer.subjectPlaceholder")}
               className="w-full bg-transparent text-base font-medium outline-none placeholder:text-fg-subtle"
             />
             <button
               type="button"
               onClick={generateSubject}
               disabled={subjectBusy || sending}
-              title="本文からAIで件名を生成"
+              title={t("composer.subjectAiTitle")}
               className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
             >
               {subjectBusy ? (
@@ -722,7 +734,7 @@ export function ReplyComposer({
               ) : (
                 <Sparkles className="size-3" />
               )}
-              件名AI
+              {t("composer.subjectAi")}
             </button>
           </div>
 
@@ -732,17 +744,22 @@ export function ReplyComposer({
           {selectionText && !reviewing && !generating && !richMode && (
             <div className="absolute bottom-4 left-1/2 z-20 flex max-w-[calc(100%-3rem)] -translate-x-1/2 flex-wrap items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs shadow-lg animate-in">
               <Wand2 className="size-3.5 text-accent" />
-              <span className="text-accent">選択範囲を修正:</span>
-              {["丁寧に", "短く", "言い換え"].map((p) => (
-                <button
-                  key={p}
-                  onClick={() => runSuggest(p, "selection")}
-                  className="rounded-full border border-accent/40 bg-surface px-2 py-0.5 text-fg-muted hover:text-accent"
-                >
-                  {p}
-                </button>
-              ))}
-              <span className="text-fg-subtle">または右で自由に指示</span>
+              <span className="text-accent">{t("composer.selectionEdit")}</span>
+              {(["composer.chip.polite", "composer.chip.shorter", "composer.chip.rephrase"] as const).map(
+                (key) => {
+                  const p = t(key);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => runSuggest(p, "selection")}
+                      className="rounded-full border border-accent/40 bg-surface px-2 py-0.5 text-fg-muted hover:text-accent"
+                    >
+                      {p}
+                    </button>
+                  );
+                },
+              )}
+              <span className="text-fg-subtle">{t("composer.orInstructRight")}</span>
             </div>
           )}
 
@@ -767,24 +784,24 @@ export function ReplyComposer({
             {generating && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg text-fg-subtle">
                 <Loader2 className="size-5 animate-spin text-accent" />
-                <p className="text-sm">AIが返信を下書きしています…</p>
+                <p className="text-sm">{t("composer.aiDrafting")}</p>
                 <button
                   onClick={cancelAi}
                   className="mt-1 rounded-lg border border-border px-3 py-1.5 text-xs text-fg-muted transition-colors hover:border-high hover:text-high"
                 >
-                  中止して自分で書く
+                  {t("composer.cancelWriteSelf")}
                 </button>
               </div>
             )}
             {busy && (
               <div className="absolute right-2 top-0 flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs text-accent">
-                <Loader2 className="size-3 animate-spin" /> 提案を作成中…
+                <Loader2 className="size-3 animate-spin" /> {t("composer.makingSuggestion")}
                 <button
                   onClick={cancelAi}
-                  title="提案の生成を中止"
+                  title={t("composer.cancelGen")}
                   className="rounded-full px-1.5 font-medium underline-offset-2 hover:underline"
                 >
-                  中止
+                  {t("composer.cancelShort")}
                 </button>
               </div>
             )}
@@ -793,35 +810,35 @@ export function ReplyComposer({
 
         {sendError && (
           <div className="flex items-start gap-2 border-t border-red-500/30 bg-red-500/10 px-6 py-2 text-xs text-red-700 dark:text-red-400">
-            <span className="flex-1">送信できませんでした: {sendError}</span>
+            <span className="flex-1">{t("composer.sendErrorPrefix")} {sendError}</span>
             <button
               onClick={() => setSendError(null)}
               className="shrink-0 rounded px-1.5 underline-offset-2 hover:underline"
             >
-              閉じる
+              {t("composer.close")}
             </button>
           </div>
         )}
         {/* Review bar OR send controls */}
         {reviewing ? (
           <div className="flex items-center gap-2 border-t border-border bg-surface px-6 py-3">
-            <span className="text-sm font-medium text-accent">{pending}件の提案を確認してください</span>
+            <span className="text-sm font-medium text-accent">{pending}{t("composer.reviewCountSuffix")}</span>
             <span className="text-xs text-fg-subtle">
-              緑=追加 / 取り消し線=削除。<strong>すべて採用/却下するまで送信できません</strong>
+              {t("composer.reviewLegend")}<strong>{t("composer.mustResolveAll")}</strong>
             </span>
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => editorRef.current?.resolveAll("before")}
                 className="rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2"
               >
-                すべて却下
+                {t("composer.rejectAll")}
               </button>
               <button
                 onClick={() => editorRef.current?.resolveAll("after")}
                 className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg"
               >
                 <CheckCheck className="size-4" />
-                すべて採用
+                {t("composer.acceptAll")}
               </button>
             </div>
           </div>
@@ -832,7 +849,7 @@ export function ReplyComposer({
                 <AttachmentChips items={attachments} onRemove={removeAttachment} disabled={sending} />
                 {richMode && (
                   <span className="text-[11px] text-fg-subtle">
-                    画像は貼り付け/ドロップで挿入・HTML送信。AI添削は全体提案（右で指示→適用）
+                    {t("composer.richModeHint")}
                   </span>
                 )}
               </div>
@@ -845,7 +862,7 @@ export function ReplyComposer({
                   type="button"
                   onClick={() => setHtmlSend((v) => !v)}
                   disabled={sending}
-                  title={`HTML形式で送信（書式・元メールのHTML引用を保持）: ${htmlSend ? "オン" : "オフ"}`}
+                  title={`${t("composer.htmlSend.title")}${htmlSend ? t("composer.on") : t("composer.off")}`}
                   className={`grid size-9 shrink-0 place-items-center rounded-lg border transition-colors disabled:opacity-50 ${
                     htmlSend
                       ? "border-accent bg-accent-soft text-accent"
@@ -859,7 +876,7 @@ export function ReplyComposer({
                 type="button"
                 onClick={toggleRichMode}
                 disabled={sending}
-                title={`リッチ編集（画像の貼り付け・ドロップで挿入・HTML送信）: ${richMode ? "オン" : "オフ"}`}
+                title={`${t("composer.rich.title")}${richMode ? t("composer.on") : t("composer.off")}`}
                 className={`grid size-9 shrink-0 place-items-center rounded-lg border transition-colors disabled:opacity-50 ${
                   richMode
                     ? "border-accent bg-accent-soft text-accent"
@@ -878,31 +895,31 @@ export function ReplyComposer({
                 className="flex shrink-0 items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
               >
                 {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                今すぐ送信
+                {t("composer.sendNow")}
               </button>
               <button
                 onClick={() => setShowSchedule(true)}
                 disabled={!canSend}
-                title="予約送信"
+                title={t("composer.scheduleTitle")}
                 className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
               >
                 <Clock className="size-4" />
-                予約
+                {t("composer.scheduleShort")}
               </button>
 
               {/* ③ 下書き / 破棄（右寄せ） */}
               <button
                 onClick={saveDraft}
                 disabled={!canSaveDraft}
-                title="送らずに下書きとして保存（端末内のみ）"
+                title={t("composer.saveDraft.title")}
                 className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
               >
                 {savingDraft ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                下書き保存
+                {t("composer.saveDraft")}
               </button>
               <button
                 onClick={onClose}
-                title="破棄"
+                title={t("composer.discard")}
                 className="grid size-9 shrink-0 place-items-center rounded-lg text-fg-muted transition-colors hover:bg-surface-2 hover:text-high"
               >
                 <X className="size-4" />
@@ -918,14 +935,14 @@ export function ReplyComposer({
           <div className="grid size-6 place-items-center rounded-md bg-accent text-accent-fg">
             <Sparkles className="size-3.5" />
           </div>
-          <span className="text-sm font-semibold">AIアシスタント</span>
-          {!aiConfigured && <span className="ml-auto text-[10px] text-fg-subtle">簡易モード</span>}
+          <span className="text-sm font-semibold">{t("composer.aiAssistant")}</span>
+          {!aiConfigured && <span className="ml-auto text-[10px] text-fg-subtle">{t("composer.basicMode")}</span>}
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {richMode && richProposal != null && (
             <div className="space-y-2 rounded-xl border border-accent/40 bg-accent-soft/40 p-3">
-              <p className="text-xs font-medium text-accent">AIの提案（全体）</p>
+              <p className="text-xs font-medium text-accent">{t("composer.aiSuggestionWhole")}</p>
               <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-surface p-2.5 text-[13px] leading-6 text-fg/90">
                 {richProposal}
               </pre>
@@ -935,22 +952,22 @@ export function ReplyComposer({
                   className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-fg"
                 >
                   <CheckCheck className="size-3.5" />
-                  適用
+                  {t("composer.apply")}
                 </button>
                 <button
                   onClick={() => setRichProposal(null)}
                   className="rounded-lg border border-border px-3 py-1.5 text-xs text-fg-muted hover:bg-surface-2"
                 >
-                  却下
+                  {t("composer.reject")}
                 </button>
-                <span className="text-[10px] text-fg-subtle">適用で本文を差し替え（書式・画像は簡素化）</span>
+                <span className="text-[10px] text-fg-subtle">{t("composer.applyReplace")}</span>
               </div>
             </div>
           )}
           <p className="rounded-xl bg-surface px-3 py-2.5 text-xs leading-relaxed text-fg-muted">
             {richMode
-              ? "リッチ編集中は下の入力で全体に指示できます（例: もっと丁寧に）。提案を確認して「適用」で本文に反映されます。"
-              : "本文を範囲選択して「ここをこうして」と指示するか、下の入力で全体に指示できます。提案は一箇所ずつ採用/却下できます。"}
+              ? t("composer.railHintRich")
+              : t("composer.railHintPlain")}
           </p>
 
           {history.map((h) => (
@@ -958,36 +975,39 @@ export function ReplyComposer({
               <div className="flex justify-end">
                 <div className="max-w-[85%] rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm text-accent-fg">
                   {h.scope === "selection" && (
-                    <span className="mr-1 rounded bg-white/20 px-1 text-[10px]">範囲</span>
+                    <span className="mr-1 rounded bg-white/20 px-1 text-[10px]">{t("composer.scopeRange")}</span>
                   )}
                   {h.instruction}
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-fg-subtle">
                 <Check className="size-3" />
-                {h.count > 0 ? `${h.count}件の提案を作成` : "変更なし"}
+                {h.count > 0 ? `${h.count}${t("composer.suggestionsMadeSuffix")}` : t("composer.noChangeShort")}
               </div>
             </div>
           ))}
           {note && <div className="text-xs text-fg-subtle">{note}</div>}
           {busy && (
             <div className="flex items-center gap-1.5 text-xs text-fg-subtle">
-              <Loader2 className="size-3 animate-spin" /> 考え中…
+              <Loader2 className="size-3 animate-spin" /> {t("composer.thinking")}
             </div>
           )}
         </div>
 
         <div className="flex flex-wrap gap-1.5 border-t border-border px-4 py-2.5">
-          {QUICK_PROMPTS.map((p) => (
-            <button
-              key={p}
-              onClick={() => runSuggest(p, "whole")}
-              disabled={busy || generating || reviewing}
-              className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
-            >
-              {p}
-            </button>
-          ))}
+          {QUICK_PROMPT_KEYS.map((key) => {
+            const p = t(key);
+            return (
+              <button
+                key={key}
+                onClick={() => runSuggest(p, "whole")}
+                disabled={busy || generating || reviewing}
+                className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                {p}
+              </button>
+            );
+          })}
         </div>
 
         <div className="border-t border-border p-3">
@@ -999,7 +1019,7 @@ export function ReplyComposer({
                 onChange={toggleEnterSend}
                 className="size-3 accent-[var(--accent)]"
               />
-              Enterで送信
+              {t("composer.enterToSendLabel")}
             </label>
           </div>
           <div className="flex items-end gap-2 rounded-xl border border-border bg-surface px-3 py-2 focus-within:border-accent">
@@ -1024,11 +1044,11 @@ export function ReplyComposer({
               rows={3}
               placeholder={
                 (richMode
-                  ? "全体への指示（例: もっと丁寧に）"
+                  ? t("composer.instructWholeExample")
                   : selectionText
-                    ? "選択範囲への指示"
-                    : "全体への指示") +
-                (enterToSend ? "（Enterで送信・Shift+Enterで改行）" : "（Shift+Enterで送信）")
+                    ? t("composer.instructSelection")
+                    : t("composer.instructWhole")) +
+                (enterToSend ? t("composer.enterHintSend") : t("composer.enterHintShift"))
               }
               disabled={reviewing}
               className="max-h-48 min-h-[4.5rem] flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-fg-subtle disabled:opacity-50"
