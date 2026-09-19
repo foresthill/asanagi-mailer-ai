@@ -181,7 +181,17 @@ export function HtmlMailView({
   table { max-width: 100%; }
   a { color: ${c.link}; }
   blockquote { border-left: 2px solid ${c.quoteBar}; margin-left: 0; padding-left: 1em; color: ${c.quoteFg}; }
-  mark.asanagi-hl { background: ${c.hl}; color: inherit; border-radius: 2px; padding: 0 1px; }
+  mark.asanagi-hl { background: ${c.hl}; color: inherit; border-radius: 2px; padding: 0 1px; }${
+    dark
+      ? `
+  /* ダーク時: メール自身の濃い文字色/白背景(color:#111 等)で不可視になるのを防ぐ。
+     子要素の文字を明色に、背景を透過してbodyの地色に載せ、必ず読めるようにする
+     （リンク・ハイライトは維持）。body 自身の地色は保持。 */
+  body * { color: ${c.fg} !important; background-color: transparent !important; border-color: ${c.quoteBar} !important; }
+  body a, body a * { color: ${c.link} !important; }
+  body mark.asanagi-hl, body mark.asanagi-hl * { background: ${c.hl} !important; color: #1a1a1e !important; }`
+      : ""
+  }
 </style></head><body>${body}</body></html>`,
     };
   }, [html, showImages, fontScale, highlight, showQuote, dark]);
