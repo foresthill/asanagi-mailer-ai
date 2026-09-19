@@ -20,6 +20,10 @@ export interface ThreadRow {
   starred: boolean;
   /** All member ids — thread-unit archive/trash act on every one. */
   ids: string[];
+  /** Message to open on click: the newest RECEIVED message (the counterpart's),
+   *  not your own latest reply — so opening a conversation/search hit lands on
+   *  the other party's mail, not the reply you sent. Falls back to `email`. */
+  openId: string;
 }
 
 /** Group a (newest-first) email list into conversation rows. With grouping
@@ -65,6 +69,10 @@ function toRow(members: Email[]): ThreadRow {
       }
     if (recipients.length) participants = `To: ${summarize(recipients)}`;
   }
+  // Open the newest RECEIVED message (members are newest-first), not our own
+  // latest reply — so clicking a conversation/search hit shows the other party's
+  // mail. All-sent conversations fall back to the representative.
+  const openTarget = members.find((m) => m.state !== "sent") ?? rep;
   return {
     email: rep,
     count: members.length,
@@ -72,5 +80,6 @@ function toRow(members: Email[]): ThreadRow {
     unread: members.some((m) => !m.read),
     starred: members.some((m) => m.starred),
     ids: members.map((m) => m.id),
+    openId: openTarget.id,
   };
 }

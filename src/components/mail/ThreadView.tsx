@@ -132,6 +132,19 @@ export function ThreadView({
   // the cache paint) re-fires this and yanks you back while you're scrolling up
   // through the history (ばーっと過去を遡れない問題).
   const scrolledFor = useRef<string | null>(null);
+  // クリックした（検索結果などから開いた）メッセージは常に展開する。ThreadView は
+  // メール切替で再マウントされず open の初期化が走らないため、selectedId が変わる
+  // たびに必ず開く（＝最新の自分の返信ではなく、クリックしたメールが開いて出る）。
+  useEffect(() => {
+    if (!selectedId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- guarded (no-op if already open)
+    setOpen((prev) => {
+      if (prev.has(selectedId)) return prev;
+      const next = new Set(prev);
+      next.add(selectedId);
+      return next;
+    });
+  }, [selectedId]);
   useEffect(() => {
     if (view !== "cards" || !selectedId || scrolledFor.current === selectedId) return;
     const t = setTimeout(() => {

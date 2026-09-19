@@ -301,7 +301,7 @@ export function EmailList({
       row={row}
       dense={horizontal} // 上下表示の上ペインは1行の密行で件数を稼ぐ
       matchQuery={searching ? searchQuery : undefined}
-      active={row.email.id === selectedId}
+      active={selectedId != null && row.ids.includes(selectedId)}
       folder={folder}
       hasNote={noteIds.has(row.email.id)}
       hasDraft={draftThreadIds.has(row.email.threadId)}
@@ -312,7 +312,7 @@ export function EmailList({
           ? (accountLabels[row.email.account] ?? row.email.account)
           : null
       }
-      onSelect={() => onSelect(row.email.id)}
+      onSelect={() => onSelect(row.openId)}
       onToggleCheck={(shiftKey) => handleToggleCheck(row.email.id, shiftKey)}
       onArchive={() => onArchive(row.ids)}
       onTrash={() => onTrash(row.ids)}
