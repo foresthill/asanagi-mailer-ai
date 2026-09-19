@@ -142,6 +142,20 @@ const ja: Dict = {
   "aisearch.points": "押さえどころ",
   "aisearch.sources": "根拠メール",
   "aisearch.empty": "先にキーワードで検索すると、その結果から経緯をまとめられます。",
+  // EmailReader（本文）
+  "importance.normal": "通常",
+  "reader.restore": "受信箱に戻す",
+  "reader.copied": "コピーしました",
+  "reader.copy": "本文をコピー（引用部分は除く）",
+  "reader.zoomOut": "文字を小さく",
+  "reader.zoomReset": "文字サイズをリセット",
+  "reader.zoomIn": "文字を大きく",
+  "reader.fullscreen.off": "全画面を解除 (Esc)",
+  "reader.fullscreen.on": "全画面表示（画面共有向け）",
+  "reader.textMode": "テキスト",
+  "reader.classifying": "重要度を判定中…",
+  "reader.importanceUnknown": "重要度は未判定",
+  "reader.learn": "学習:",
 };
 
 const en: Dict = {
@@ -265,6 +279,20 @@ const en: Dict = {
   "aisearch.points": "Key points",
   "aisearch.sources": "Source emails",
   "aisearch.empty": "Search by keyword first, then summarize the results.",
+  // EmailReader
+  "importance.normal": "Normal",
+  "reader.restore": "Move to Inbox",
+  "reader.copied": "Copied",
+  "reader.copy": "Copy body (excludes quotes)",
+  "reader.zoomOut": "Smaller text",
+  "reader.zoomReset": "Reset text size",
+  "reader.zoomIn": "Larger text",
+  "reader.fullscreen.off": "Exit full screen (Esc)",
+  "reader.fullscreen.on": "Full screen (for screen sharing)",
+  "reader.textMode": "Text",
+  "reader.classifying": "Judging importance…",
+  "reader.importanceUnknown": "Importance not judged yet",
+  "reader.learn": "Learn:",
 };
 
 // fr / zh: キー予約。未訳は en へフォールバック（順次追加）。
@@ -391,6 +419,20 @@ const fr: Dict = {
   "aisearch.points": "Points clés",
   "aisearch.sources": "E-mails sources",
   "aisearch.empty": "Cherchez d'abord par mot-clé, puis résumez les résultats.",
+  // EmailReader
+  "importance.normal": "Normal",
+  "reader.restore": "Remettre en boîte de réception",
+  "reader.copied": "Copié",
+  "reader.copy": "Copier le corps (hors citations)",
+  "reader.zoomOut": "Réduire le texte",
+  "reader.zoomReset": "Réinitialiser la taille du texte",
+  "reader.zoomIn": "Agrandir le texte",
+  "reader.fullscreen.off": "Quitter le plein écran (Échap)",
+  "reader.fullscreen.on": "Plein écran (partage d'écran)",
+  "reader.textMode": "Texte",
+  "reader.classifying": "Évaluation de l'importance…",
+  "reader.importanceUnknown": "Importance non évaluée",
+  "reader.learn": "Apprendre :",
 };
 
 const zh: Dict = {
