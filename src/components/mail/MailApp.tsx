@@ -594,6 +594,22 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     }
   }, []);
 
+  // List-side inline expansion: fetch a thread's members from the local cache
+  // (instant, cross-folder — your own sent replies included). Best-effort; an
+  // empty result just means the row won't expand.
+  const loadThreadMembers = useCallback(async (email: Email): Promise<Email[]> => {
+    if (!email.account || !email.threadId) return [];
+    try {
+      const res = await fetch(
+        `/api/threads/${encodeURIComponent(`${email.account}/${email.threadId}`)}?cached=1`,
+      );
+      const data = await res.json();
+      return (data.messages as Email[]) ?? [];
+    } catch {
+      return [];
+    }
+  }, []);
+
   const selectEmail = useCallback(
     async (id: string) => {
       // A docked (minimized) composer stays open while you read other mail;
@@ -1036,6 +1052,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onSearchChange={setSearchQuery}
       onToggleGrouping={toggleGrouping}
       onSelect={selectEmail}
+      onLoadThreadMembers={loadThreadMembers}
       onArchive={archive}
       onTrash={trash}
       onToggleStar={toggleStar}

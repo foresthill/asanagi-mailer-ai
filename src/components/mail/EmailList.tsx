@@ -186,6 +186,7 @@ export function EmailList({
   onServerSearch,
   onToggleGrouping,
   onSelect,
+  onLoadThreadMembers,
   onArchive,
   onTrash,
   onToggleStar,
@@ -245,6 +246,9 @@ export function EmailList({
   onServerSearch: () => void;
   onToggleGrouping: () => void;
   onSelect: (id: string) => void;
+  /** Inline thread expansion: fetch a conversation's members (cache-first,
+   *  cross-folder). Returns [] when there's nothing to show. */
+  onLoadThreadMembers: (email: Email) => Promise<Email[]>;
   /** Thread-unit: every id of the row (1 element when not grouped). */
   onArchive: (ids: string[]) => void;
   onTrash: (ids: string[]) => void;
@@ -295,30 +299,87 @@ export function EmailList({
       return next;
     });
 
-  const renderRow = (row: ThreadRow) => (
-    <EmailListItem
-      key={row.email.id}
-      row={row}
-      dense={horizontal} // 上下表示の上ペインは1行の密行で件数を稼ぐ
-      matchQuery={searching ? searchQuery : undefined}
-      active={selectedId != null && row.ids.includes(selectedId)}
-      folder={folder}
-      hasNote={noteIds.has(row.email.id)}
-      hasDraft={draftThreadIds.has(row.email.threadId)}
-      checked={checkedIds.has(row.email.id)}
-      selectionActive={selectionActive}
-      accountLabel={
-        accountLabels && row.email.account
-          ? (accountLabels[row.email.account] ?? row.email.account)
-          : null
-      }
-      onSelect={() => onSelect(row.email.id)}
-      onToggleCheck={(shiftKey) => handleToggleCheck(row.email.id, shiftKey)}
-      onArchive={() => onArchive(row.ids)}
-      onTrash={() => onTrash(row.ids)}
-      onToggleStar={() => onToggleStar(row.email.id)}
-    />
-  );
+  // Inline thread expansion (一覧側で全体像): a grouped row can unfold its whole
+  // conversation as compact sub-rows, without leaving the list. Members are
+  // fetched cache-first (instant, cross-folder) and memoized per rep id.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [members, setMembers] = useState<Record<string, Email[]>>({});
+  const toggleExpand = (row: ThreadRow) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(row.email.id)) next.delete(row.email.id);
+      else next.add(row.email.id);
+      return next;
+    });
+    if (!members[row.email.id]) {
+      onLoadThreadMembers(row.email).then((ms) =>
+        // Oldest→newest so the sub-rows read as a timeline.
+        setMembers((prev) => ({
+          ...prev,
+          [row.email.id]: [...ms].sort((a, b) => +new Date(a.date) - +new Date(b.date)),
+        })),
+      );
+    }
+  };
+
+  const renderRow = (row: ThreadRow) => {
+    // Expansion only makes sense for real conversations, and not in search
+    // (already 1-hit-per-row) or the dense 上下 pane (no room).
+    const canExpand = row.count > 1 && !searching && !horizontal;
+    const isExpanded = canExpand && expanded.has(row.email.id);
+    const subs = members[row.email.id];
+    const terms = searching ? searchTerms(searchQuery) : [];
+    return (
+      <Fragment key={row.email.id}>
+        <EmailListItem
+          row={row}
+          dense={horizontal} // 上下表示の上ペインは1行の密行で件数を稼ぐ
+          matchQuery={searching ? searchQuery : undefined}
+          active={selectedId != null && row.ids.includes(selectedId)}
+          folder={folder}
+          hasNote={noteIds.has(row.email.id)}
+          hasDraft={draftThreadIds.has(row.email.threadId)}
+          checked={checkedIds.has(row.email.id)}
+          selectionActive={selectionActive}
+          expandable={canExpand}
+          expanded={isExpanded}
+          onToggleExpand={() => toggleExpand(row)}
+          accountLabel={
+            accountLabels && row.email.account
+              ? (accountLabels[row.email.account] ?? row.email.account)
+              : null
+          }
+          onSelect={() => onSelect(row.email.id)}
+          onToggleCheck={(shiftKey) => handleToggleCheck(row.email.id, shiftKey)}
+          onArchive={() => onArchive(row.ids)}
+          onTrash={() => onTrash(row.ids)}
+          onToggleStar={() => onToggleStar(row.email.id)}
+        />
+        {isExpanded && (
+          <div className="mb-1 ml-6 flex flex-col border-l border-border pl-1">
+            {subs === undefined ? (
+              <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-fg-subtle">
+                <Loader2 className="size-3.5 animate-spin" />
+                {t("list.thread.loading")}
+              </div>
+            ) : subs.length === 0 ? (
+              <p className="px-2 py-1.5 text-xs text-fg-subtle">{t("list.thread.empty")}</p>
+            ) : (
+              subs.map((m) => (
+                <ThreadMemberRow
+                  key={m.id}
+                  email={m}
+                  active={selectedId === m.id}
+                  terms={terms}
+                  onClick={() => onSelect(m.id)}
+                />
+              ))
+            )}
+          </div>
+        )}
+      </Fragment>
+    );
+  };
 
   return (
     <div
@@ -751,6 +812,65 @@ function AccountChip({ account, label }: { account: string; label: string }) {
   );
 }
 
+/**
+ * A single conversation member, shown inline when a thread row is expanded
+ * (一覧側の全体像). Compact one-liner: 差出人／重要度／冒頭／添付／時刻。
+ * Clicking opens that exact message in the reader.
+ */
+function ThreadMemberRow({
+  email,
+  active,
+  terms,
+  onClick,
+}: {
+  email: Email;
+  active: boolean;
+  terms: string[];
+  onClick: () => void;
+}) {
+  const { t } = useI18n();
+  const sent = email.state === "sent";
+  const name = sent ? t("thread.you") : email.from.name || email.from.email;
+  const faceEmail = sent ? (email.to[0]?.email ?? email.from.email) : email.from.email;
+  return (
+    <button
+      onClick={onClick}
+      title={email.subject}
+      className={cn(
+        "flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors",
+        active ? "bg-accent-soft" : "hover:bg-surface-2",
+      )}
+    >
+      <span
+        className="grid size-5 shrink-0 place-items-center rounded-full text-[9px] font-semibold text-white"
+        style={{ background: avatarColor(faceEmail) }}
+      >
+        {sent ? t("thread.youInitial") : initials(email.from)}
+      </span>
+      <span
+        className={cn(
+          "w-24 shrink-0 truncate text-xs",
+          email.read ? "text-fg-muted" : "font-semibold text-fg",
+        )}
+      >
+        {name}
+      </span>
+      {email.importance === "high" && (
+        <span className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high">
+          {t("importance.high")}
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate text-xs text-fg-subtle">
+        <Highlighted text={email.snippet || email.subject} terms={terms} />
+      </span>
+      {email.hasAttachment && <Paperclip className="size-3 shrink-0 text-fg-subtle" />}
+      <span className="shrink-0 text-[10px] tabular-nums text-fg-subtle">
+        {relativeTime(email.date)}
+      </span>
+    </button>
+  );
+}
+
 function EmailListItem({
   row,
   active,
@@ -762,6 +882,9 @@ function EmailListItem({
   accountLabel,
   matchQuery,
   dense,
+  expandable,
+  expanded,
+  onToggleExpand,
   onSelect,
   onToggleCheck,
   onArchive,
@@ -784,6 +907,12 @@ function EmailListItem({
   checked: boolean;
   /** Any row is checked → checkboxes stay visible on every row. */
   selectionActive: boolean;
+  /** This grouped row can unfold its conversation inline (count>1, non-search). */
+  expandable?: boolean;
+  /** Currently unfolded. */
+  expanded?: boolean;
+  /** Toggle inline expansion (count badge acts as the handle). */
+  onToggleExpand?: () => void;
   /** Origin account badge text (unified inbox only); null hides it. */
   accountLabel: string | null;
   onSelect: () => void;
@@ -998,14 +1127,30 @@ function EmailListItem({
             >
               <Highlighted text={participants} terms={terms} />
             </span>
-            {count > 1 && (
-              <span
-                title={t("list.threadCount.title").replace("{n}", String(count))}
-                className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold tabular-nums text-fg-muted"
-              >
-                {count}
-              </span>
-            )}
+            {count > 1 &&
+              (expandable ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleExpand?.();
+                  }}
+                  title={expanded ? t("list.thread.collapse") : t("list.thread.expand")}
+                  aria-expanded={expanded}
+                  className="flex shrink-0 items-center gap-0.5 rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold tabular-nums text-fg-muted transition-colors hover:text-accent"
+                >
+                  <ChevronRight
+                    className={cn("size-3 transition-transform", expanded && "rotate-90")}
+                  />
+                  {count}
+                </button>
+              ) : (
+                <span
+                  title={t("list.threadCount.title").replace("{n}", String(count))}
+                  className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold tabular-nums text-fg-muted"
+                >
+                  {count}
+                </span>
+              ))}
             {accountLabel && <AccountChip account={email.account ?? ""} label={accountLabel} />}
             <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle">
               {starred && (

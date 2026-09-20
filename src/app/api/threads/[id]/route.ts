@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * when the provider supports it (Gmail), otherwise the local cache — which
  * spans folders, so your own replies (sent) appear alongside received mail.
  */
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: raw } = await ctx.params;
   const decoded = decodeURIComponent(raw);
   const slash = decoded.indexOf("/");
@@ -20,6 +20,16 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }
   const account = decoded.slice(0, slash);
   const threadId = decoded.slice(slash + 1);
+
+  // Cache-only fast path (?cached=1): instant local read, no provider round-trip.
+  // Used by the list's inline thread expansion so 全体像 shows「一瞬で」.
+  if (new URL(req.url).searchParams.get("cached") === "1") {
+    const messages = cachedThread(account, threadId);
+    return NextResponse.json({
+      messages: messages.map((e) => ({ ...e, account, id: `${account}/${e.id}` })),
+      cached: true,
+    });
+  }
 
   try {
     let messages: Email[];
