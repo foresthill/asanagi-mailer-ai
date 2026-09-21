@@ -324,10 +324,10 @@ export function EmailList({
 
   const renderRow = (row: ThreadRow) => {
     // Expansion only makes sense for real conversations while grouped, and not
-    // in search (already 1-hit-per-row) or the dense 上下 pane (no room).
+    // in search (already 1-hit-per-row). Works in both layouts (左右/上下).
     // threadTotal (cache, cross-folder) can exceed the loaded member count, so a
     // lone inbox mail that's part of a bigger thread is expandable too.
-    const canExpand = grouping && row.threadTotal > 1 && !searching && !horizontal;
+    const canExpand = grouping && row.threadTotal > 1 && !searching;
     const isExpanded = canExpand && expanded.has(row.email.id);
     const subs = members[row.email.id];
     const terms = searching ? searchTerms(searchQuery) : [];
@@ -1003,11 +1003,27 @@ function EmailListItem({
           <Highlighted text={participants} terms={terms} />
         </span>
         {accountLabel && <AccountChip account={email.account ?? ""} label={accountLabel} />}
-        {count > 1 && (
-          <span className="shrink-0 rounded-full bg-surface-2 px-1 text-[10px] font-semibold tabular-nums text-fg-muted">
-            {convCount}
-          </span>
-        )}
+        {showBadge &&
+          (expandable ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand?.();
+              }}
+              title={expanded ? t("list.thread.collapse") : t("list.thread.expand")}
+              aria-expanded={expanded}
+              className="flex shrink-0 items-center gap-0.5 rounded-full bg-surface-2 px-1 text-[10px] font-semibold tabular-nums text-fg-muted transition-colors hover:text-accent"
+            >
+              <ChevronRight
+                className={cn("size-3 transition-transform", expanded && "rotate-90")}
+              />
+              {convCount}
+            </button>
+          ) : (
+            <span className="shrink-0 rounded-full bg-surface-2 px-1 text-[10px] font-semibold tabular-nums text-fg-muted">
+              {convCount}
+            </span>
+          ))}
         {email.importance === "high" && (
           <span className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high">
             {t("importance.high")}
