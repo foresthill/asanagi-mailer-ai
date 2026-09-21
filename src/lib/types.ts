@@ -73,6 +73,9 @@ export interface Email {
   account?: string;
   /** True when we have sent a message in this conversation (返信済み). */
   replied?: boolean;
+  /** Total cached messages in this conversation (spans folders). Labels the
+   *  list's conversation badge with the true size = what inline expansion shows. */
+  threadCount?: number;
   /** Meeting invite found in this mail (live fetches only — not cached). */
   invite?: MeetingInvite;
   /** Attachments on this mail (metadata only — bytes fetched on demand). */

@@ -323,9 +323,11 @@ export function EmailList({
   };
 
   const renderRow = (row: ThreadRow) => {
-    // Expansion only makes sense for real conversations, and not in search
-    // (already 1-hit-per-row) or the dense 上下 pane (no room).
-    const canExpand = row.count > 1 && !searching && !horizontal;
+    // Expansion only makes sense for real conversations while grouped, and not
+    // in search (already 1-hit-per-row) or the dense 上下 pane (no room).
+    // threadTotal (cache, cross-folder) can exceed the loaded member count, so a
+    // lone inbox mail that's part of a bigger thread is expandable too.
+    const canExpand = grouping && row.threadTotal > 1 && !searching && !horizontal;
     const isExpanded = canExpand && expanded.has(row.email.id);
     const subs = members[row.email.id];
     const terms = searching ? searchTerms(searchQuery) : [];
@@ -923,7 +925,11 @@ function EmailListItem({
   onToggleStar: () => void;
 }) {
   const { t } = useI18n();
-  const { email, count, participants, unread, starred } = row;
+  const { email, count, participants, unread, starred, threadTotal } = row;
+  // Badge shows the TRUE conversation size (cache, cross-folder) = what inline
+  // expansion reveals, so the number and the unfolded rows always agree.
+  const convCount = threadTotal || count;
+  const showBadge = expandable || count > 1;
   const hits = matchedFields(email, matchQuery);
   const terms = searchTerms(matchQuery);
   const threadActionHint = count > 1 ? t("row.threadAll").replace("{n}", String(count)) : "";
@@ -999,7 +1005,7 @@ function EmailListItem({
         {accountLabel && <AccountChip account={email.account ?? ""} label={accountLabel} />}
         {count > 1 && (
           <span className="shrink-0 rounded-full bg-surface-2 px-1 text-[10px] font-semibold tabular-nums text-fg-muted">
-            {count}
+            {convCount}
           </span>
         )}
         {email.importance === "high" && (
@@ -1127,7 +1133,7 @@ function EmailListItem({
             >
               <Highlighted text={participants} terms={terms} />
             </span>
-            {count > 1 &&
+            {showBadge &&
               (expandable ? (
                 <button
                   onClick={(e) => {
@@ -1141,14 +1147,14 @@ function EmailListItem({
                   <ChevronRight
                     className={cn("size-3 transition-transform", expanded && "rotate-90")}
                   />
-                  {count}
+                  {convCount}
                 </button>
               ) : (
                 <span
-                  title={t("list.threadCount.title").replace("{n}", String(count))}
+                  title={t("list.threadCount.title").replace("{n}", String(convCount))}
                   className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold tabular-nums text-fg-muted"
                 >
-                  {count}
+                  {convCount}
                 </span>
               ))}
             {accountLabel && <AccountChip account={email.account ?? ""} label={accountLabel} />}

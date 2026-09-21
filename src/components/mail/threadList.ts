@@ -20,6 +20,10 @@ export interface ThreadRow {
   starred: boolean;
   /** All member ids — thread-unit archive/trash act on every one. */
   ids: string[];
+  /** True conversation size from the cache (spans folders) — what the inline
+   *  expansion reveals. Labels the badge so it matches the unfolded rows. Falls
+   *  back to the loaded member count when the server didn't supply threadCount. */
+  threadTotal: number;
 }
 
 /** Group a (newest-first) email list into conversation rows. With grouping
@@ -65,6 +69,9 @@ function toRow(members: Email[]): ThreadRow {
       }
     if (recipients.length) participants = `To: ${summarize(recipients)}`;
   }
+  // The full conversation may span folders (your sent replies live in 送信箱),
+  // so the true size ≥ loaded members. Prefer the cache-derived threadCount.
+  const threadTotal = Math.max(members.length, ...members.map((m) => m.threadCount ?? 1));
   return {
     email: rep,
     count: members.length,
@@ -72,5 +79,6 @@ function toRow(members: Email[]): ThreadRow {
     unread: members.some((m) => !m.read),
     starred: members.some((m) => m.starred),
     ids: members.map((m) => m.id),
+    threadTotal,
   };
 }
