@@ -289,10 +289,19 @@ export function ThreadView({
     </div>
   );
 
+  // Pin the mode switcher: in a long thread the reader auto-scrolls down to the
+  // opened message, so a top-anchored toolbar would be buried far above. Sticky
+  // keeps カード/会話/アウトライン reachable while reading anywhere in the thread.
+  const switcherBar = (
+    <div className="sticky top-0 z-20 -mx-8 mb-1 flex justify-end bg-bg/85 px-8 py-2 backdrop-blur">
+      {switcher}
+    </div>
+  );
+
   if (view === "outline") {
     return (
       <div className="mt-6 flex flex-col gap-3">
-        <div className="flex justify-end">{switcher}</div>
+        {switcherBar}
         {digestSection}
         {/* 全体像を一覧で: 1通=1行（差出人・重要度・冒頭・添付・時刻）。押すと
             カード表示に切り替わり、その1通へ即ジャンプして開く。 */}
@@ -341,7 +350,7 @@ export function ThreadView({
   if (view === "chat") {
     return (
       <div className="mt-6 flex flex-col gap-3">
-        <div className="flex justify-end">{switcher}</div>
+        {switcherBar}
         {digestSection}
         <ConversationBubbles messages={messages} selectedId={selectedId} />
       </div>
@@ -350,7 +359,7 @@ export function ThreadView({
 
   return (
     <div className="mt-6 flex flex-col gap-3">
-      <div className="flex justify-end">{switcher}</div>
+      {switcherBar}
       {digestSection}
       {messages.map((m) => {
         const name = displayName(m.from);
