@@ -20,7 +20,13 @@ import {
 import type { Email, FolderView, Importance, SavedDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { avatarColor, displayName, fullTime, htmlToText, initials } from "./helpers";
+import {
+  avatarColor,
+  displayName,
+  fullTime,
+  htmlToText,
+  initials,
+} from "./helpers";
 import { ThreadView } from "./ThreadView";
 import { QuotedText, segmentReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
@@ -30,7 +36,6 @@ import { HtmlMailView } from "./HtmlMailView";
 import { PrivateNote } from "./PrivateNote";
 import { ReplyButton, AiReplyButton } from "./ReplyButtons";
 import type { ComposeAI, ComposeKind } from "./compose";
-
 
 export function EmailReader({
   email,
@@ -81,8 +86,10 @@ export function EmailReader({
   // 全画面（画面共有向け）＋本文の文字サイズ拡大。
   const [fullscreen, setFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const zoomOut = () => setZoom((z) => Math.max(0.8, Math.round((z - 0.1) * 10) / 10));
-  const zoomIn = () => setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10));
+  const zoomOut = () =>
+    setZoom((z) => Math.max(0.8, Math.round((z - 0.1) * 10) / 10));
+  const zoomIn = () =>
+    setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10));
   const [copied, setCopied] = useState(false);
 
   // Esc で全画面を解除。
@@ -121,7 +128,9 @@ export function EmailReader({
     // HTML tags — some senders put HTML in the text/plain part) is converted
     // to text first; a normal plain-text body is used as-is.
     const plain =
-      email.html || /<\/?[a-z][^>]*>/i.test(email.body) ? htmlToText(email.html || email.body) : email.body;
+      email.html || /<\/?[a-z][^>]*>/i.test(email.body)
+        ? htmlToText(email.html || email.body)
+        : email.body;
     // Copy the new text only — all non-quote segments (keeps inline replies,
     // drops quoted history), joined.
     const head = segmentReply(plain)
@@ -163,12 +172,25 @@ export function EmailReader({
           tone="star"
         />
         {folder !== "archived" && folder !== "sent" && (
-          <IconBtn icon={Archive} title={t("action.archive")} onClick={onArchive} />
+          <IconBtn
+            icon={Archive}
+            title={t("action.archive")}
+            onClick={onArchive}
+          />
         )}
         {folder !== "trashed" ? (
-          <IconBtn icon={Trash2} title={t("action.trash")} onClick={onTrash} tone="danger" />
+          <IconBtn
+            icon={Trash2}
+            title={t("action.trash")}
+            onClick={onTrash}
+            tone="danger"
+          />
         ) : (
-          <IconBtn icon={RotateCcw} title={t("reader.restore")} onClick={onRestore} />
+          <IconBtn
+            icon={RotateCcw}
+            title={t("reader.restore")}
+            onClick={onRestore}
+          />
         )}
 
         <Divider />
@@ -207,7 +229,9 @@ export function EmailReader({
         </div>
         <IconBtn
           icon={fullscreen ? Minimize2 : Maximize2}
-          title={fullscreen ? t("reader.fullscreen.off") : t("reader.fullscreen.on")}
+          title={
+            fullscreen ? t("reader.fullscreen.off") : t("reader.fullscreen.on")
+          }
           onClick={() => setFullscreen((v) => !v)}
           active={fullscreen}
         />
@@ -239,8 +263,15 @@ export function EmailReader({
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-8 py-7">
-        <div className={cn("mx-auto animate-in", fullscreen ? "max-w-5xl" : "max-w-2xl")}>
-          <h2 className="text-xl font-semibold leading-snug tracking-tight">{email.subject}</h2>
+        <div
+          className={cn(
+            "mx-auto animate-in",
+            fullscreen ? "max-w-5xl" : "max-w-2xl",
+          )}
+        >
+          <h2 className="text-xl font-semibold leading-snug tracking-tight">
+            {email.subject}
+          </h2>
 
           <div className="mt-4 flex items-center gap-3">
             <div
@@ -251,7 +282,9 @@ export function EmailReader({
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-fg">{name}</p>
-              <p className="truncate text-xs text-fg-subtle">{email.from.email}</p>
+              <p className="truncate text-xs text-fg-subtle">
+                {email.from.email}
+              </p>
               {email.to.length > 0 && (
                 <p
                   className="truncate text-xs text-fg-subtle"
@@ -268,7 +301,9 @@ export function EmailReader({
                     .join("\n")}
                 >
                   宛先: {email.to.map((a) => a.name || a.email).join("、")}
-                  {email.cc?.length ? `（CC: ${email.cc.map((a) => a.name || a.email).join("、")}）` : ""}
+                  {email.cc?.length
+                    ? `（CC: ${email.cc.map((a) => a.name || a.email).join("、")}）`
+                    : ""}
                   {/* BCC exists only on our own sent copies — the sending record. */}
                   {email.bcc?.length
                     ? `（BCC: ${email.bcc.map((a) => a.name || a.email).join("、")}）`
@@ -276,18 +311,32 @@ export function EmailReader({
                 </p>
               )}
             </div>
-            <span className="ml-auto text-xs text-fg-subtle">{fullTime(email.date)}</span>
+            <span className="ml-auto text-xs text-fg-subtle">
+              {fullTime(email.date)}
+            </span>
           </div>
 
           {/* Meeting invite → calendar bridge (docs/05) */}
-          {email.invite && <MeetingCard emailId={email.id} invite={email.invite} />}
-
-          {/* Single email: attachments here. In a thread they render inside the
-              message card instead (consistent with the conversation), so skip
-              this top list to avoid a disconnected "navigation" above. */}
-          {!(thread && thread.length > 1) && email.attachments && email.attachments.length > 0 && (
-            <AttachmentList emailId={email.id} attachments={email.attachments} />
+          {email.invite && (
+            <MeetingCard emailId={email.id} invite={email.invite} />
           )}
+
+          {/* Single email: attachments near the top (below the header) so they're
+              always visible — critical for attachment-only mail with an empty body.
+              While the live fetch is loading the metadata, show a placeholder so
+              the mail never looks empty. In a thread they render inside each card. */}
+          {!(thread && thread.length > 1) &&
+            (email.attachments && email.attachments.length > 0 ? (
+              <AttachmentList
+                emailId={email.id}
+                attachments={email.attachments}
+              />
+            ) : email.hasAttachment ? (
+              <div className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-xs text-fg-muted">
+                <Loader2 className="size-3.5 animate-spin" />
+                {t("reader.attachmentsLoading")}
+              </div>
+            ) : null)}
 
           {/* AI importance */}
           <ImportanceBar
@@ -326,7 +375,11 @@ export function EmailReader({
                 </div>
               )}
               {email.html && !textMode ? (
-                <HtmlMailView html={email.html} fontScale={zoom} highlight={highlight} />
+                <HtmlMailView
+                  html={email.html}
+                  fontScale={zoom}
+                  highlight={highlight}
+                />
               ) : (
                 <SelectableText
                   className="mt-6 whitespace-pre-wrap leading-7 text-fg/90"
@@ -399,24 +452,45 @@ function ImportanceBar({
             {t(`importance.${email.importance}`)}
           </span>
           {email.importanceReason && (
-            <span className="text-xs text-fg-muted">{email.importanceReason}</span>
+            <span className="text-xs text-fg-muted">
+              {email.importanceReason}
+            </span>
           )}
         </>
       ) : (
-        <span className="text-xs text-fg-subtle">{t("reader.importanceUnknown")}</span>
+        <span className="text-xs text-fg-subtle">
+          {t("reader.importanceUnknown")}
+        </span>
       )}
 
       <div className="ml-auto flex items-center gap-1">
-        <span className="mr-1 text-[11px] text-fg-subtle">{t("reader.learn")}</span>
-        <FeedbackChip label={t("importance.high")} onClick={() => onFeedback("high")} />
-        <FeedbackChip label={t("importance.normal")} onClick={() => onFeedback("normal")} />
-        <FeedbackChip label={t("importance.low")} onClick={() => onFeedback("low")} />
+        <span className="mr-1 text-[11px] text-fg-subtle">
+          {t("reader.learn")}
+        </span>
+        <FeedbackChip
+          label={t("importance.high")}
+          onClick={() => onFeedback("high")}
+        />
+        <FeedbackChip
+          label={t("importance.normal")}
+          onClick={() => onFeedback("normal")}
+        />
+        <FeedbackChip
+          label={t("importance.low")}
+          onClick={() => onFeedback("low")}
+        />
       </div>
     </div>
   );
 }
 
-function FeedbackChip({ label, onClick }: { label: string; onClick: () => void }) {
+function FeedbackChip({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}

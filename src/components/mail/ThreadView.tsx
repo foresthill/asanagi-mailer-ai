@@ -550,6 +550,11 @@ export function ThreadView({
                         emailId={m.id}
                         attachments={full.attachments}
                       />
+                    ) : m.hasAttachment ? (
+                      <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-xs text-fg-muted">
+                        <Loader2 className="size-3.5 animate-spin" />
+                        添付ファイルを読み込み中…
+                      </div>
                     ) : null}
                     {/* Body: rich HTML (indented quotes + inline images) once loaded;
                     plain text fallback while fetching or when there's no HTML. */}
@@ -598,33 +603,49 @@ function ThreadOutlineRail({
   return (
     <nav
       aria-label="スレッドのアウトライン"
-      className="sticky top-12 hidden max-h-[calc(100vh-9rem)] w-40 shrink-0 self-start overflow-y-auto lg:block"
+      className="sticky top-12 hidden max-h-[calc(100vh-9rem)] w-56 shrink-0 self-start overflow-y-auto lg:block"
     >
       <ul className="flex flex-col">
         {messages.map((m) => {
           const active = m.id === activeId;
           const sent = m.state === "sent";
           const who = sent ? "自分" : displayName(m.from);
+          const d = new Date(m.date);
+          const md = `${d.getMonth() + 1}/${d.getDate()}`;
+          // 件名はスレッド内で共通なので、各メッセージの区別は差出人＋冒頭で行う。
+          const preview = (m.snippet || m.subject || "（本文なし）")
+            .replace(/\s+/g, " ")
+            .trim();
           return (
             <li key={m.id}>
               <button
                 onClick={() => onJump(m.id)}
-                title={`${who}｜${m.subject}`}
+                title={`${who}｜${preview}`}
                 className={cn(
-                  "flex w-full items-center gap-1.5 border-l-2 py-1 pl-2 pr-1 text-left text-[11px] leading-tight transition-colors",
+                  "flex w-full flex-col gap-0.5 border-l-2 py-1.5 pl-2 pr-1.5 text-left leading-tight transition-colors",
                   active
-                    ? "border-accent bg-accent-soft/50 font-medium text-fg"
+                    ? "border-accent bg-accent-soft/50 text-fg"
                     : "border-border text-fg-subtle hover:border-fg-subtle hover:text-fg",
                 )}
               >
-                <span
-                  className="size-1.5 shrink-0 rounded-full"
-                  style={{ background: avatarColor(m.from.email) }}
-                />
-                <span className="truncate">{who}</span>
-                {m.hasAttachment && (
-                  <Paperclip className="size-2.5 shrink-0 opacity-70" />
-                )}
+                <span className="flex w-full items-center gap-1.5 text-[11px]">
+                  <span
+                    className="size-1.5 shrink-0 rounded-full"
+                    style={{ background: avatarColor(m.from.email) }}
+                  />
+                  <span className={cn("truncate", active && "font-semibold")}>
+                    {who}
+                  </span>
+                  {m.hasAttachment && (
+                    <Paperclip className="size-2.5 shrink-0 opacity-70" />
+                  )}
+                  <span className="ml-auto shrink-0 text-[10px] tabular-nums opacity-70">
+                    {md}
+                  </span>
+                </span>
+                <span className="line-clamp-2 w-full text-[10px] text-fg-subtle">
+                  {preview}
+                </span>
               </button>
             </li>
           );
