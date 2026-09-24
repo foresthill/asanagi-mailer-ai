@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Clock, Loader2, X, Ban, ChevronRight } from "lucide-react";
+import {
+  Clock,
+  Loader2,
+  X,
+  Ban,
+  ChevronRight,
+  TriangleAlert,
+} from "lucide-react";
 import type { ScheduledSend, SendStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +92,16 @@ export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () =
           >
             <X className="size-4" />
           </button>
+        </div>
+
+        {/* 予約送信は過去に不具合が発生した実績があるため注意喚起（要検証機能）。 */}
+        <div className="flex shrink-0 items-start gap-2 border-b border-high/30 bg-high-soft px-5 py-2.5 text-xs text-high">
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+          <p className="leading-relaxed">
+            予約送信は不具合が報告されています。送信予定時刻のあとは、必ず
+            <span className="font-medium">送信箱で結果をご確認ください</span>
+            （未送信・重複送信の可能性）。重要なメールは手動送信を推奨します。
+          </p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
