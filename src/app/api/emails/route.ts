@@ -1,6 +1,13 @@
 import { NextResponse, after } from "next/server";
 import { listAccounts, getProviderFor } from "@/lib/email/accounts";
-import { cachedList, cachedStarred, existingIds, repliedThreadIds, upsertEmails } from "@/lib/db";
+import {
+  cachedList,
+  cachedStarred,
+  existingIds,
+  repliedThreadIds,
+  threadCounts,
+  upsertEmails,
+} from "@/lib/db";
 import { getEmailSettings, listSignals } from "@/lib/store";
 import { annotateImportance } from "@/lib/importance";
 import type { Email, FolderView } from "@/lib/types";
@@ -12,15 +19,25 @@ function tag(account: string, e: Email): Email {
   return { ...e, account, id: `${account}/${e.id}` };
 }
 
-/** Mark conversations we've replied to (own sent message in the thread). */
+/**
+ * Annotate each mail with conversation-level facts from the cache: 返信済み
+ * (own sent message in the thread) and the true conversation size (threadCount,
+ * spans folders) so the list badge matches what inline expansion shows.
+ */
 function markReplied(account: string, emails: Email[]): Email[] {
   const replied = repliedThreadIds(
     account,
     emails.map((e) => e.threadId),
   );
-  return emails.map((e) =>
-    e.state !== "sent" && replied.has(e.threadId) ? { ...e, replied: true } : e,
+  const counts = threadCounts(
+    account,
+    emails.map((e) => e.threadId),
   );
+  return emails.map((e) => ({
+    ...e,
+    ...(e.state !== "sent" && replied.has(e.threadId) ? { replied: true } : {}),
+    threadCount: counts.get(e.threadId) ?? 1,
+  }));
 }
 
 /**

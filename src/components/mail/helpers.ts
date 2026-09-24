@@ -26,7 +26,9 @@ export function htmlToText(html: string): string {
 export function initials(addr: EmailAddress): string {
   const base = addr.name?.trim() || addr.email;
   const parts = base.split(/[\s@.]+/).filter(Boolean);
-  return (parts[0]?.[0] ?? "?").toUpperCase() + (parts[1]?.[0]?.toUpperCase() ?? "");
+  return (
+    (parts[0]?.[0] ?? "?").toUpperCase() + (parts[1]?.[0]?.toUpperCase() ?? "")
+  );
 }
 
 export function displayName(addr: EmailAddress): string {
@@ -61,6 +63,51 @@ export function fullTime(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/**
+ * A compact preview that skips boilerplate openers — the honorific address
+ * line (「〜様」), the standard greeting (「お世話になっております」etc.), quoted
+ * history (「>」) and separators — so distinct messages read differently in a
+ * dense list (the outline rail). Pure string work, no AI. Falls back to the
+ * snippet/subject when nothing substantive remains (e.g. a one-line greeting).
+ */
+export function bodyPreview(email: {
+  body?: string;
+  snippet?: string;
+  subject?: string;
+}): string {
+  const raw = (email.body || email.snippet || "")
+    .replace(/\r/g, "")
+    .replace(/　/g, " ");
+  const lines = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const isBoiler = (l: string) =>
+    (l.length <= 24 && /(様|さま|さん|殿|御中)$/.test(l)) || // 宛名行
+    // 会社名だけの行（宛名の一部）。句読点を含まない短い行に限定して誤爆を防ぐ。
+    (l.length <= 30 &&
+      !/[。！？!?]/.test(l) &&
+      (/^(株式会社|有限会社|合同会社)/.test(l) ||
+        /(株式会社|有限会社|合同会社|御中)$/.test(l))) ||
+    /(お世話に(なって|なり)|いつもお世話|大変お世話|ご無沙汰|恐れ入り|平素|拝啓|突然のご連絡|ご連絡(いたしました|申し上げ))/.test(
+      l,
+    ) || // 定型挨拶
+    /^>/.test(l) || // 引用
+    /^[-—=_*]{2,}$/.test(l); // 区切り線
+  const kept = lines.filter((l) => !isBoiler(l));
+  let text = (kept.length ? kept : lines).join(" ").replace(/\s+/g, " ").trim();
+  // Strip a leading self-introduction「〜の〜です。」(会社の氏名です) — it repeats
+  // across a thread and crowds out the real content. Require a「の」so short
+  // content sentences ending in「です。」aren't dropped.
+  const selfIntro = text.match(
+    /^[^。.！？!?]{2,30}の[^。.！？!?]{1,15}(です|でございます|と申します)[。.]/,
+  );
+  if (selfIntro && text.length > selfIntro[0].length + 4) {
+    text = text.slice(selfIntro[0].length).trim();
+  }
+  return text || email.snippet || email.subject || "";
 }
 
 /** Extract the concatenated text of a UIMessage's text parts. */

@@ -38,8 +38,8 @@ export function ReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: Co
       </div>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow)]">
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-40 mt-1 w-44 overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow)]">
             <button
               onClick={() => {
                 setOpen(false);
@@ -94,8 +94,8 @@ export function AiReplyButton({ onReply }: { onReply: (kind: ComposeKind, mode: 
       </div>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-20 mt-1 w-48 overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow)]">
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-40 mt-1 w-48 overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow)]">
             <button
               onClick={() => {
                 setOpen(false);

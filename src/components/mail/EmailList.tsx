@@ -20,7 +20,7 @@ import {
   Star,
   X,
 } from "lucide-react";
-import type { Email, FolderView } from "@/lib/types";
+import type { Email, FolderView, Importance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { avatarColor, initials, relativeTime } from "./helpers";
@@ -53,7 +53,9 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function Highlighted({ text, terms }: { text: string; terms: string[] }) {
   if (!terms.length || !text) return <>{text}</>;
   // One capture group around the alternation → split() alternates text/match.
-  const parts = text.split(new RegExp(`(${terms.map(escapeRe).join("|")})`, "gi"));
+  const parts = text.split(
+    new RegExp(`(${terms.map(escapeRe).join("|")})`, "gi"),
+  );
   return (
     <>
       {parts.map((p, i) =>
@@ -132,7 +134,10 @@ function buildSections(
   unknownLabel: string,
 ): { key: string; label: string; rows: ThreadRow[] }[] {
   if (axis === "none") return [{ key: "_all", label: "", rows }];
-  const map = new Map<string, { key: string; label: string; rows: ThreadRow[] }>();
+  const map = new Map<
+    string,
+    { key: string; label: string; rows: ThreadRow[] }
+  >();
   for (const r of rows) {
     let key: string;
     let label: string;
@@ -182,10 +187,13 @@ export function EmailList({
   onClearChecked,
   onBulkArchive,
   onBulkTrash,
+  onBulkImportance,
+  onImportanceFor,
   onSearchChange,
   onServerSearch,
   onToggleGrouping,
   onSelect,
+  onLoadThreadMembers,
   onArchive,
   onTrash,
   onToggleStar,
@@ -241,10 +249,17 @@ export function EmailList({
   onClearChecked: () => void;
   onBulkArchive: () => void;
   onBulkTrash: () => void;
+  /** Mark all checked mails' importance (重要/通常/低) — AI 学習シグナル. */
+  onBulkImportance: (importance: Importance) => void;
+  /** Mark specific mails' importance — for per-message (thread sub-row) selection. */
+  onImportanceFor: (emails: Email[], importance: Importance) => void;
   onSearchChange: (q: string) => void;
   onServerSearch: () => void;
   onToggleGrouping: () => void;
   onSelect: (id: string) => void;
+  /** Inline thread expansion: fetch a conversation's members (cache-first,
+   *  cross-folder). Returns [] when there's nothing to show. */
+  onLoadThreadMembers: (email: Email) => Promise<Email[]>;
   /** Thread-unit: every id of the row (1 element when not grouped). */
   onArchive: (ids: string[]) => void;
   onTrash: (ids: string[]) => void;
@@ -264,13 +279,18 @@ export function EmailList({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // 検索結果は横断のため軸グループ化しない（特定の1通を探す行為）。
   const effectiveAxis: GroupAxis = searching ? "none" : groupAxis;
-  const sections = buildSections(rows, effectiveAxis, accountLabels, t("group.unknown"));
+  const sections = buildSections(
+    rows,
+    effectiveAxis,
+    accountLabels,
+    t("group.unknown"),
+  );
   // Shift+click 連続選択のアンカー（直前に触れた行の rep id）。
   const anchorRef = useRef<string | null>(null);
   // 表示順の rep id 列（範囲計算用。セクション表示でも見えている順に並べる）。
-  const orderedIds = (effectiveAxis === "none" ? rows : sections.flatMap((s) => s.rows)).map(
-    (r) => r.email.id,
-  );
+  const orderedIds = (
+    effectiveAxis === "none" ? rows : sections.flatMap((s) => s.rows)
+  ).map((r) => r.email.id);
   // 通常クリック=トグル、Shift+クリック=アンカーからの範囲を選択に加える。
   const handleToggleCheck = (id: string, shiftKey: boolean) => {
     const anchor = anchorRef.current;
@@ -295,30 +315,142 @@ export function EmailList({
       return next;
     });
 
-  const renderRow = (row: ThreadRow) => (
-    <EmailListItem
-      key={row.email.id}
-      row={row}
-      dense={horizontal} // 上下表示の上ペインは1行の密行で件数を稼ぐ
-      matchQuery={searching ? searchQuery : undefined}
-      active={row.email.id === selectedId}
-      folder={folder}
-      hasNote={noteIds.has(row.email.id)}
-      hasDraft={draftThreadIds.has(row.email.threadId)}
-      checked={checkedIds.has(row.email.id)}
-      selectionActive={selectionActive}
-      accountLabel={
-        accountLabels && row.email.account
-          ? (accountLabels[row.email.account] ?? row.email.account)
-          : null
-      }
-      onSelect={() => onSelect(row.email.id)}
-      onToggleCheck={(shiftKey) => handleToggleCheck(row.email.id, shiftKey)}
-      onArchive={() => onArchive(row.ids)}
-      onTrash={() => onTrash(row.ids)}
-      onToggleStar={() => onToggleStar(row.email.id)}
-    />
-  );
+  // Inline thread expansion (一覧側で全体像): a grouped row can unfold its whole
+  // conversation as compact sub-rows, without leaving the list. Members are
+  // fetched cache-first (instant, cross-folder) and memoized per rep id.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [members, setMembers] = useState<Record<string, Email[]>>({});
+  // Per-message selection inside an expanded conversation (individual mails).
+  // Distinct from the row-level `checkedIds` (whole conversations), so you can
+  // act on just one inquiry of a same-subject group (e.g. お問い合わせ 4通).
+  const [subChecked, setSubChecked] = useState<Set<string>>(new Set());
+  const toggleSubCheck = (id: string) =>
+    setSubChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleExpand = (row: ThreadRow) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(row.email.id)) next.delete(row.email.id);
+      else next.add(row.email.id);
+      return next;
+    });
+    if (!members[row.email.id]) {
+      onLoadThreadMembers(row.email).then((ms) =>
+        // Oldest→newest so the sub-rows read as a timeline.
+        setMembers((prev) => ({
+          ...prev,
+          [row.email.id]: [...ms].sort(
+            (a, b) => +new Date(a.date) - +new Date(b.date),
+          ),
+        })),
+      );
+    }
+  };
+
+  const renderRow = (row: ThreadRow) => {
+    // Expansion only makes sense for real conversations while grouped, and not
+    // in search (already 1-hit-per-row). Works in both layouts (左右/上下).
+    // threadTotal (cache, cross-folder) can exceed the loaded member count, so a
+    // lone inbox mail that's part of a bigger thread is expandable too.
+    const canExpand = grouping && row.threadTotal > 1 && !searching;
+    const isExpanded = canExpand && expanded.has(row.email.id);
+    const subs = members[row.email.id];
+    const terms = searching ? searchTerms(searchQuery) : [];
+    return (
+      <Fragment key={row.email.id}>
+        <EmailListItem
+          row={row}
+          dense={horizontal} // 上下表示の上ペインは1行の密行で件数を稼ぐ
+          matchQuery={searching ? searchQuery : undefined}
+          active={selectedId != null && row.ids.includes(selectedId)}
+          folder={folder}
+          hasNote={noteIds.has(row.email.id)}
+          hasDraft={draftThreadIds.has(row.email.threadId)}
+          checked={checkedIds.has(row.email.id)}
+          selectionActive={selectionActive}
+          expandable={canExpand}
+          expanded={isExpanded}
+          onToggleExpand={() => toggleExpand(row)}
+          accountLabel={
+            accountLabels && row.email.account
+              ? (accountLabels[row.email.account] ?? row.email.account)
+              : null
+          }
+          onSelect={() => onSelect(row.email.id)}
+          onToggleCheck={(shiftKey) =>
+            handleToggleCheck(row.email.id, shiftKey)
+          }
+          onArchive={() => onArchive(row.ids)}
+          onTrash={() => onTrash(row.ids)}
+          onToggleStar={() => onToggleStar(row.email.id)}
+        />
+        {isExpanded && (
+          <div className="mb-1 ml-6 flex flex-col border-l border-border pl-1">
+            {subs === undefined ? (
+              <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-fg-subtle">
+                <Loader2 className="size-3.5 animate-spin" />
+                {t("list.thread.loading")}
+              </div>
+            ) : subs.length === 0 ? (
+              <p className="px-2 py-1.5 text-xs text-fg-subtle">
+                {t("list.thread.empty")}
+              </p>
+            ) : (
+              (() => {
+                // This expansion's selected members (per-message actions).
+                const picked = subs.filter((m) => subChecked.has(m.id));
+                const clearPicked = () =>
+                  setSubChecked((prev) => {
+                    const next = new Set(prev);
+                    for (const m of subs) next.delete(m.id);
+                    return next;
+                  });
+                return (
+                  <>
+                    {picked.length > 0 && (
+                      <SubActionBar
+                        count={picked.length}
+                        folder={folder}
+                        onClear={clearPicked}
+                        onArchive={() => {
+                          onArchive(picked.map((m) => m.id));
+                          clearPicked();
+                        }}
+                        onTrash={() => {
+                          onTrash(picked.map((m) => m.id));
+                          clearPicked();
+                        }}
+                        onImportance={(imp) => {
+                          onImportanceFor(picked, imp);
+                          clearPicked();
+                        }}
+                      />
+                    )}
+                    {subs.map((m) => (
+                      <ThreadMemberRow
+                        key={m.id}
+                        email={m}
+                        active={selectedId === m.id}
+                        terms={terms}
+                        checked={subChecked.has(m.id)}
+                        selectionActive={picked.length > 0}
+                        onToggleCheck={() => toggleSubCheck(m.id)}
+                        onClick={() => onSelect(m.id)}
+                      />
+                    ))}
+                  </>
+                );
+              })()
+            )}
+          </div>
+        )}
+      </Fragment>
+    );
+  };
 
   return (
     <div
@@ -334,7 +466,7 @@ export function EmailList({
     >
       {selectionActive ? (
         // Bulk action bar — replaces the header while rows are checked.
-        <header className="flex items-center gap-1.5 px-4 pb-2 pt-5">
+        <header className="flex flex-wrap items-center gap-1.5 px-4 pb-2 pt-5">
           <button
             onClick={onClearChecked}
             title={t("bulk.clear")}
@@ -352,6 +484,30 @@ export function EmailList({
           >
             {t("bulk.selectAll")}
           </button>
+          {/* 重要度を一括学習（AI教師データ）: 選択メールの差出人ごとに学習シグナルを送る。 */}
+          <span
+            className="ml-1 flex items-center gap-0.5 rounded-lg border border-border p-0.5"
+            title={t("bulk.importance.hint")}
+          >
+            <button
+              onClick={() => onBulkImportance("high")}
+              className="rounded-md px-1.5 py-1 text-[11px] font-medium text-high hover:bg-high-soft"
+            >
+              {t("importance.high")}
+            </button>
+            <button
+              onClick={() => onBulkImportance("normal")}
+              className="rounded-md px-1.5 py-1 text-[11px] text-fg-muted hover:bg-surface-2"
+            >
+              {t("importance.normal")}
+            </button>
+            <button
+              onClick={() => onBulkImportance("low")}
+              className="rounded-md px-1.5 py-1 text-[11px] text-fg-subtle hover:bg-surface-2"
+            >
+              {t("importance.low")}
+            </button>
+          </span>
           <span className="ml-auto flex items-center gap-1">
             {folder !== "archived" && folder !== "sent" && (
               <button
@@ -388,10 +544,18 @@ export function EmailList({
                 title={t("list.refresh")}
                 className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-50"
               >
-                <RefreshCw className={cn("size-3.5", (loading || refreshing) && "animate-spin")} />
+                <RefreshCw
+                  className={cn(
+                    "size-3.5",
+                    (loading || refreshing) && "animate-spin",
+                  )}
+                />
               </button>
               {refreshing && (
-                <span className="flex items-center text-[11px] text-fg-subtle" aria-live="polite">
+                <span
+                  className="flex items-center text-[11px] text-fg-subtle"
+                  aria-live="polite"
+                >
                   {t("list.refreshing")}
                 </span>
               )}
@@ -500,7 +664,10 @@ export function EmailList({
             emailById={
               new Map(
                 // ヒット全件（flat）優先で索引。無ければ代表行から補完。
-                [...rows.map((r) => r.email), ...searchCorpus].map((e) => [e.id, e]),
+                [...rows.map((r) => r.email), ...searchCorpus].map((e) => [
+                  e.id,
+                  e,
+                ]),
               )
             }
           />
@@ -525,7 +692,10 @@ export function EmailList({
                       : t("empty.folder")}
               </p>
               {searching && !serverSearched && (
-                <ServerSearchButton searching={serverSearching} onClick={onServerSearch} />
+                <ServerSearchButton
+                  searching={serverSearching}
+                  onClick={onServerSearch}
+                />
               )}
             </div>
           </div>
@@ -546,7 +716,9 @@ export function EmailList({
                     <ChevronDown className="size-3.5 shrink-0" />
                   )}
                   <span className="truncate">{sec.label}</span>
-                  <span className="shrink-0 tabular-nums text-fg-subtle">{sec.rows.length}</span>
+                  <span className="shrink-0 tabular-nums text-fg-subtle">
+                    {sec.rows.length}
+                  </span>
                 </button>
                 {!isCollapsed && sec.rows.map(renderRow)}
               </div>
@@ -558,9 +730,14 @@ export function EmailList({
         {searching && rows.length > 0 && !loading && (
           <div className="flex justify-center py-3">
             {serverSearched ? (
-              <span className="text-[11px] text-fg-subtle">{t("server.result")}</span>
+              <span className="text-[11px] text-fg-subtle">
+                {t("server.result")}
+              </span>
             ) : (
-              <ServerSearchButton searching={serverSearching} onClick={onServerSearch} />
+              <ServerSearchButton
+                searching={serverSearching}
+                onClick={onServerSearch}
+              />
             )}
           </div>
         )}
@@ -585,7 +762,11 @@ function ServerSearchButton({
       title={t("server.search.title")}
       className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
     >
-      {searching ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
+      {searching ? (
+        <Loader2 className="size-3.5 animate-spin" />
+      ) : (
+        <Search className="size-3.5" />
+      )}
       {searching ? t("server.searching") : t("server.search")}
     </button>
   );
@@ -655,7 +836,9 @@ function SearchDigestPanel({
     <div className="mx-1 mb-2 rounded-xl border border-accent/30 bg-surface p-3.5 shadow-sm">
       <div className="mb-2 flex items-center gap-1.5">
         <Sparkles className="size-3.5 text-accent" />
-        <span className="text-xs font-semibold text-accent">{t("aisearch.heading")}</span>
+        <span className="text-xs font-semibold text-accent">
+          {t("aisearch.heading")}
+        </span>
         <button
           onClick={onRun}
           title={t("aisearch.regenerate")}
@@ -664,7 +847,9 @@ function SearchDigestPanel({
           <RefreshCw className="size-3.5" />
         </button>
       </div>
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{digest.summary}</p>
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">
+        {digest.summary}
+      </p>
 
       {digest.timeline.length > 0 && (
         <div className="mt-3">
@@ -686,7 +871,9 @@ function SearchDigestPanel({
 
       {digest.points.length > 0 && (
         <div className="mt-3">
-          <div className="mb-1 text-[11px] font-semibold text-fg-muted">{t("aisearch.points")}</div>
+          <div className="mb-1 text-[11px] font-semibold text-fg-muted">
+            {t("aisearch.points")}
+          </div>
           <ul className="flex flex-col gap-1">
             {digest.points.map((p, i) => (
               <li key={i} className="flex gap-1.5 text-xs text-fg-muted">
@@ -722,7 +909,9 @@ function SearchDigestPanel({
                     <span className="block truncate text-xs font-medium text-fg">
                       {e?.subject || "(メール)"}
                     </span>
-                    <span className="block truncate text-[11px] text-fg-subtle">{s.reason}</span>
+                    <span className="block truncate text-[11px] text-fg-subtle">
+                      {s.reason}
+                    </span>
                   </span>
                 </button>
               );
@@ -745,9 +934,200 @@ function AccountChip({ account, label }: { account: string; label: string }) {
       className="flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-medium text-fg-muted"
       title={`アカウント: ${label}`}
     >
-      <span className="size-1.5 rounded-full" style={{ background: avatarColor(account) }} />
+      <span
+        className="size-1.5 rounded-full"
+        style={{ background: avatarColor(account) }}
+      />
       <span className="max-w-[7rem] truncate">{short}</span>
     </span>
+  );
+}
+
+/**
+ * Compact action bar for per-message selection inside an expanded conversation.
+ * Lets you archive/trash or mark importance on individual mails — e.g. handle
+ * one inquiry of a same-subject group without touching the others.
+ */
+function SubActionBar({
+  count,
+  folder,
+  onClear,
+  onArchive,
+  onTrash,
+  onImportance,
+}: {
+  count: number;
+  folder: FolderView;
+  onClear: () => void;
+  onArchive: () => void;
+  onTrash: () => void;
+  onImportance: (importance: Importance) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="mb-1 flex flex-wrap items-center gap-1 rounded-lg border border-accent/30 bg-accent-soft/40 px-2 py-1">
+      <button
+        onClick={onClear}
+        title={t("bulk.clear")}
+        className="grid size-5 place-items-center rounded text-fg-subtle hover:text-fg"
+      >
+        <X className="size-3.5" />
+      </button>
+      <span className="text-[11px] font-semibold tabular-nums">
+        {count}
+        {t("bulk.selectedSuffix")}
+      </span>
+      <span
+        className="ml-1 flex items-center gap-0.5 rounded-md border border-border p-0.5"
+        title={t("bulk.importance.hint")}
+      >
+        <button
+          onClick={() => onImportance("high")}
+          className="rounded px-1 py-0.5 text-[10px] font-medium text-high hover:bg-high-soft"
+        >
+          {t("importance.high")}
+        </button>
+        <button
+          onClick={() => onImportance("normal")}
+          className="rounded px-1 py-0.5 text-[10px] text-fg-muted hover:bg-surface-2"
+        >
+          {t("importance.normal")}
+        </button>
+        <button
+          onClick={() => onImportance("low")}
+          className="rounded px-1 py-0.5 text-[10px] text-fg-subtle hover:bg-surface-2"
+        >
+          {t("importance.low")}
+        </button>
+      </span>
+      <span className="ml-auto flex items-center gap-0.5">
+        {folder !== "archived" && folder !== "sent" && (
+          <button
+            onClick={onArchive}
+            title={t("bulk.archive.title")}
+            className="grid size-6 place-items-center rounded text-fg-muted hover:bg-accent-soft hover:text-accent"
+          >
+            <Archive className="size-3.5" />
+          </button>
+        )}
+        {folder !== "trashed" && (
+          <button
+            onClick={onTrash}
+            title={t("bulk.trash.title")}
+            className="grid size-6 place-items-center rounded text-fg-muted hover:bg-high-soft hover:text-high"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A single conversation member, shown inline when a thread row is expanded
+ * (一覧側の全体像). Compact one-liner: 差出人／重要度／冒頭／添付／時刻。
+ * Clicking opens that exact message; the avatar doubles as a checkbox so you can
+ * select individual mails of the conversation for per-message actions.
+ */
+function ThreadMemberRow({
+  email,
+  active,
+  terms,
+  checked,
+  selectionActive,
+  onToggleCheck,
+  onClick,
+}: {
+  email: Email;
+  active: boolean;
+  terms: string[];
+  checked: boolean;
+  selectionActive: boolean;
+  onToggleCheck: () => void;
+  onClick: () => void;
+}) {
+  const { t } = useI18n();
+  const sent = email.state === "sent";
+  const name = sent ? t("thread.you") : email.from.name || email.from.email;
+  const faceEmail = sent
+    ? (email.to[0]?.email ?? email.from.email)
+    : email.from.email;
+  const showCheckbox = checked || selectionActive;
+  return (
+    <div
+      onClick={onClick}
+      title={email.subject}
+      className={cn(
+        "group/mem flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors",
+        active
+          ? "bg-accent-soft"
+          : checked
+            ? "bg-accent-soft/60"
+            : "hover:bg-surface-2",
+      )}
+    >
+      {/* Avatar ⇄ checkbox: hover or an active selection reveals the box. */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleCheck();
+        }}
+        title={checked ? t("row.check.off") : t("row.check.on")}
+        className="relative size-5 shrink-0"
+      >
+        <span
+          className={cn(
+            "grid size-5 place-items-center rounded-full text-[9px] font-semibold text-white transition-opacity",
+            showCheckbox ? "opacity-0" : "group-hover/mem:opacity-0",
+          )}
+          style={{ background: avatarColor(faceEmail) }}
+        >
+          {sent ? t("thread.youInitial") : initials(email.from)}
+        </span>
+        <span
+          className={cn(
+            "absolute inset-0 grid place-items-center transition-opacity",
+            showCheckbox
+              ? "opacity-100"
+              : "opacity-0 group-hover/mem:opacity-100",
+          )}
+        >
+          <span
+            className={cn(
+              "grid size-4 place-items-center rounded border transition-colors",
+              checked
+                ? "border-accent bg-accent text-accent-fg"
+                : "border-border bg-surface hover:border-accent",
+            )}
+          >
+            {checked && <Check className="size-3" />}
+          </span>
+        </span>
+      </button>
+      <span
+        className={cn(
+          "w-24 shrink-0 truncate text-xs",
+          email.read ? "text-fg-muted" : "font-semibold text-fg",
+        )}
+      >
+        {name}
+      </span>
+      {email.importance === "high" && (
+        <span className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high">
+          {t("importance.high")}
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate text-xs text-fg-subtle">
+        <Highlighted text={email.snippet || email.subject} terms={terms} />
+      </span>
+      {email.hasAttachment && (
+        <Paperclip className="size-3 shrink-0 text-fg-subtle" />
+      )}
+      <span className="shrink-0 text-[10px] tabular-nums text-fg-subtle">
+        {relativeTime(email.date)}
+      </span>
+    </div>
   );
 }
 
@@ -762,6 +1142,9 @@ function EmailListItem({
   accountLabel,
   matchQuery,
   dense,
+  expandable,
+  expanded,
+  onToggleExpand,
   onSelect,
   onToggleCheck,
   onArchive,
@@ -784,6 +1167,12 @@ function EmailListItem({
   checked: boolean;
   /** Any row is checked → checkboxes stay visible on every row. */
   selectionActive: boolean;
+  /** This grouped row can unfold its conversation inline (count>1, non-search). */
+  expandable?: boolean;
+  /** Currently unfolded. */
+  expanded?: boolean;
+  /** Toggle inline expansion (count badge acts as the handle). */
+  onToggleExpand?: () => void;
   /** Origin account badge text (unified inbox only); null hides it. */
   accountLabel: string | null;
   onSelect: () => void;
@@ -794,10 +1183,15 @@ function EmailListItem({
   onToggleStar: () => void;
 }) {
   const { t } = useI18n();
-  const { email, count, participants, unread, starred } = row;
+  const { email, count, participants, unread, starred, threadTotal } = row;
+  // Badge shows the TRUE conversation size (cache, cross-folder) = what inline
+  // expansion reveals, so the number and the unfolded rows always agree.
+  const convCount = threadTotal || count;
+  const showBadge = expandable || count > 1;
   const hits = matchedFields(email, matchQuery);
   const terms = searchTerms(matchQuery);
-  const threadActionHint = count > 1 ? t("row.threadAll").replace("{n}", String(count)) : "";
+  const threadActionHint =
+    count > 1 ? t("row.threadAll").replace("{n}", String(count)) : "";
   // Sent mail: the avatar represents the recipient (the row shows "To: …").
   const face = email.state === "sent" && email.to[0] ? email.to[0] : email.from;
   const showCheckbox = checked || selectionActive;
@@ -812,7 +1206,11 @@ function EmailListItem({
     // delay lets a just-switched layout (上下の短い一覧) settle before measuring.
     if (!active) return;
     const t = setTimeout(
-      () => rowRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+      () =>
+        rowRef.current?.scrollIntoView({
+          block: "nearest",
+          behavior: "smooth",
+        }),
       60,
     );
     return () => clearTimeout(t);
@@ -829,7 +1227,11 @@ function EmailListItem({
         className={cn(
           // Faint per-row rule (薄い罫線) for a scannable dense list.
           "group relative flex cursor-pointer items-center gap-2 border-b border-border/60 px-2.5 py-1.5 transition-colors",
-          active ? "bg-accent-soft" : checked ? "bg-accent-soft/60" : "hover:bg-surface-2",
+          active
+            ? "bg-accent-soft"
+            : checked
+              ? "bg-accent-soft/60"
+              : "hover:bg-surface-2",
         )}
       >
         {/* Unread dot ⇄ checkbox: hover or an active selection reveals the box
@@ -852,8 +1254,12 @@ function EmailListItem({
           <span
             className={cn(
               "absolute grid size-3.5 place-items-center rounded border transition-opacity",
-              checked ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface",
-              showCheckbox ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              checked
+                ? "border-accent bg-accent text-accent-fg"
+                : "border-border bg-surface",
+              showCheckbox
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100",
             )}
           >
             {checked && <Check className="size-2.5" />}
@@ -867,12 +1273,35 @@ function EmailListItem({
         >
           <Highlighted text={participants} terms={terms} />
         </span>
-        {accountLabel && <AccountChip account={email.account ?? ""} label={accountLabel} />}
-        {count > 1 && (
-          <span className="shrink-0 rounded-full bg-surface-2 px-1 text-[10px] font-semibold tabular-nums text-fg-muted">
-            {count}
-          </span>
+        {accountLabel && (
+          <AccountChip account={email.account ?? ""} label={accountLabel} />
         )}
+        {showBadge &&
+          (expandable ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand?.();
+              }}
+              title={
+                expanded ? t("list.thread.collapse") : t("list.thread.expand")
+              }
+              aria-expanded={expanded}
+              className="flex shrink-0 items-center gap-0.5 rounded-full bg-surface-2 px-1 text-[10px] font-semibold tabular-nums text-fg-muted transition-colors hover:text-accent"
+            >
+              <ChevronRight
+                className={cn(
+                  "size-3 transition-transform",
+                  expanded && "rotate-90",
+                )}
+              />
+              {convCount}
+            </button>
+          ) : (
+            <span className="shrink-0 rounded-full bg-surface-2 px-1 text-[10px] font-semibold tabular-nums text-fg-muted">
+              {convCount}
+            </span>
+          ))}
         {email.importance === "high" && (
           <span className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high">
             {t("importance.high")}
@@ -889,14 +1318,35 @@ function EmailListItem({
         {/* Meta (time + status icons) — hidden on hover to reveal quick-actions. */}
         <span className="flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle group-hover:hidden">
           {starred && (
-            <Star className="size-3 fill-amber-400 text-amber-400" aria-label={t("aria.starred")} />
+            <Star
+              className="size-3 fill-amber-400 text-amber-400"
+              aria-label={t("aria.starred")}
+            />
           )}
-          {email.replied && <Reply className="size-3 text-accent" aria-label={t("aria.replied")} />}
+          {email.replied && (
+            <Reply
+              className="size-3 text-accent"
+              aria-label={t("aria.replied")}
+            />
+          )}
           {email.hasAttachment && (
-            <Paperclip className="size-3 text-fg-muted" aria-label={t("aria.attachment")} />
+            <Paperclip
+              className="size-3 text-fg-muted"
+              aria-label={t("aria.attachment")}
+            />
           )}
-          {hasNote && <NotebookPen className="size-3 text-amber-500" aria-label={t("aria.note")} />}
-          {hasDraft && <PenLine className="size-3 text-amber-600" aria-label={t("draft.badge")} />}
+          {hasNote && (
+            <NotebookPen
+              className="size-3 text-amber-500"
+              aria-label={t("aria.note")}
+            />
+          )}
+          {hasDraft && (
+            <PenLine
+              className="size-3 text-amber-600"
+              aria-label={t("draft.badge")}
+            />
+          )}
           <span className="tabular-nums">{relativeTime(email.date)}</span>
         </span>
         {/* Right-edge quick-actions (same set as the classic row). */}
@@ -909,7 +1359,12 @@ function EmailListItem({
             title={email.starred ? t("row.star.off") : t("row.star.on")}
             className="grid size-6 place-items-center rounded-md text-fg-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
           >
-            <Star className={cn("size-3.5", email.starred && "fill-amber-400 text-amber-400")} />
+            <Star
+              className={cn(
+                "size-3.5",
+                email.starred && "fill-amber-400 text-amber-400",
+              )}
+            />
           </button>
           {folder !== "archived" && (
             <button
@@ -946,7 +1401,11 @@ function EmailListItem({
       onClick={onSelect}
       className={cn(
         "group relative mb-0.5 cursor-pointer rounded-xl px-3 py-3 transition-colors",
-        active ? "bg-accent-soft" : checked ? "bg-accent-soft/60" : "hover:bg-surface-2",
+        active
+          ? "bg-accent-soft"
+          : checked
+            ? "bg-accent-soft/60"
+            : "hover:bg-surface-2",
       )}
     >
       <div className="flex items-start gap-3">
@@ -971,7 +1430,9 @@ function EmailListItem({
           <span
             className={cn(
               "absolute inset-0 grid place-items-center transition-opacity",
-              showCheckbox ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              showCheckbox
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100",
             )}
           >
             <span
@@ -989,7 +1450,9 @@ function EmailListItem({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {unread && <span className="size-2 shrink-0 rounded-full bg-accent" />}
+            {unread && (
+              <span className="size-2 shrink-0 rounded-full bg-accent" />
+            )}
             <span
               className={cn(
                 "truncate text-sm",
@@ -998,30 +1461,73 @@ function EmailListItem({
             >
               <Highlighted text={participants} terms={terms} />
             </span>
-            {count > 1 && (
-              <span
-                title={t("list.threadCount.title").replace("{n}", String(count))}
-                className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold tabular-nums text-fg-muted"
-              >
-                {count}
-              </span>
+            {showBadge &&
+              (expandable ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleExpand?.();
+                  }}
+                  title={
+                    expanded
+                      ? t("list.thread.collapse")
+                      : t("list.thread.expand")
+                  }
+                  aria-expanded={expanded}
+                  className="flex shrink-0 items-center gap-0.5 rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold tabular-nums text-fg-muted transition-colors hover:text-accent"
+                >
+                  <ChevronRight
+                    className={cn(
+                      "size-3 transition-transform",
+                      expanded && "rotate-90",
+                    )}
+                  />
+                  {convCount}
+                </button>
+              ) : (
+                <span
+                  title={t("list.threadCount.title").replace(
+                    "{n}",
+                    String(convCount),
+                  )}
+                  className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold tabular-nums text-fg-muted"
+                >
+                  {convCount}
+                </span>
+              ))}
+            {accountLabel && (
+              <AccountChip account={email.account ?? ""} label={accountLabel} />
             )}
-            {accountLabel && <AccountChip account={email.account ?? ""} label={accountLabel} />}
             <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle">
               {starred && (
-                <Star className="size-3 fill-amber-400 text-amber-400" aria-label={t("aria.starred")} />
+                <Star
+                  className="size-3 fill-amber-400 text-amber-400"
+                  aria-label={t("aria.starred")}
+                />
               )}
               {email.replied && (
-                <Reply className="size-3 text-accent" aria-label={t("aria.replied")} />
+                <Reply
+                  className="size-3 text-accent"
+                  aria-label={t("aria.replied")}
+                />
               )}
               {email.hasAttachment && (
-                <Paperclip className="size-3 text-fg-muted" aria-label={t("aria.attachment")} />
+                <Paperclip
+                  className="size-3 text-fg-muted"
+                  aria-label={t("aria.attachment")}
+                />
               )}
               {hasNote && (
-                <NotebookPen className="size-3 text-amber-500" aria-label={t("aria.note")} />
+                <NotebookPen
+                  className="size-3 text-amber-500"
+                  aria-label={t("aria.note")}
+                />
               )}
               {hasDraft && (
-                <PenLine className="size-3 text-amber-600" aria-label={t("draft.badge")} />
+                <PenLine
+                  className="size-3 text-amber-600"
+                  aria-label={t("draft.badge")}
+                />
               )}
               {relativeTime(email.date)}
             </span>
@@ -1086,7 +1592,12 @@ function EmailListItem({
           title={email.starred ? t("row.star.off") : t("row.star.on")}
           className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
         >
-          <Star className={cn("size-4", email.starred && "fill-amber-400 text-amber-400")} />
+          <Star
+            className={cn(
+              "size-4",
+              email.starred && "fill-amber-400 text-amber-400",
+            )}
+          />
         </button>
         {folder !== "archived" && (
           <button

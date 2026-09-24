@@ -277,6 +277,30 @@ export function repliedThreadIds(account: string, threadIds: string[]): Set<stri
   return new Set(rows.map((r) => String(r.thread_id)));
 }
 
+/**
+ * Total cached messages per conversation (spans folders, so it matches what the
+ * inline thread expansion shows — own sent replies included). Batched/chunked.
+ * Used to label the list's conversation badge with the true conversation size.
+ */
+export function threadCounts(account: string, threadIds: string[]): Map<string, number> {
+  const ids = [...new Set(threadIds)].filter(Boolean);
+  const out = new Map<string, number>();
+  if (!ids.length) return out;
+  const db = getDb();
+  for (let i = 0; i < ids.length; i += 400) {
+    const chunk = ids.slice(i, i + 400);
+    const marks = chunk.map(() => "?").join(",");
+    const rows = db
+      .prepare(
+        `SELECT thread_id, COUNT(*) AS n FROM messages
+         WHERE account = ? AND thread_id IN (${marks}) GROUP BY thread_id`,
+      )
+      .all(account, ...chunk) as { thread_id: string; n: number }[];
+    for (const r of rows) out.set(String(r.thread_id), Number(r.n));
+  }
+  return out;
+}
+
 /** Conversation from the local cache (spans folders), oldest first. */
 export function cachedThread(account: string, threadId: string): Email[] {
   const rows = getDb()

@@ -286,6 +286,7 @@ export async function listSignals(): Promise<ImportanceSignal[]> {
 export async function recordImportanceFeedback(
   fromEmail: string,
   importance: Importance,
+  projectKey?: string,
   now = new Date(),
 ): Promise<void> {
   const signals = await listSignals();
@@ -315,8 +316,16 @@ export async function recordImportanceFeedback(
     }
   };
 
-  upsert(fromEmail, "sender");
-  upsert(domain, "domain");
+  // For a project-scoped mail (GitHub repo notification etc.), learn ONLY the
+  // project — the shared sender (notifications@github.com) is not a meaningful
+  // importance unit, and learning it would wrongly bias every other repo. For
+  // normal mail, learn the sender + domain as before.
+  if (projectKey) {
+    upsert(projectKey, "project");
+  } else {
+    upsert(fromEmail, "sender");
+    upsert(domain, "domain");
+  }
   await writeJson(SIGNALS, signals);
 }
 
@@ -385,7 +394,14 @@ export function guessSweepAction(
 export function guessFromSignals(
   fromEmail: string,
   signals: ImportanceSignal[],
+  projectKey?: string,
 ): Importance | undefined {
+  // Most specific first: project (repo) > sender > domain. So a per-project
+  // rule overrides a broad「github.com は低」and vice-versa.
+  if (projectKey) {
+    const proj = signals.find((s) => s.kind === "project" && s.pattern === projectKey);
+    if (proj) return proj.importance;
+  }
   const domain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
   const sender = signals.find((s) => s.kind === "sender" && s.pattern === fromEmail);
   if (sender) return sender.importance;
