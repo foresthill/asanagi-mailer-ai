@@ -56,6 +56,24 @@ npx tauri build              # OSに応じた .app/.dmg / .AppImage/.deb / .msi 
 - **`.data/` の保存先を要確定**: OAuth トークン・BYOK キー・SQLite が入る。現状サーバは実行ディレクトリ基準で `.data` を作るため、アプリ資源ディレクトリが読み取り専用だと失敗しうる。**書込可能なユーザーデータ領域**（例: `~/Library/Application Support/Asanagi`, XDG data dir）を実行時に指すよう改修が必要 → **実ビルドで要検証**。
 - 初回はアプリ内で Gmail 再認証と AI キー入力が必要（秘密情報はリポジトリに無い）。
 
+## トラブルシューティング：起動時に「ローカルサーバを起動中」で止まる
+
+原因のほぼ全ては **同梱サーバ（`node server/server.js`）が起動しない**こと。窓は最大 ~20s 待って、
+ダメなら**エラーページ**を表示する（旧版は無言でハングした）。診断順：
+
+1. **Node.js のバージョン**：`node --version` が **v22.5 未満**だと `node:sqlite` が無く即クラッシュ。
+   → **Node.js 24（最低 22.5）**を入れて再起動。これが最頻。
+2. **`node` が PATH に無い**：nvm/fnm 等で入れると GUI アプリ起動時の PATH に載らないことがある。
+   → システムワイドに Node を入れる（`apt`/公式インストーラ/`/usr/local/bin` へのシンボリックリンク等）。
+3. **詳細ログ**：サーバの stdout/stderr は **ユーザーデータ領域の `server.log`** に出る
+   （Linux: `~/.local/share/<アプリID>/server.log`、macOS: `~/Library/Application Support/<アプリID>/server.log`）。
+   ここに Node の実クラッシュ内容が出るので、それを見れば原因が特定できる。
+4. **手動再現**：`.deb`/`.rpm` 展開先の `server/server.js` を直接
+   `PORT=3100 ASANAGI_DATA_DIR=/tmp/asanagi node .../server/server.js` で起動するとエラーが即分かる。
+5. **ポート衝突**：`lsof -nP -iTCP:3100 -sTCP:LISTEN` で 3100 が別プロセスに使われていないか確認。
+
+恒久対策は **Node バイナリの sidecar 同梱**（Node 不要化・第二版候補、下記「検証状況」参照）。
+
 ## 自動アップデート（tauri-plugin-updater）
 
 1. **署名鍵を生成**（秘密鍵は厳重保管・CI Secret へ。紛失＝以後の更新配信不可）:

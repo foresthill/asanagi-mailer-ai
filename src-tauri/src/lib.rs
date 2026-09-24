@@ -23,20 +23,33 @@ fn start_server(handle: &tauri::AppHandle) {
         .map(|p| p.to_path_buf())
         .unwrap_or(resource_dir);
 
+    // .data（トークン・SQLite・設定）は設置先(読み取り専用のことがある)ではなく
+    // OSのユーザーアプリデータ領域へ書く。Nodeサーバは ASANAGI_DATA_DIR を尊重する。
+    let data_dir = handle.path().app_data_dir().ok();
+    if let Some(ref d) = data_dir {
+        let _ = std::fs::create_dir_all(d);
+    }
+
     let mut cmd = std::process::Command::new("node");
     cmd.arg(&server_js)
         .env("PORT", SERVER_PORT.to_string())
         .env("HOSTNAME", "127.0.0.1")
         .current_dir(&server_root);
+    if let Some(ref d) = data_dir {
+        cmd.env("ASANAGI_DATA_DIR", d);
+        log::info!("ASANAGI_DATA_DIR = {}", d.display());
+    }
 
-    // .data（トークン・SQLite・設定）は設置先(読み取り専用のことがある)ではなく
-    // OSのユーザーアプリデータ領域へ書く。Nodeサーバは ASANAGI_DATA_DIR を尊重する。
-    if let Ok(data_dir) = handle.path().app_data_dir() {
-        if let Err(e) = std::fs::create_dir_all(&data_dir) {
-            log::warn!("could not create data dir {}: {e}", data_dir.display());
+    // Capture the Node server's stdout/stderr to a log the user can inspect, so
+    // a startup crash (e.g. Node too old for node:sqlite → needs Node 22.5+/24,
+    // or `node` missing from PATH) is diagnosable instead of a silent hang.
+    if let Some(ref d) = data_dir {
+        if let Ok(f) = std::fs::File::create(d.join("server.log")) {
+            if let Ok(f2) = f.try_clone() {
+                cmd.stdout(std::process::Stdio::from(f));
+                cmd.stderr(std::process::Stdio::from(f2));
+            }
         }
-        cmd.env("ASANAGI_DATA_DIR", &data_dir);
-        log::info!("ASANAGI_DATA_DIR = {}", data_dir.display());
     }
 
     match cmd.spawn() {
@@ -46,19 +59,30 @@ fn start_server(handle: &tauri::AppHandle) {
 
     let handle = handle.clone();
     std::thread::spawn(move || {
-        // Wait (up to ~15s) for the server to accept connections, then load it.
-        for _ in 0..60 {
+        // Wait (up to ~20s) for the server to accept connections, then load it.
+        let mut up = false;
+        for _ in 0..80 {
             if std::net::TcpStream::connect(("127.0.0.1", SERVER_PORT)).is_ok() {
+                up = true;
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(250));
         }
         if let Some(win) = handle.get_webview_window("main") {
-            match format!("http://localhost:{SERVER_PORT}").parse() {
-                Ok(url) => {
-                    let _ = win.navigate(url);
+            if up {
+                match format!("http://localhost:{SERVER_PORT}").parse() {
+                    Ok(url) => {
+                        let _ = win.navigate(url);
+                    }
+                    Err(e) => log::error!("bad server url: {e}"),
                 }
-                Err(e) => log::error!("bad server url: {e}"),
+            } else {
+                // The server never came up — show an actionable error instead of
+                // a blank/frozen window.
+                log::error!("server did not start within timeout");
+                let _ = win.eval(
+                    "document.documentElement.innerHTML = '<div style=\"font-family:system-ui,sans-serif;max-width:40rem;margin:3rem auto;padding:0 1.5rem;line-height:1.8;color:#222\"><h2>ローカルサーバを起動できませんでした</h2><p>このアプリは Node.js を使ってローカルで動作します。<b>Node.js 24（22.5 以上）</b>が必要です。</p><ol><li>ターミナルで <code>node --version</code> を確認（22.5 未満なら <a href=\"https://nodejs.org\">nodejs.org</a> から 24 を導入）</li><li>Node をインストール後、アプリを再起動</li></ol><p>詳細エラーはデータフォルダ内の <code>server.log</code> に出力されています（Linux: <code>~/.local/share</code> 配下）。</p></div>'",
+                );
             }
         }
     });
