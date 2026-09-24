@@ -15,7 +15,13 @@ import type { Email, Attachment } from "@/lib/types";
 import type { ComposeAI, ComposeKind } from "./compose";
 import { ReplyButton, AiReplyButton } from "./ReplyButtons";
 import { cn } from "@/lib/utils";
-import { avatarColor, displayName, fullTime, initials } from "./helpers";
+import {
+  avatarColor,
+  bodyPreview,
+  displayName,
+  fullTime,
+  initials,
+} from "./helpers";
 import { ConversationBubbles } from "./ConversationBubbles";
 import { QuotedText } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
@@ -612,10 +618,9 @@ function ThreadOutlineRail({
           const who = sent ? "自分" : displayName(m.from);
           const d = new Date(m.date);
           const md = `${d.getMonth() + 1}/${d.getDate()}`;
-          // 件名はスレッド内で共通なので、各メッセージの区別は差出人＋冒頭で行う。
-          const preview = (m.snippet || m.subject || "（本文なし）")
-            .replace(/\s+/g, " ")
-            .trim();
+          // 件名はスレッド内で共通なので、各メッセージの区別は差出人＋本文の要点で行う。
+          // 宛名・定型挨拶・引用をスキップした「意味のある冒頭」を出す（AI不要）。
+          const preview = bodyPreview(m) || "（本文なし）";
           return (
             <li key={m.id}>
               <button
