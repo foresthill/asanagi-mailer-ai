@@ -895,15 +895,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     await mutateState(ids, state, label);
   };
 
-  // Bulk importance — mark every checked conversation's mail as 重要/通常/低.
-  // Each is a per-sender training signal (教師データ), so the AI's future
-  // judgments improve. Acts on the representative (差出人) of each checked row.
-  const bulkImportance = async (importance: Importance) => {
-    const targets = rows
-      .filter((r) => checked.has(r.email.id))
-      .map((r) => r.email);
+  // Mark a set of mails' importance — a per-sender training signal (教師データ)
+  // for each, so the AI's future judgments improve. Shared by the conversation
+  // bulk bar and the per-message (thread sub-row) selection.
+  const importanceForEmails = async (
+    targets: Email[],
+    importance: Importance,
+  ) => {
     if (!targets.length) return;
-    setChecked(new Set());
     setEmails((list) =>
       list.map((e) =>
         targets.some((t) => t.id === e.id) ? { ...e, importance } : e,
@@ -923,6 +922,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     const label =
       importance === "high" ? "重要" : importance === "low" ? "低" : "通常";
     showToast(`${targets.length}件を「${label}」として学習しました`);
+  };
+
+  // Bulk importance for the checked conversation rows (acts on each 代表=差出人).
+  const bulkImportance = async (importance: Importance) => {
+    const targets = rows
+      .filter((r) => checked.has(r.email.id))
+      .map((r) => r.email);
+    if (!targets.length) return;
+    setChecked(new Set());
+    await importanceForEmails(targets, importance);
   };
 
   /** Star toggle — optimistic UI, server-synced (Gmail STARRED / IMAP \Flagged). */
@@ -1178,6 +1187,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onBulkArchive={() => bulkAct("archived", "一括アーカイブしました")}
       onBulkTrash={() => bulkAct("trashed", "一括でゴミ箱に移動しました")}
       onBulkImportance={bulkImportance}
+      onImportanceFor={importanceForEmails}
       onServerSearch={searchServer}
       onSearchChange={setSearchQuery}
       onToggleGrouping={toggleGrouping}

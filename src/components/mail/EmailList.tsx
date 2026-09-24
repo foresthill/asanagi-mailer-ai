@@ -188,6 +188,7 @@ export function EmailList({
   onBulkArchive,
   onBulkTrash,
   onBulkImportance,
+  onImportanceFor,
   onSearchChange,
   onServerSearch,
   onToggleGrouping,
@@ -250,6 +251,8 @@ export function EmailList({
   onBulkTrash: () => void;
   /** Mark all checked mails' importance (重要/通常/低) — AI 学習シグナル. */
   onBulkImportance: (importance: Importance) => void;
+  /** Mark specific mails' importance — for per-message (thread sub-row) selection. */
+  onImportanceFor: (emails: Email[], importance: Importance) => void;
   onSearchChange: (q: string) => void;
   onServerSearch: () => void;
   onToggleGrouping: () => void;
@@ -317,6 +320,17 @@ export function EmailList({
   // fetched cache-first (instant, cross-folder) and memoized per rep id.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [members, setMembers] = useState<Record<string, Email[]>>({});
+  // Per-message selection inside an expanded conversation (individual mails).
+  // Distinct from the row-level `checkedIds` (whole conversations), so you can
+  // act on just one inquiry of a same-subject group (e.g. お問い合わせ 4通).
+  const [subChecked, setSubChecked] = useState<Set<string>>(new Set());
+  const toggleSubCheck = (id: string) =>
+    setSubChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const toggleExpand = (row: ThreadRow) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -386,15 +400,51 @@ export function EmailList({
                 {t("list.thread.empty")}
               </p>
             ) : (
-              subs.map((m) => (
-                <ThreadMemberRow
-                  key={m.id}
-                  email={m}
-                  active={selectedId === m.id}
-                  terms={terms}
-                  onClick={() => onSelect(m.id)}
-                />
-              ))
+              (() => {
+                // This expansion's selected members (per-message actions).
+                const picked = subs.filter((m) => subChecked.has(m.id));
+                const clearPicked = () =>
+                  setSubChecked((prev) => {
+                    const next = new Set(prev);
+                    for (const m of subs) next.delete(m.id);
+                    return next;
+                  });
+                return (
+                  <>
+                    {picked.length > 0 && (
+                      <SubActionBar
+                        count={picked.length}
+                        folder={folder}
+                        onClear={clearPicked}
+                        onArchive={() => {
+                          onArchive(picked.map((m) => m.id));
+                          clearPicked();
+                        }}
+                        onTrash={() => {
+                          onTrash(picked.map((m) => m.id));
+                          clearPicked();
+                        }}
+                        onImportance={(imp) => {
+                          onImportanceFor(picked, imp);
+                          clearPicked();
+                        }}
+                      />
+                    )}
+                    {subs.map((m) => (
+                      <ThreadMemberRow
+                        key={m.id}
+                        email={m}
+                        active={selectedId === m.id}
+                        terms={terms}
+                        checked={subChecked.has(m.id)}
+                        selectionActive={picked.length > 0}
+                        onToggleCheck={() => toggleSubCheck(m.id)}
+                        onClick={() => onSelect(m.id)}
+                      />
+                    ))}
+                  </>
+                );
+              })()
             )}
           </div>
         )}
@@ -894,19 +944,107 @@ function AccountChip({ account, label }: { account: string; label: string }) {
 }
 
 /**
+ * Compact action bar for per-message selection inside an expanded conversation.
+ * Lets you archive/trash or mark importance on individual mails — e.g. handle
+ * one inquiry of a same-subject group without touching the others.
+ */
+function SubActionBar({
+  count,
+  folder,
+  onClear,
+  onArchive,
+  onTrash,
+  onImportance,
+}: {
+  count: number;
+  folder: FolderView;
+  onClear: () => void;
+  onArchive: () => void;
+  onTrash: () => void;
+  onImportance: (importance: Importance) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="mb-1 flex flex-wrap items-center gap-1 rounded-lg border border-accent/30 bg-accent-soft/40 px-2 py-1">
+      <button
+        onClick={onClear}
+        title={t("bulk.clear")}
+        className="grid size-5 place-items-center rounded text-fg-subtle hover:text-fg"
+      >
+        <X className="size-3.5" />
+      </button>
+      <span className="text-[11px] font-semibold tabular-nums">
+        {count}
+        {t("bulk.selectedSuffix")}
+      </span>
+      <span
+        className="ml-1 flex items-center gap-0.5 rounded-md border border-border p-0.5"
+        title={t("bulk.importance.hint")}
+      >
+        <button
+          onClick={() => onImportance("high")}
+          className="rounded px-1 py-0.5 text-[10px] font-medium text-high hover:bg-high-soft"
+        >
+          {t("importance.high")}
+        </button>
+        <button
+          onClick={() => onImportance("normal")}
+          className="rounded px-1 py-0.5 text-[10px] text-fg-muted hover:bg-surface-2"
+        >
+          {t("importance.normal")}
+        </button>
+        <button
+          onClick={() => onImportance("low")}
+          className="rounded px-1 py-0.5 text-[10px] text-fg-subtle hover:bg-surface-2"
+        >
+          {t("importance.low")}
+        </button>
+      </span>
+      <span className="ml-auto flex items-center gap-0.5">
+        {folder !== "archived" && folder !== "sent" && (
+          <button
+            onClick={onArchive}
+            title={t("bulk.archive.title")}
+            className="grid size-6 place-items-center rounded text-fg-muted hover:bg-accent-soft hover:text-accent"
+          >
+            <Archive className="size-3.5" />
+          </button>
+        )}
+        {folder !== "trashed" && (
+          <button
+            onClick={onTrash}
+            title={t("bulk.trash.title")}
+            className="grid size-6 place-items-center rounded text-fg-muted hover:bg-high-soft hover:text-high"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/**
  * A single conversation member, shown inline when a thread row is expanded
  * (一覧側の全体像). Compact one-liner: 差出人／重要度／冒頭／添付／時刻。
- * Clicking opens that exact message in the reader.
+ * Clicking opens that exact message; the avatar doubles as a checkbox so you can
+ * select individual mails of the conversation for per-message actions.
  */
 function ThreadMemberRow({
   email,
   active,
   terms,
+  checked,
+  selectionActive,
+  onToggleCheck,
   onClick,
 }: {
   email: Email;
   active: boolean;
   terms: string[];
+  checked: boolean;
+  selectionActive: boolean;
+  onToggleCheck: () => void;
   onClick: () => void;
 }) {
   const { t } = useI18n();
@@ -915,21 +1053,58 @@ function ThreadMemberRow({
   const faceEmail = sent
     ? (email.to[0]?.email ?? email.from.email)
     : email.from.email;
+  const showCheckbox = checked || selectionActive;
   return (
-    <button
+    <div
       onClick={onClick}
       title={email.subject}
       className={cn(
-        "flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors",
-        active ? "bg-accent-soft" : "hover:bg-surface-2",
+        "group/mem flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors",
+        active
+          ? "bg-accent-soft"
+          : checked
+            ? "bg-accent-soft/60"
+            : "hover:bg-surface-2",
       )}
     >
-      <span
-        className="grid size-5 shrink-0 place-items-center rounded-full text-[9px] font-semibold text-white"
-        style={{ background: avatarColor(faceEmail) }}
+      {/* Avatar ⇄ checkbox: hover or an active selection reveals the box. */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleCheck();
+        }}
+        title={checked ? t("row.check.off") : t("row.check.on")}
+        className="relative size-5 shrink-0"
       >
-        {sent ? t("thread.youInitial") : initials(email.from)}
-      </span>
+        <span
+          className={cn(
+            "grid size-5 place-items-center rounded-full text-[9px] font-semibold text-white transition-opacity",
+            showCheckbox ? "opacity-0" : "group-hover/mem:opacity-0",
+          )}
+          style={{ background: avatarColor(faceEmail) }}
+        >
+          {sent ? t("thread.youInitial") : initials(email.from)}
+        </span>
+        <span
+          className={cn(
+            "absolute inset-0 grid place-items-center transition-opacity",
+            showCheckbox
+              ? "opacity-100"
+              : "opacity-0 group-hover/mem:opacity-100",
+          )}
+        >
+          <span
+            className={cn(
+              "grid size-4 place-items-center rounded border transition-colors",
+              checked
+                ? "border-accent bg-accent text-accent-fg"
+                : "border-border bg-surface hover:border-accent",
+            )}
+          >
+            {checked && <Check className="size-3" />}
+          </span>
+        </span>
+      </button>
       <span
         className={cn(
           "w-24 shrink-0 truncate text-xs",
@@ -952,7 +1127,7 @@ function ThreadMemberRow({
       <span className="shrink-0 text-[10px] tabular-nums text-fg-subtle">
         {relativeTime(email.date)}
       </span>
-    </button>
+    </div>
   );
 }
 
