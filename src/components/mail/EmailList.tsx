@@ -188,6 +188,7 @@ export function EmailList({
   onClearChecked,
   onBulkArchive,
   onBulkTrash,
+  onBulkReportSpam,
   onBulkImportance,
   onImportanceFor,
   onSearchChange,
@@ -250,6 +251,8 @@ export function EmailList({
   onClearChecked: () => void;
   onBulkArchive: () => void;
   onBulkTrash: () => void;
+  /** Report all checked mails as spam/phishing (learns per sender + trashes). */
+  onBulkReportSpam: () => void;
   /** Mark all checked mails' importance (重要/通常/低) — AI 学習シグナル. */
   onBulkImportance: (importance: Importance) => void;
   /** Mark specific mails' importance — for per-message (thread sub-row) selection. */
@@ -518,6 +521,16 @@ export function EmailList({
               >
                 <Archive className="size-3.5" />
                 {t("action.archive")}
+              </button>
+            )}
+            {folder !== "sent" && (
+              <button
+                onClick={onBulkReportSpam}
+                title={t("bulk.reportSpam.title")}
+                className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-high hover:text-high"
+              >
+                <ShieldAlert className="size-3.5" />
+                {t("bulk.reportSpam")}
               </button>
             )}
             {folder !== "trashed" && (

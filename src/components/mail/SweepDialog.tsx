@@ -6,6 +6,7 @@ import {
   Check,
   Inbox,
   Loader2,
+  ShieldAlert,
   Sparkles,
   Trash2,
   X,
@@ -15,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { avatarColor, displayName } from "./helpers";
 import { useI18n } from "@/lib/i18n";
 
-type SweepAction = "keep" | "archive" | "trash";
+type SweepAction = "keep" | "archive" | "trash" | "spam";
 
 interface SweepItem {
   id: string;
@@ -27,10 +28,17 @@ interface SweepItem {
   source: "learned" | "heuristic" | "ai";
 }
 
+// setAll (header) offers the 3 safe dispositions; "spam" is per-row only —
+// there is no "mark everything as spam" shortcut (too destructive).
 const ACTIONS: { value: SweepAction; icon: typeof Archive }[] = [
   { value: "keep", icon: Inbox },
   { value: "archive", icon: Archive },
   { value: "trash", icon: Trash2 },
+];
+// Per-row selector adds 迷惑メール報告 (report as spam/phishing → learn + trash).
+const ROW_ACTIONS: { value: SweepAction; icon: typeof Archive }[] = [
+  ...ACTIONS,
+  { value: "spam", icon: ShieldAlert },
 ];
 
 /**
@@ -192,13 +200,19 @@ export function SweepDialog({
   // 変わり、位置は動かない。再整列すると押した瞬間に行が別グループへ飛んで
   // 「バーっと振り分け」がしづらいため（deps は items のみ・actions を含めない）。
   const ordered = useMemo(() => {
-    const rank: Record<SweepAction, number> = { trash: 0, archive: 1, keep: 2 };
+    const rank: Record<SweepAction, number> = {
+      spam: 0,
+      trash: 1,
+      archive: 2,
+      keep: 3,
+    };
     return [...items].sort((a, b) => rank[a.action] - rank[b.action]);
   }, [items]);
 
   const archiveCount = items.filter((i) => actions[i.id] === "archive").length;
   const trashCount = items.filter((i) => actions[i.id] === "trash").length;
-  const actionable = archiveCount + trashCount;
+  const spamCount = items.filter((i) => actions[i.id] === "spam").length;
+  const actionable = archiveCount + trashCount + spamCount;
   // Cost transparency: how many actually hit the AI this run vs were free.
   const aiCount = items.filter((i) => i.source === "ai").length;
   const freeCount = items.length - aiCount;
@@ -208,11 +222,13 @@ export function SweepDialog({
   /** 「なぎ払い」演出のウォッシュ色（判定＝行の運命を色で示す）。
    *  ゴミ箱=赤 / アーカイブ=青 / 残す=無し。CSS変数 --sweep-wash に渡す。 */
   const washFor = (action: SweepAction): string =>
-    action === "trash"
-      ? "color-mix(in srgb, var(--high) 30%, transparent)"
-      : action === "archive"
-        ? "color-mix(in srgb, var(--accent) 26%, transparent)"
-        : "transparent";
+    action === "spam"
+      ? "color-mix(in srgb, var(--high) 45%, transparent)"
+      : action === "trash"
+        ? "color-mix(in srgb, var(--high) 30%, transparent)"
+        : action === "archive"
+          ? "color-mix(in srgb, var(--accent) 26%, transparent)"
+          : "transparent";
 
   /** 全行を一括で同じ処分に（ヘッダの一括ボタン）。 */
   const setAll = (action: SweepAction) =>
@@ -243,8 +259,31 @@ export function SweepDialog({
       const trashIds = items
         .filter((i) => actions[i.id] === "trash")
         .map((i) => i.id);
+      // 迷惑メール報告: spam rows are trashed like any other, and additionally
+      // reported (threat learning) so detectThreat flags the sender next time.
+      const spamItems = items.filter((i) => actions[i.id] === "spam");
+      const spamIds = spamItems.map((i) => i.id);
       const sweepAnim = new Promise((r) => setTimeout(r, 600));
-      await Promise.all([onApply(archiveIds, trashIds), sweepAnim]);
+      await Promise.all([
+        onApply(archiveIds, [...trashIds, ...spamIds]),
+        sweepAnim,
+      ]);
+      // One threat report per distinct spam sender (best-effort learning).
+      if (spamItems.length) {
+        const seen = new Set<string>();
+        await Promise.all(
+          spamItems.map((i) => {
+            const from = i.fromEmail ?? byId.get(i.id)?.from.email;
+            if (!from || seen.has(from)) return Promise.resolve();
+            seen.add(from);
+            return fetch(`/api/emails/${encodeURIComponent(i.id)}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ reportSpam: { fromEmail: from } }),
+            }).catch(() => {});
+          }),
+        );
+      }
       try {
         await fetch("/api/sweep/reviewed", {
           method: "POST",
@@ -262,11 +301,14 @@ export function SweepDialog({
           .map((i) => {
             const from = i.fromEmail ?? byId.get(i.id)?.from.email;
             const action = actions[i.id] ?? i.action;
+            // spam is trashed; record it as a trash signal (the threat report
+            // above carries the spam-specific learning).
+            const learnAction = action === "spam" ? "trash" : action;
             return from
               ? {
                   fromEmail: from,
                   importance: action === "keep" ? "normal" : "low",
-                  action,
+                  action: learnAction,
                 }
               : null;
           })
@@ -356,6 +398,8 @@ export function SweepDialog({
                 {t("sweep.done.detail")
                   .replace("{archive}", String(archiveCount))
                   .replace("{trash}", String(trashCount))}
+                {spamCount > 0 &&
+                  t("sweep.spamClause").replace("{n}", String(spamCount))}
               </p>
             </div>
           ) : (
@@ -505,9 +549,9 @@ export function SweepDialog({
                           {i.reason}
                         </span>
                       </span>
-                      {/* 3択セグメント: 残す / アーカイブ / ゴミ箱 */}
+                      {/* 4択セグメント: 残す / アーカイブ / ゴミ箱 / 迷惑 */}
                       <span className="flex shrink-0 items-center overflow-hidden rounded-lg border border-border">
-                        {ACTIONS.map((a) => {
+                        {ROW_ACTIONS.map((a) => {
                           const on = cur === a.value;
                           return (
                             <button
@@ -522,12 +566,16 @@ export function SweepDialog({
                               className={cn(
                                 "flex items-center gap-1 px-2 py-1 text-[11px] transition-colors",
                                 on
-                                  ? a.value === "trash"
-                                    ? "bg-high text-white"
-                                    : a.value === "archive"
-                                      ? "bg-accent text-accent-fg"
-                                      : "bg-surface-2 text-fg"
-                                  : "text-fg-subtle hover:bg-surface-2",
+                                  ? a.value === "spam"
+                                    ? "bg-high text-white ring-1 ring-inset ring-white/40"
+                                    : a.value === "trash"
+                                      ? "bg-high text-white"
+                                      : a.value === "archive"
+                                        ? "bg-accent text-accent-fg"
+                                        : "bg-surface-2 text-fg"
+                                  : a.value === "spam"
+                                    ? "text-high/70 hover:bg-high-soft hover:text-high"
+                                    : "text-fg-subtle hover:bg-surface-2",
                               )}
                             >
                               <a.icon className="size-3" />
@@ -572,6 +620,8 @@ export function SweepDialog({
               .replace("{archive}", String(archiveCount))
               .replace("{trash}", String(trashCount))
               .replace("{keep}", String(items.length - actionable))}
+            {spamCount > 0 &&
+              t("sweep.spamClause").replace("{n}", String(spamCount))}
           </span>
           <button
             onClick={apply}

@@ -145,6 +145,11 @@ const ja: Dict = {
   "sweep.action.keep": "残す",
   "sweep.action.archive": "アーカイブ",
   "sweep.action.trash": "ゴミ箱",
+  "sweep.action.spam": "迷惑",
+  "sweep.spamClause": "・迷惑{n}",
+  "bulk.reportSpam": "迷惑メール報告",
+  "bulk.reportSpam.title":
+    "選択した会話を迷惑メールとして報告し、ゴミ箱へ（差出人を学習）",
   "nav.sweep.title":
     "朝の一凪（ひとなぎ）— 受信箱を一括判定して片付け推奨を表示（差出人・件名・冒頭のみで判定）",
   "nav.drafts": "下書き",
@@ -628,6 +633,11 @@ const en: Dict = {
   "sweep.action.keep": "Keep",
   "sweep.action.archive": "Archive",
   "sweep.action.trash": "Trash",
+  "sweep.action.spam": "Spam",
+  "sweep.spamClause": " · {n} spam",
+  "bulk.reportSpam": "Report spam",
+  "bulk.reportSpam.title":
+    "Report the selected conversations as spam and trash them (learns the sender)",
   "nav.sweep.title":
     "Morning Calm — batch-triage the inbox and suggest cleanup (judged by sender, subject & opening only)",
   "nav.drafts": "Drafts",
@@ -1117,6 +1127,11 @@ const fr: Dict = {
   "sweep.action.keep": "Garder",
   "sweep.action.archive": "Archiver",
   "sweep.action.trash": "Corbeille",
+  "sweep.action.spam": "Indésirable",
+  "sweep.spamClause": " · {n} indésirable",
+  "bulk.reportSpam": "Signaler indésirable",
+  "bulk.reportSpam.title":
+    "Signaler les conversations sélectionnées comme indésirables et les mettre à la corbeille (apprend l'expéditeur)",
   "nav.sweep.title":
     "Calme du matin — tri groupé de la boîte de réception avec suggestions de rangement (jugé sur l'expéditeur, l'objet et le début uniquement)",
   "nav.drafts": "Brouillons",
