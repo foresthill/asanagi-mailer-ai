@@ -5,19 +5,8 @@ import { Loader2, ListChecks, Sparkles, Check } from "lucide-react";
 import type { Importance } from "@/lib/types";
 import type { Judgment } from "@/lib/db";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 import { relativeTime } from "./helpers";
-
-const IMPORTANCE_LABEL: Record<Importance, string> = {
-  high: "重要",
-  normal: "通常",
-  low: "低",
-};
-
-const SOURCE_LABEL: Record<string, string> = {
-  ai: "AI",
-  heuristic: "簡易",
-  learned: "学習済み",
-};
 
 function chipClass(i: Importance): string {
   return i === "high"
@@ -34,10 +23,13 @@ function chipClass(i: Importance): string {
  * local classifier (docs/02).
  */
 export function TriageView() {
+  const { t } = useI18n();
   const [items, setItems] = useState<Judgment[] | null>(null);
-  const [stats, setStats] = useState<{ total: number; reviewed: number; agreed: number } | null>(
-    null,
-  );
+  const [stats, setStats] = useState<{
+    total: number;
+    reviewed: number;
+    agreed: number;
+  } | null>(null);
   // AIへのメモ（嗜好プロファイル, docs/02 §5.4）: 自然文ルール → 判定に注入。
   const [profile, setProfile] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -77,7 +69,9 @@ export function TriageView() {
     // Optimistic update.
     setItems((prev) =>
       (prev ?? []).map((x) =>
-        x.account === j.account && x.emailId === j.emailId ? { ...x, verdict } : x,
+        x.account === j.account && x.emailId === j.emailId
+          ? { ...x, verdict }
+          : x,
       ),
     );
     const res = await fetch("/api/judgments", {
@@ -95,24 +89,27 @@ export function TriageView() {
   }
 
   const accuracy =
-    stats && stats.reviewed > 0 ? Math.round((stats.agreed / stats.reviewed) * 100) : null;
+    stats && stats.reviewed > 0
+      ? Math.round((stats.agreed / stats.reviewed) * 100)
+      : null;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-bg">
       <div className="flex items-center gap-3 border-b border-border bg-surface px-6 py-3.5">
         <ListChecks className="size-4 text-accent" />
-        <h1 className="text-sm font-semibold">仕分けレビュー</h1>
+        <h1 className="text-sm font-semibold">{t("nav.triage")}</h1>
         {stats && (
           <span className="text-xs text-fg-subtle">
-            判定 {stats.total}件・レビュー済み {stats.reviewed}件
-            {accuracy !== null && `・一致率 ${accuracy}%`}
+            {t("triage.stats")
+              .replace("{total}", String(stats.total))
+              .replace("{reviewed}", String(stats.reviewed))}
+            {accuracy !== null &&
+              t("triage.accuracy").replace("{accuracy}", String(accuracy))}
           </span>
         )}
       </div>
       <p className="border-b border-border bg-surface-2 px-6 py-2 text-[11px] text-fg-muted">
-        AI/簡易判定の結果を確認して、正しい重要度を選んでください。あなたの判断は
-        <strong>その場で学習</strong>され（次の一覧表示から反映）、将来のローカル分類器の
-        <strong>教師データ</strong>として蓄積されます。
+        {t("triage.intro")}
       </p>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -120,18 +117,19 @@ export function TriageView() {
           <div className="rounded-xl border border-border bg-surface p-4">
             <div className="mb-1 flex items-center gap-2">
               <Sparkles className="size-3.5 text-accent" />
-              <h2 className="text-sm font-semibold">AIへのメモ（嗜好プロファイル）</h2>
+              <h2 className="text-sm font-semibold">
+                {t("triage.profile.heading")}
+              </h2>
             </div>
             <p className="mb-2 text-[11px] text-fg-muted">
-              あなたのルールを自然文で書くと、<strong>朝の一凪</strong>と<strong>個別の重要度判定</strong>に反映されます。
-              例:「ニュースレターは全部アーカイブ」「上司の田中さんからは必ず重要」「請求書・契約は必ず残す」。
+              {t("triage.profile.desc")}
             </p>
             <textarea
               value={profile ?? ""}
               disabled={profile === null}
               onChange={(e) => setProfile(e.target.value)}
               rows={4}
-              placeholder="例: 取引先Acmeの返信要求は重要。SaaSの自動通知は低。CC止まりは低。"
+              placeholder={t("triage.profile.placeholder")}
               className="w-full resize-y rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
             />
             <div className="mt-2 flex items-center gap-2">
@@ -141,15 +139,17 @@ export function TriageView() {
                 className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-50"
               >
                 {savingProfile && <Loader2 className="size-4 animate-spin" />}
-                保存
+                {t("triage.save")}
               </button>
               {profileSaved && (
                 <span className="flex items-center gap-1 text-xs text-emerald-600">
                   <Check className="size-3" />
-                  保存しました
+                  {t("triage.saved")}
                 </span>
               )}
-              <span className="ml-auto text-[10px] text-fg-subtle">端末内に保存（AI判定にのみ使用）</span>
+              <span className="ml-auto text-[10px] text-fg-subtle">
+                {t("triage.profile.note")}
+              </span>
             </div>
           </div>
           {items === null ? (
@@ -158,7 +158,7 @@ export function TriageView() {
             </div>
           ) : items.length === 0 ? (
             <p className="py-10 text-center text-sm text-fg-subtle">
-              まだ判定ログがありません。メールを開くと判定が記録されていきます。
+              {t("triage.empty")}
             </p>
           ) : (
             items.map((j) => (
@@ -173,13 +173,21 @@ export function TriageView() {
                       chipClass(j.importance),
                     )}
                   >
-                    {IMPORTANCE_LABEL[j.importance]}
+                    {t(`importance.${j.importance}`)}
                   </span>
                   <span className="flex shrink-0 items-center gap-1 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-subtle">
                     {j.source === "ai" && <Sparkles className="size-2.5" />}
-                    {SOURCE_LABEL[j.source] ?? j.source}判定
+                    {t("triage.judgedBy").replace(
+                      "{source}",
+                      t(`triage.source.${j.source}`) ===
+                        `triage.source.${j.source}`
+                        ? j.source
+                        : t(`triage.source.${j.source}`),
+                    )}
                   </span>
-                  <span className="min-w-0 truncate text-sm font-medium">{j.subject}</span>
+                  <span className="min-w-0 truncate text-sm font-medium">
+                    {j.subject}
+                  </span>
                   <span className="ml-auto shrink-0 text-[11px] text-fg-subtle">
                     {relativeTime(j.createdAt)}
                   </span>
@@ -189,7 +197,9 @@ export function TriageView() {
                   {j.reason ? `・${j.reason}` : ""}
                 </p>
                 <div className="mt-2 flex items-center gap-1.5">
-                  <span className="mr-1 text-[11px] text-fg-subtle">あなたの判断:</span>
+                  <span className="mr-1 text-[11px] text-fg-subtle">
+                    {t("triage.yourVerdict")}
+                  </span>
                   {(["high", "normal", "low"] as const).map((v) => (
                     <button
                       key={v}
@@ -202,17 +212,21 @@ export function TriageView() {
                       )}
                     >
                       {j.verdict === v && <Check className="size-3" />}
-                      {IMPORTANCE_LABEL[v]}
+                      {t(`importance.${v}`)}
                     </button>
                   ))}
                   {j.verdict && (
                     <span
                       className={cn(
                         "ml-2 text-[11px]",
-                        j.verdict === j.importance ? "text-emerald-600" : "text-high",
+                        j.verdict === j.importance
+                          ? "text-emerald-600"
+                          : "text-high",
                       )}
                     >
-                      {j.verdict === j.importance ? "判定と一致" : "是正済み（学習に反映）"}
+                      {j.verdict === j.importance
+                        ? t("triage.agree")
+                        : t("triage.corrected")}
                     </span>
                   )}
                 </div>
