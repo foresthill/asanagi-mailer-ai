@@ -4,14 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, SquarePen, Sparkles } from "lucide-react";
 import type { Email, EmailAddress, Importance } from "@/lib/types";
 import { avatarColor } from "./helpers";
+import { useI18n } from "@/lib/i18n";
 import { ConversationBubbles } from "./ConversationBubbles";
 import type { ContactInfo } from "@/lib/db";
-
-const IMPORTANCE_LABEL: Record<Importance, string> = {
-  high: "重要",
-  normal: "通常",
-  low: "低",
-};
 
 /**
  * Person page: profile header + the full conversation timeline with this
@@ -24,8 +19,12 @@ export function ContactPage({
   contact: ContactInfo;
   onComposeTo: (to: EmailAddress) => void;
 }) {
+  const { t } = useI18n();
   const [messages, setMessages] = useState<Email[] | null>(null);
-  const [learned, setLearned] = useState<{ importance: Importance; weight: number } | null>(null);
+  const [learned, setLearned] = useState<{
+    importance: Importance;
+    weight: number;
+  } | null>(null);
   // person = このアドレスだけ / company = 同じ会社（@domain の全員）の全履歴。
   // 同じ要件で担当が複数に分かれても1画面で辿れるように（相手軸の集約）。
   const [scope, setScope] = useState<"person" | "company">("person");
@@ -56,7 +55,9 @@ export function ContactPage({
     (async () => {
       setMessages(null);
       const qs = scope === "company" ? "?scope=company" : "";
-      const res = await fetch(`/api/contacts/${encodeURIComponent(contact.email)}${qs}`);
+      const res = await fetch(
+        `/api/contacts/${encodeURIComponent(contact.email)}${qs}`,
+      );
       const data = await res.json();
       if (!active) return;
       setMessages(data.messages ?? []);
@@ -95,12 +96,20 @@ export function ContactPage({
             {learned && (
               <span className="flex items-center gap-1 rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent">
                 <Sparkles className="size-3" />
-                学習済み: {IMPORTANCE_LABEL[learned.importance]} (×{learned.weight})
+                {t("contact.learned")
+                  .replace(
+                    "{importance}",
+                    t(`importance.${learned.importance}`),
+                  )
+                  .replace("{weight}", String(learned.weight))}
               </span>
             )}
           </p>
           <p className="truncate text-xs text-fg-subtle">
-            {contact.email}・受信 {contact.received} / 送信 {contact.sent}
+            {contact.email}・
+            {t("contact.stats")
+              .replace("{received}", String(contact.received))
+              .replace("{sent}", String(contact.sent))}
           </p>
         </div>
         {canCompany && (
@@ -108,35 +117,40 @@ export function ContactPage({
             <button
               onClick={() => setScope("person")}
               aria-pressed={scope === "person"}
-              title="このアドレスとの履歴だけ"
+              title={t("contact.scope.person.title")}
               className={
                 scope === "person"
                   ? "rounded-md bg-accent-soft px-2.5 py-1 font-medium text-accent"
                   : "rounded-md px-2.5 py-1 text-fg-subtle hover:text-fg"
               }
             >
-              この人
+              {t("contact.scope.person")}
             </button>
             <button
               onClick={() => setScope("company")}
               aria-pressed={scope === "company"}
-              title={`@${domain} の全員（担当が分かれても1画面で辿る）`}
+              title={t("contact.scope.company.title").replace(
+                "{domain}",
+                domain,
+              )}
               className={
                 scope === "company"
                   ? "rounded-md bg-accent-soft px-2.5 py-1 font-medium text-accent"
                   : "rounded-md px-2.5 py-1 text-fg-subtle hover:text-fg"
               }
             >
-              会社全体
+              {t("contact.scope.company")}
             </button>
           </div>
         )}
         <button
-          onClick={() => onComposeTo({ name: contact.name, email: contact.email })}
+          onClick={() =>
+            onComposeTo({ name: contact.name, email: contact.email })
+          }
           className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg shadow-sm transition-transform hover:scale-[1.02] active:scale-95"
         >
           <SquarePen className="size-4" />
-          メールを書く
+          {t("contact.compose")}
         </button>
       </div>
 
@@ -148,7 +162,7 @@ export function ContactPage({
             </div>
           ) : messages.length === 0 ? (
             <p className="py-10 text-center text-sm text-fg-subtle">
-              キャッシュにこの人とのメールがまだありません
+              {t("contact.empty")}
             </p>
           ) : (
             <ConversationBubbles messages={messages} />

@@ -145,6 +145,15 @@ const ja: Dict = {
   "storage.tooltip.empty": "(まだキャッシュなし)",
   "storage.tooltip.retention": "保持上限: 各アカウント直近{n}通",
   "reader.empty": "メールを選択してください",
+  "contact.learned": "学習済み: {importance}（×{weight}）",
+  "contact.stats": "受信 {received} / 送信 {sent}",
+  "contact.scope.person": "この人",
+  "contact.scope.person.title": "このアドレスとの履歴だけ",
+  "contact.scope.company": "会社全体",
+  "contact.scope.company.title":
+    "@{domain} の全員（担当が分かれても1画面で辿る）",
+  "contact.compose": "メールを書く",
+  "contact.empty": "キャッシュにこの人とのメールがまだありません",
   // 検索モード / AIナレッジ
   "search.mode.keyword": "キーワード",
   "search.mode.ai": "AI",
@@ -416,6 +425,15 @@ const en: Dict = {
   "storage.tooltip.empty": "(nothing cached yet)",
   "storage.tooltip.retention": "Retention: latest {n} msgs per account",
   "reader.empty": "Select an email",
+  "contact.learned": "Learned: {importance} (×{weight})",
+  "contact.stats": "Received {received} / Sent {sent}",
+  "contact.scope.person": "This person",
+  "contact.scope.person.title": "History with this address only",
+  "contact.scope.company": "Whole company",
+  "contact.scope.company.title":
+    "Everyone at @{domain} (follow the thread across contacts)",
+  "contact.compose": "Write email",
+  "contact.empty": "No cached email with this person yet",
   // Search modes / AI knowledge
   "search.mode.keyword": "Keyword",
   "search.mode.ai": "AI",
@@ -691,6 +709,15 @@ const fr: Dict = {
   "storage.tooltip.retention":
     "Conservation : {n} derniers messages par compte",
   "reader.empty": "Sélectionnez un e-mail",
+  "contact.learned": "Appris : {importance} (×{weight})",
+  "contact.stats": "Reçus {received} / Envoyés {sent}",
+  "contact.scope.person": "Cette personne",
+  "contact.scope.person.title": "Historique avec cette adresse uniquement",
+  "contact.scope.company": "Toute l’entreprise",
+  "contact.scope.company.title":
+    "Tout le monde chez @{domain} (suivre le fil entre contacts)",
+  "contact.compose": "Écrire un e-mail",
+  "contact.empty": "Aucun e-mail en cache avec cette personne",
   // Modes de recherche / connaissance IA
   "search.mode.keyword": "Mot-clé",
   "search.mode.ai": "IA",
