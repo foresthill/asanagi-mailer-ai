@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Reply,
   Search,
+  ShieldAlert,
   Sparkles,
   Star,
   X,
@@ -1302,7 +1303,13 @@ function EmailListItem({
               {convCount}
             </span>
           ))}
-        {email.importance === "high" && (
+        {email.threat && (
+          <span className="flex shrink-0 items-center gap-0.5 rounded bg-high px-1 text-[10px] font-semibold text-white">
+            <ShieldAlert className="size-2.5" />
+            {t(`threat.${email.threat}.badge`)}
+          </span>
+        )}
+        {email.importance === "high" && !email.threat && (
           <span className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high">
             {t("importance.high")}
           </span>
@@ -1533,7 +1540,16 @@ function EmailListItem({
             </span>
           </div>
           <div className="mt-0.5 flex items-center gap-1.5">
-            {email.importance === "high" && (
+            {email.threat && (
+              <span
+                title={t(`threat.${email.threat}.title`)}
+                className="flex shrink-0 items-center gap-0.5 rounded bg-high px-1 text-[10px] font-semibold text-white"
+              >
+                <ShieldAlert className="size-2.5" />
+                {t(`threat.${email.threat}.badge`)}
+              </span>
+            )}
+            {email.importance === "high" && !email.threat && (
               <span
                 title={t("importance.high.title")}
                 className="shrink-0 rounded bg-high-soft px-1 text-[10px] font-semibold text-high"
@@ -1541,7 +1557,7 @@ function EmailListItem({
                 {t("importance.high")}
               </span>
             )}
-            {email.importance === "low" && (
+            {email.importance === "low" && !email.threat && (
               <span
                 title={t("importance.low.title")}
                 className="shrink-0 rounded bg-surface-2 px-1 text-[10px] text-fg-subtle"

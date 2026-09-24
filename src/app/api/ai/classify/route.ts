@@ -2,9 +2,19 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
-import { CLASSIFY_SYSTEM, classifyContext, profileBlock } from "@/lib/ai/prompts";
-import { getJudgmentProfile, guessFromSignals, listSignals } from "@/lib/store";
+import {
+  CLASSIFY_SYSTEM,
+  classifyContext,
+  profileBlock,
+} from "@/lib/ai/prompts";
+import {
+  getJudgmentProfile,
+  guessFromSignals,
+  listSignals,
+  listThreatSenders,
+} from "@/lib/store";
 import { heuristicImportance, projectKeyFromSubject } from "@/lib/importance";
+import { detectThreat } from "@/lib/threat";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage, logJudgment } from "@/lib/db";
 import type { Email, Importance } from "@/lib/types";
@@ -14,10 +24,17 @@ export const maxDuration = 30;
 const schema = z.object({
   importance: z.enum(["high", "normal", "low"]),
   reason: z.string(),
+  // 危険メールは重要度とは別軸。none/spam/phishing。
+  threat: z.enum(["none", "spam", "phishing"]).default("none"),
 });
 
 /** Persist every judgment — the supervised-learning log (仕分けレビュー). */
-function record(email: Email, importance: Importance, reason: string, source: string) {
+function record(
+  email: Email,
+  importance: Importance,
+  reason: string,
+  source: string,
+) {
   try {
     logJudgment({
       account: email.account ?? "unknown",
@@ -37,6 +54,9 @@ function record(email: Email, importance: Importance, reason: string, source: st
 export async function POST(req: Request) {
   const { email } = (await req.json()) as { email: Email };
   const signals = await listSignals();
+  // Dangerous-mail flag (phishing/spam) — independent of importance, always
+  // applied so a "learned low" or heuristic result still carries the warning.
+  const threat = detectThreat(email, await listThreatSenders());
 
   // Heuristic short-circuit: if the user has already taught us about this
   // sender/domain, trust that immediately (fast + free + personalized).
@@ -48,7 +68,12 @@ export async function POST(req: Request) {
   if (learned) {
     const reason = "あなたの過去の判断（学習済み）に基づく判定です。";
     record(email, learned, reason, "learned");
-    return NextResponse.json({ importance: learned, reason, source: "learned" });
+    return NextResponse.json({
+      importance: learned,
+      reason,
+      source: "learned",
+      threat,
+    });
   }
 
   const cfg = await loadAIConfig();
@@ -57,7 +82,12 @@ export async function POST(req: Request) {
     const importance = heuristicImportance(email);
     const reason = "キーワードに基づく簡易判定です（AIキー未設定）。";
     record(email, importance, reason, "heuristic");
-    return NextResponse.json({ importance, reason, source: "heuristic" });
+    return NextResponse.json({
+      importance,
+      reason,
+      source: "heuristic",
+      threat,
+    });
   }
 
   try {
@@ -75,7 +105,8 @@ export async function POST(req: Request) {
     // 嗜好メモ（ユーザー自筆の指示）はマスクせず素のまま注入する。
     const profile = await getJudgmentProfile();
     const prompt =
-      classifyContext(target, signals, cfg.piiMask ? masker : undefined) + profileBlock(profile);
+      classifyContext(target, signals, cfg.piiMask ? masker : undefined) +
+      profileBlock(profile);
     const { object, usage } = await generateObject({
       // 重要度判定は安価な判定用モデルで（未設定ならメインと同じ）。
       model: resolveModel({ ...cfg, model: cfg.judgmentModel }),
@@ -88,12 +119,27 @@ export async function POST(req: Request) {
     });
     record(email, object.importance, object.reason, "ai");
     const logged = `[system]\n${CLASSIFY_SYSTEM}\n\n[prompt]\n${prompt}`;
-    logAiUsage("classify", cfg.judgmentModel, usage?.inputTokens, usage?.outputTokens, {
-      prompt: logged,
-      response: JSON.stringify(object, null, 2),
-      maskAudit: cfg.piiMask ? auditOutgoing("classify", masker, logged) : undefined,
+    logAiUsage(
+      "classify",
+      cfg.judgmentModel,
+      usage?.inputTokens,
+      usage?.outputTokens,
+      {
+        prompt: logged,
+        response: JSON.stringify(object, null, 2),
+        maskAudit: cfg.piiMask
+          ? auditOutgoing("classify", masker, logged)
+          : undefined,
+      },
+    );
+    // AI threat wins if it found one; otherwise fall back to the heuristic flag.
+    const aiThreat = object.threat === "none" ? undefined : object.threat;
+    return NextResponse.json({
+      importance: object.importance,
+      reason: masker.unmask(object.reason),
+      source: "ai",
+      threat: aiThreat ?? threat,
     });
-    return NextResponse.json({ ...object, reason: masker.unmask(object.reason), source: "ai" });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "classify failed" },

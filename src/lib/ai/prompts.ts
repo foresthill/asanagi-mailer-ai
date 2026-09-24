@@ -21,14 +21,19 @@ export function emailContext(email: Email): string {
  * Conversation history block for reply drafting: recent messages oldest
  * first, bodies truncated so a long thread can't blow up the prompt.
  */
-export function historyContext(history: Email[], excludeId?: string, max = 6): string {
+export function historyContext(
+  history: Email[],
+  excludeId?: string,
+  max = 6,
+): string {
   const items = history.filter((m) => m.id !== excludeId).slice(-max);
   if (!items.length) return "";
   return items
     .map((m) => {
       const who = m.state === "sent" ? "自分" : formatAddr(m.from);
       const body = m.body.trim().replace(/\n{3,}/g, "\n\n");
-      const clipped = body.length > 500 ? `${body.slice(0, 500)}…（以下略）` : body;
+      const clipped =
+        body.length > 500 ? `${body.slice(0, 500)}…（以下略）` : body;
       return [`▼ ${who}（${m.date}）`, clipped].join("\n");
     })
     .join("\n\n");
@@ -154,7 +159,9 @@ export const REFINE_SYSTEM = `あなたはメール下書きの編集者です�
 export function profileBlock(profile: string): string {
   const p = profile.trim();
   if (!p) return "";
-  return ["", "## ユーザーの嗜好メモ（最優先で尊重してください）", p].join("\n");
+  return ["", "## ユーザーの嗜好メモ（最優先で尊重してください）", p].join(
+    "\n",
+  );
 }
 
 /**
@@ -165,7 +172,9 @@ export function profileBlock(profile: string): string {
 export function writingNoteBlock(note: string): string {
   const n = note.trim();
   if (!n) return "";
-  return ["", "## 文章作成のルール（ユーザー指定・最優先で守る）", n].join("\n");
+  return ["", "## 文章作成のルール（ユーザー指定・最優先で守る）", n].join(
+    "\n",
+  );
 }
 
 export const CLASSIFY_SYSTEM = `あなたはユーザーの受信メールの重要度を判定するアシスタントです。
@@ -173,7 +182,15 @@ export const CLASSIFY_SYSTEM = `あなたはユーザーの受信メールの重
 
 判断材料:
 - 差出人との関係、緊急性、アクション要否、締切の有無。
-- 下記「学習済みシグナル」はユーザーが過去に示した好みです。強く尊重してください。`;
+- 下記「学習済みシグナル」はユーザーが過去に示した好みです。強く尊重してください。
+
+さらに「threat」フィールドで危険性を判定します（重要度とは別軸）:
+- "phishing": 実在の企業・公的機関（銀行/カード/宅配/税務署/年金/Amazon等）を装い、
+  リンククリックや認証情報・カード番号の入力、偽の請求/支払いを促す詐欺メール。
+  差出人の表示名と実ドメインの不一致は強い手がかり。
+- "spam": 迷惑・無差別の宣伝や勧誘（危険性は低いが不要）。
+- "none": 上記に該当しない通常のメール。
+迷ったら "none"。フィッシングは実害があるので、確度が高いときのみ "phishing" とします。`;
 
 export function classifyContext(
   email: Email,
@@ -185,11 +202,18 @@ export function classifyContext(
   // preference list doesn't leak to the AI provider. sender→[EMAIL_n] via the
   // email regex; domain has no `@`, so use maskDomain→[DOMAIN_n].
   const maskPattern = (s: ImportanceSignal) =>
-    !masker ? s.pattern : s.kind === "domain" ? masker.maskDomain(s.pattern) : masker.mask(s.pattern);
+    !masker
+      ? s.pattern
+      : s.kind === "domain"
+        ? masker.maskDomain(s.pattern)
+        : masker.mask(s.pattern);
   const learned =
     signals.length > 0
       ? signals
-          .map((s) => `- ${s.kind}:"${maskPattern(s)}" → ${s.importance} (確信度 ${s.weight})`)
+          .map(
+            (s) =>
+              `- ${s.kind}:"${maskPattern(s)}" → ${s.importance} (確信度 ${s.weight})`,
+          )
           .join("\n")
       : "（まだ学習データはありません）";
 

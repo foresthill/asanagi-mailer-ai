@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
-import { cachedGet, removeCached, setJudgmentVerdict, updateCached, upsertEmails } from "@/lib/db";
-import { recordImportanceFeedback } from "@/lib/store";
+import {
+  cachedGet,
+  removeCached,
+  setJudgmentVerdict,
+  updateCached,
+  upsertEmails,
+} from "@/lib/db";
+import { recordImportanceFeedback, recordThreatReport } from "@/lib/store";
 import { projectKeyFromSubject } from "@/lib/importance";
 import type { EmailProvider } from "@/lib/email";
 import type { Importance, MailboxState } from "@/lib/types";
@@ -29,10 +35,17 @@ async function resolve(raw: string): Promise<{
 /** Gmail OAuth token expiry (OAuthテストは7日失効) → 再認証が必要。 */
 function isAuthError(err: unknown): boolean {
   const m = (err instanceof Error ? err.message : String(err)).toLowerCase();
-  return m.includes("invalid_grant") || m.includes("expired") || m.includes("revoked");
+  return (
+    m.includes("invalid_grant") ||
+    m.includes("expired") ||
+    m.includes("revoked")
+  );
 }
 
-export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
   const { id: rawId } = await ctx.params;
   const { provider, account, id } = await resolve(rawId);
   // Cached body fallback (offline / token expiry / a moved-or-expunged IMAP
@@ -56,11 +69,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     // Pass the cached Message-ID so IMAP can relocate a mail whose id went stale
     // after archiving (moved folders → new UID) — otherwise its body/attachments
     // vanish and downloads 404.
-    const hint = account ? (cachedGet(account, id)?.messageId ?? undefined) : undefined;
+    const hint = account
+      ? (cachedGet(account, id)?.messageId ?? undefined)
+      : undefined;
     const email = await provider.get(id, hint);
     // Live lookup miss (e.g. the message was archived/moved so this folder's
     // UID is gone) — serve the cached copy rather than a dead "not found".
-    if (!email) return serveCached() ?? NextResponse.json({ error: "not found" }, { status: 404 });
+    if (!email)
+      return (
+        serveCached() ??
+        NextResponse.json({ error: "not found" }, { status: 404 })
+      );
     // Opening an email marks it read.
     if (!email.read) {
       try {
@@ -104,13 +123,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   }
 }
 
-export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
   const { id: rawId } = await ctx.params;
   const body = (await req.json()) as {
     state?: MailboxState;
     read?: boolean;
     starred?: boolean;
     importanceFeedback?: { importance: Importance; fromEmail: string };
+    reportSpam?: { fromEmail: string };
   };
   const { provider, account, id } = await resolve(rawId);
 
@@ -142,11 +165,21 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       // the same supervision as a verdict click on the 仕分けレビュー screen.
       if (account) {
         try {
-          setJudgmentVerdict(account, `${account}/${id}`, body.importanceFeedback.importance);
+          setJudgmentVerdict(
+            account,
+            `${account}/${id}`,
+            body.importanceFeedback.importance,
+          );
         } catch {
           /* judgment log may not exist yet — feedback itself still applies */
         }
       }
+    }
+    if (body.reportSpam) {
+      // 迷惑メール報告: この差出人/ドメインを危険として学習（以降 detectThreat が
+      // フラグ）＋重要度も低として学習。移動(ゴミ箱)はクライアントの trash が行う。
+      await recordThreatReport(body.reportSpam.fromEmail);
+      await recordImportanceFeedback(body.reportSpam.fromEmail, "low");
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
@@ -169,7 +202,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  _req: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
   const { id: rawId } = await ctx.params;
   const { provider, account, id } = await resolve(rawId);
   await provider.remove(id);
