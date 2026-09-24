@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Archive,
   Trash2,
@@ -15,6 +15,7 @@ import {
   ZoomOut,
   Copy,
   Check,
+  List,
   PenLine,
 } from "lucide-react";
 import type { Email, FolderView, Importance, SavedDraft } from "@/lib/types";
@@ -28,6 +29,7 @@ import {
   initials,
 } from "./helpers";
 import { ThreadView } from "./ThreadView";
+import { ThreadOutlineRail } from "./ThreadOutlineRail";
 import { QuotedText, segmentReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
 import { MeetingCard } from "./MeetingCard";
@@ -91,6 +93,76 @@ export function EmailReader({
   const zoomIn = () =>
     setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10));
   const [copied, setCopied] = useState(false);
+
+  // Outline rail (document-style TOC) in the LEFT gutter — show/hide toggle in
+  // the toolbar (a separate axis from カード/会話), persisted. Default ON.
+  const [showTree, setShowTree] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return localStorage.getItem("asanagi:thread-rail") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const toggleTree = () =>
+    setShowTree((v) => {
+      const nv = !v;
+      try {
+        localStorage.setItem("asanagi:thread-rail", nv ? "1" : "0");
+      } catch {
+        /* private mode — preference just won't stick */
+      }
+      return nv;
+    });
+  const isThread = !!thread && thread.length > 1;
+  // Scroll-spy: which conversation card is at the top of the reader (現在地),
+  // so the rail highlights it as you scroll. Also drives the rail's jump target.
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [activeMsgId, setActiveMsgId] = useState<string>("");
+  // Rail-jump signal → ThreadView expands this message's card; we then scroll.
+  const [expand, setExpand] = useState<{ id: string; n: number }>({
+    id: "",
+    n: 0,
+  });
+  const jumpToMsg = (id: string) => {
+    setActiveMsgId(id);
+    setExpand((e) => ({ id, n: e.n + 1 }));
+    setTimeout(() => {
+      document
+        .getElementById(`thread-msg-${id}`)
+        ?.scrollIntoView({ block: "start", behavior: "auto" });
+    }, 50);
+  };
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !thread || thread.length <= 1) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const refY = scroller.getBoundingClientRect().top + 96;
+      let best = "";
+      let bestTop = -Infinity;
+      for (const m of thread) {
+        const el = document.getElementById(`thread-msg-${m.id}`);
+        if (!el) continue;
+        const top = el.getBoundingClientRect().top;
+        if (top <= refY && top > bestTop) {
+          bestTop = top;
+          best = m.id;
+        }
+      }
+      if (best) setActiveMsgId(best);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    onScroll(); // deferred initial pass (avoids a synchronous set-state-in-effect)
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [thread]);
 
   // Esc で全画面を解除。
   useEffect(() => {
@@ -196,6 +268,14 @@ export function EmailReader({
         <Divider />
 
         {/* ② 表示 */}
+        {isThread && (
+          <IconBtn
+            icon={List}
+            title={t("reader.outline.toggle")}
+            onClick={toggleTree}
+            active={showTree}
+          />
+        )}
         <IconBtn
           icon={copied ? Check : Copy}
           title={copied ? t("reader.copied") : t("reader.copy")}
@@ -261,135 +341,149 @@ export function EmailReader({
         </button>
       )}
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-8 py-7">
-        <div
-          className={cn(
-            "mx-auto animate-in",
-            fullscreen ? "max-w-5xl" : "max-w-2xl",
+      {/* Body — a left outline rail (thread only, toggle in toolbar) beside the
+          content column, so the mail body keeps its width. */}
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-6 py-7">
+        <div className="flex gap-5">
+          {isThread && showTree && (
+            <ThreadOutlineRail
+              messages={thread}
+              activeId={activeMsgId}
+              onJump={jumpToMsg}
+            />
           )}
-        >
-          <h2 className="text-xl font-semibold leading-snug tracking-tight">
-            {email.subject}
-          </h2>
-
-          <div className="mt-4 flex items-center gap-3">
+          <div className="min-w-0 flex-1">
             <div
-              className="grid size-10 place-items-center rounded-full text-sm font-semibold text-white"
-              style={{ background: avatarColor(email.from.email) }}
-            >
-              {initials(email.from)}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-fg">{name}</p>
-              <p className="truncate text-xs text-fg-subtle">
-                {email.from.email}
-              </p>
-              {email.to.length > 0 && (
-                <p
-                  className="truncate text-xs text-fg-subtle"
-                  title={[
-                    `To: ${email.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`,
-                    email.cc?.length
-                      ? `Cc: ${email.cc.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`
-                      : "",
-                    email.bcc?.length
-                      ? `Bcc: ${email.bcc.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join("\n")}
-                >
-                  宛先: {email.to.map((a) => a.name || a.email).join("、")}
-                  {email.cc?.length
-                    ? `（CC: ${email.cc.map((a) => a.name || a.email).join("、")}）`
-                    : ""}
-                  {/* BCC exists only on our own sent copies — the sending record. */}
-                  {email.bcc?.length
-                    ? `（BCC: ${email.bcc.map((a) => a.name || a.email).join("、")}）`
-                    : ""}
-                </p>
+              className={cn(
+                "mx-auto animate-in",
+                fullscreen ? "max-w-5xl" : "max-w-2xl",
               )}
-            </div>
-            <span className="ml-auto text-xs text-fg-subtle">
-              {fullTime(email.date)}
-            </span>
-          </div>
+            >
+              <h2 className="text-xl font-semibold leading-snug tracking-tight">
+                {email.subject}
+              </h2>
 
-          {/* Meeting invite → calendar bridge (docs/05) */}
-          {email.invite && (
-            <MeetingCard emailId={email.id} invite={email.invite} />
-          )}
+              <div className="mt-4 flex items-center gap-3">
+                <div
+                  className="grid size-10 place-items-center rounded-full text-sm font-semibold text-white"
+                  style={{ background: avatarColor(email.from.email) }}
+                >
+                  {initials(email.from)}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-fg">{name}</p>
+                  <p className="truncate text-xs text-fg-subtle">
+                    {email.from.email}
+                  </p>
+                  {email.to.length > 0 && (
+                    <p
+                      className="truncate text-xs text-fg-subtle"
+                      title={[
+                        `To: ${email.to.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`,
+                        email.cc?.length
+                          ? `Cc: ${email.cc.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`
+                          : "",
+                        email.bcc?.length
+                          ? `Bcc: ${email.bcc.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ")}`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join("\n")}
+                    >
+                      宛先: {email.to.map((a) => a.name || a.email).join("、")}
+                      {email.cc?.length
+                        ? `（CC: ${email.cc.map((a) => a.name || a.email).join("、")}）`
+                        : ""}
+                      {/* BCC exists only on our own sent copies — the sending record. */}
+                      {email.bcc?.length
+                        ? `（BCC: ${email.bcc.map((a) => a.name || a.email).join("、")}）`
+                        : ""}
+                    </p>
+                  )}
+                </div>
+                <span className="ml-auto text-xs text-fg-subtle">
+                  {fullTime(email.date)}
+                </span>
+              </div>
 
-          {/* Single email: attachments near the top (below the header) so they're
+              {/* Meeting invite → calendar bridge (docs/05) */}
+              {email.invite && (
+                <MeetingCard emailId={email.id} invite={email.invite} />
+              )}
+
+              {/* Single email: attachments near the top (below the header) so they're
               always visible — critical for attachment-only mail with an empty body.
               While the live fetch is loading the metadata, show a placeholder so
               the mail never looks empty. In a thread they render inside each card. */}
-          {!(thread && thread.length > 1) &&
-            (email.attachments && email.attachments.length > 0 ? (
-              <AttachmentList
-                emailId={email.id}
-                attachments={email.attachments}
+              {!(thread && thread.length > 1) &&
+                (email.attachments && email.attachments.length > 0 ? (
+                  <AttachmentList
+                    emailId={email.id}
+                    attachments={email.attachments}
+                  />
+                ) : email.hasAttachment ? (
+                  <div className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-xs text-fg-muted">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    {t("reader.attachmentsLoading")}
+                  </div>
+                ) : null)}
+
+              {/* AI importance */}
+              <ImportanceBar
+                email={email}
+                classifying={classifying}
+                onFeedback={onImportanceFeedback}
               />
-            ) : email.hasAttachment ? (
-              <div className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-xs text-fg-muted">
-                <Loader2 className="size-3.5 animate-spin" />
-                {t("reader.attachmentsLoading")}
-              </div>
-            ) : null)}
 
-          {/* AI importance */}
-          <ImportanceBar
-            email={email}
-            classifying={classifying}
-            onFeedback={onImportanceFeedback}
-          />
+              {/* 自分用メモ（端末内のみ・AIに渡さない） */}
+              <PrivateNote emailId={email.id} onSaved={onNoteSaved} />
 
-          {/* 自分用メモ（端末内のみ・AIに渡さない） */}
-          <PrivateNote emailId={email.id} onSaved={onNoteSaved} />
-
-          {thread && thread.length > 1 ? (
-            <ThreadView
-              messages={thread}
-              selectedId={email.id}
-              onOpen={onOpenMessage}
-              onReplyMessage={onReplyMessage}
-              anchorHtml={email.html}
-              anchorAttachments={email.attachments}
-              highlight={highlight}
-            />
-          ) : (
-            <>
-              {email.html && (
-                <div className="mt-3 flex justify-end gap-1">
-                  <BodyModeButton
-                    label="HTML"
-                    active={!textMode}
-                    onClick={() => setTextMode(false)}
-                  />
-                  <BodyModeButton
-                    label={t("reader.textMode")}
-                    active={textMode}
-                    onClick={() => setTextMode(true)}
-                  />
-                </div>
-              )}
-              {email.html && !textMode ? (
-                <HtmlMailView
-                  html={email.html}
-                  fontScale={zoom}
+              {thread && thread.length > 1 ? (
+                <ThreadView
+                  messages={thread}
+                  selectedId={email.id}
+                  onOpen={onOpenMessage}
+                  onReplyMessage={onReplyMessage}
+                  anchorHtml={email.html}
+                  anchorAttachments={email.attachments}
                   highlight={highlight}
+                  expandId={expand.id}
+                  expandNonce={expand.n}
                 />
               ) : (
-                <SelectableText
-                  className="mt-6 whitespace-pre-wrap leading-7 text-fg/90"
-                  style={{ fontSize: `${Math.round(15 * zoom)}px` }}
-                >
-                  <QuotedText text={email.body} highlight={highlight} />
-                </SelectableText>
+                <>
+                  {email.html && (
+                    <div className="mt-3 flex justify-end gap-1">
+                      <BodyModeButton
+                        label="HTML"
+                        active={!textMode}
+                        onClick={() => setTextMode(false)}
+                      />
+                      <BodyModeButton
+                        label={t("reader.textMode")}
+                        active={textMode}
+                        onClick={() => setTextMode(true)}
+                      />
+                    </div>
+                  )}
+                  {email.html && !textMode ? (
+                    <HtmlMailView
+                      html={email.html}
+                      fontScale={zoom}
+                      highlight={highlight}
+                    />
+                  ) : (
+                    <SelectableText
+                      className="mt-6 whitespace-pre-wrap leading-7 text-fg/90"
+                      style={{ fontSize: `${Math.round(15 * zoom)}px` }}
+                    >
+                      <QuotedText text={email.body} highlight={highlight} />
+                    </SelectableText>
+                  )}
+                </>
               )}
-            </>
-          )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

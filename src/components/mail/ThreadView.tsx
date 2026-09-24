@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   ChevronDown,
-  List,
   Loader2,
   MessageCircle,
   Paperclip,
@@ -15,13 +14,7 @@ import type { Email, Attachment } from "@/lib/types";
 import type { ComposeAI, ComposeKind } from "./compose";
 import { ReplyButton, AiReplyButton } from "./ReplyButtons";
 import { cn } from "@/lib/utils";
-import {
-  avatarColor,
-  bodyPreview,
-  displayName,
-  fullTime,
-  initials,
-} from "./helpers";
+import { avatarColor, displayName, fullTime, initials } from "./helpers";
 import { ConversationBubbles } from "./ConversationBubbles";
 import { QuotedText } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
@@ -47,19 +40,12 @@ interface ThreadDigest {
 }
 
 const VIEW_PREF_KEY = "asanagi:thread-view";
-const RAIL_PREF_KEY = "asanagi:thread-rail";
 
 type ViewMode = "cards" | "chat";
 
 function loadViewPref(): ViewMode {
   if (typeof window === "undefined") return "cards";
   return localStorage.getItem(VIEW_PREF_KEY) === "chat" ? "chat" : "cards";
-}
-
-/** Outline rail defaults ON (document-style, always-visible table of contents). */
-function loadRailPref(): boolean {
-  if (typeof window === "undefined") return true;
-  return localStorage.getItem(RAIL_PREF_KEY) !== "0";
 }
 
 /** Full To/Cc/Bcc with addresses, for the recipient line's hover tooltip. */
@@ -85,9 +71,15 @@ export function ThreadView({
   anchorHtml,
   anchorAttachments,
   highlight,
+  expandId,
+  expandNonce,
 }: {
   messages: Email[];
   selectedId: string;
+  /** Rail-jump request from the reader: expand this message's card. */
+  expandId?: string;
+  /** Bumps per rail click so repeat clicks on the same message re-fire. */
+  expandNonce?: number;
   /** Re-anchor the reader to this message (open it as the current email). */
   onOpen?: (id: string) => void;
   /** Reply/forward to THIS specific message (per-message action buttons). */
@@ -191,79 +183,16 @@ export function ThreadView({
     }
   };
 
-  // Outline rail (document-style TOC): always visible beside the conversation,
-  // highlighting where you are. Default on; can be hidden for more width.
-  const [showRail, setShowRail] = useState<boolean>(loadRailPref);
-  const toggleRail = () =>
-    setShowRail((v) => {
-      const nv = !v;
-      try {
-        localStorage.setItem(RAIL_PREF_KEY, nv ? "1" : "0");
-      } catch {
-        /* private mode — preference just won't stick */
-      }
-      return nv;
-    });
-
-  // Which message is "現在地" — the one at the top of the reader as you scroll.
-  const [activeId, setActiveId] = useState<string>(selectedId);
-  // Clicking a rail item opens + snaps to that message and marks it current.
-  const scrollToMsg = (id: string) => {
-    setActiveId(id);
-    setOpen((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
-    setTimeout(() => {
-      document
-        .getElementById(`thread-msg-${id}`)
-        ?.scrollIntoView({ block: "start", behavior: "auto" });
-    }, 40);
-  };
-  // Scroll-spy: track the card currently at the top of the reader so the rail
-  // highlights 現在地. A scroll listener + getBoundingClientRect is used (rather
-  // than IntersectionObserver) because it's robust to the reader's inner scroll
-  // container and fires reliably on programmatic scrolls too.
-  const rootRef = useRef<HTMLDivElement>(null);
+  // The outline rail lives in the reader's left gutter (EmailReader). When a
+  // rail item is clicked it asks us to expand that message's card so the reader
+  // can scroll to it. expandNonce bumps each request so repeat clicks re-fire.
   useEffect(() => {
-    if (view !== "cards") return;
-    let scroller: HTMLElement | null = rootRef.current?.parentElement ?? null;
-    while (
-      scroller &&
-      !(
-        scroller.scrollHeight > scroller.clientHeight + 20 &&
-        /(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
-      )
-    ) {
-      scroller = scroller.parentElement;
-    }
-    const target: HTMLElement | Window = scroller ?? window;
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      // Reference line a little below the reader's top edge = "what I'm reading".
-      const refY = (scroller ? scroller.getBoundingClientRect().top : 0) + 96;
-      let best: string | null = null;
-      let bestTop = -Infinity;
-      for (const m of messages) {
-        const el = document.getElementById(`thread-msg-${m.id}`);
-        if (!el) continue;
-        const top = el.getBoundingClientRect().top;
-        // The last card whose top has passed the reference line = current.
-        if (top <= refY && top > bestTop) {
-          bestTop = top;
-          best = m.id;
-        }
-      }
-      if (best) setActiveId(best);
-    };
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(update);
-    };
-    target.addEventListener("scroll", onScroll, { passive: true });
-    update();
-    return () => {
-      target.removeEventListener("scroll", onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [messages, view]);
+    if (!expandId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- guarded (no-op if already open)
+    setOpen((prev) =>
+      prev.has(expandId) ? prev : new Set(prev).add(expandId),
+    );
+  }, [expandId, expandNonce]);
 
   const toggle = (id: string) =>
     setOpen((prev) => {
@@ -368,22 +297,14 @@ export function ThreadView({
         active={view === "chat"}
         onClick={() => changeView("chat")}
       />
-      {view === "cards" && messages.length > 1 && (
-        <ModeButton
-          icon={List}
-          label="アウトライン"
-          active={showRail}
-          onClick={toggleRail}
-        />
-      )}
     </div>
   );
 
   // Pin the mode switcher: in a long thread the reader auto-scrolls down to the
   // opened message, so a top-anchored toolbar would be buried far above. Sticky
-  // keeps カード/会話/アウトライン reachable while reading anywhere in the thread.
+  // keeps カード/会話 reachable while reading anywhere in the thread.
   const switcherBar = (
-    <div className="sticky top-0 z-20 -mx-8 mb-1 flex justify-end bg-bg/85 px-8 py-2 backdrop-blur">
+    <div className="sticky top-0 z-20 mb-1 flex justify-end bg-bg/85 py-2 backdrop-blur">
       {switcher}
     </div>
   );
@@ -399,264 +320,185 @@ export function ThreadView({
   }
 
   return (
-    <div ref={rootRef} className="mt-6 flex flex-col gap-3">
+    <div className="mt-6 flex flex-col gap-3">
       {switcherBar}
       {digestSection}
-      <div className="flex gap-4">
-        {showRail && messages.length > 1 && (
-          <ThreadOutlineRail
-            messages={messages}
-            activeId={activeId}
-            onJump={scrollToMsg}
-          />
-        )}
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          {messages.map((m) => {
-            const name = displayName(m.from);
-            const expanded = open.has(m.id);
-            // The message the user opened from the list — subtle amber tint so
-            // it's findable inside a long conversation.
-            const current = m.id === selectedId;
-            // Effective rich data: the on-demand fetch, or — for the anchor — the
-            // reader's already-loaded body/attachments so it shows instantly.
-            const full =
-              fullMap[m.id] ??
-              (current
-                ? { html: anchorHtml, attachments: anchorAttachments ?? [] }
-                : undefined);
-            return (
-              <div
-                key={m.id}
-                id={`thread-msg-${m.id}`}
-                ref={current ? currentRef : undefined}
-                className={cn(
-                  "rounded-xl border transition-colors scroll-mt-4",
-                  current
-                    ? "border-amber-300/70 bg-amber-50/60 dark:border-amber-300/30 dark:bg-amber-400/10"
-                    : m.state === "sent"
-                      ? // 自分の送信は accent 寄りに色付け（一目で自分の発言と分かる）
-                        "border-accent/40 bg-accent-soft/50"
-                      : "border-border bg-surface",
-                  expanded || current ? "" : "hover:border-accent/40",
-                )}
-              >
-                <div className="flex w-full items-center gap-2 px-4 py-3">
-                  <button
-                    onClick={() => toggle(m.id)}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+      <div className="flex flex-col gap-3">
+        {messages.map((m) => {
+          const name = displayName(m.from);
+          const expanded = open.has(m.id);
+          // The message the user opened from the list — subtle amber tint so
+          // it's findable inside a long conversation.
+          const current = m.id === selectedId;
+          // Effective rich data: the on-demand fetch, or — for the anchor — the
+          // reader's already-loaded body/attachments so it shows instantly.
+          const full =
+            fullMap[m.id] ??
+            (current
+              ? { html: anchorHtml, attachments: anchorAttachments ?? [] }
+              : undefined);
+          return (
+            <div
+              key={m.id}
+              id={`thread-msg-${m.id}`}
+              ref={current ? currentRef : undefined}
+              className={cn(
+                "rounded-xl border transition-colors scroll-mt-4",
+                current
+                  ? "border-amber-300/70 bg-amber-50/60 dark:border-amber-300/30 dark:bg-amber-400/10"
+                  : m.state === "sent"
+                    ? // 自分の送信は accent 寄りに色付け（一目で自分の発言と分かる）
+                      "border-accent/40 bg-accent-soft/50"
+                    : "border-border bg-surface",
+                expanded || current ? "" : "hover:border-accent/40",
+              )}
+            >
+              <div className="flex w-full items-center gap-2 px-4 py-3">
+                <button
+                  onClick={() => toggle(m.id)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                  <div
+                    className="grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold text-white"
+                    style={{ background: avatarColor(m.from.email) }}
                   >
-                    <div
-                      className="grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold text-white"
-                      style={{ background: avatarColor(m.from.email) }}
-                    >
-                      {initials(m.from)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium">
-                          {name}
-                        </span>
-                        {m.state === "sent" && (
-                          <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                            自分
-                          </span>
-                        )}
+                    {initials(m.from)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">
+                        {name}
                       </span>
-                      {m.to.length > 0 && (
-                        <span
-                          title={recipientTitle(m)}
-                          className={cn(
-                            "block text-xs text-fg-subtle",
-                            // Open the card → recipients expand with the body (one click).
-                            expanded
-                              ? "whitespace-normal break-words"
-                              : "truncate",
-                          )}
-                        >
-                          宛先: {m.to.map((a) => a.name || a.email).join("、")}
-                          {m.cc?.length
-                            ? `（CC: ${m.cc.map((a) => a.name || a.email).join("、")}）`
-                            : ""}
+                      {m.state === "sent" && (
+                        <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                          自分
                         </span>
                       )}
-                      {!expanded && (
-                        <p className="truncate text-xs text-fg-subtle">
-                          {m.snippet}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                  {/* 📎 → download bubble right here (no scrolling up to the top). */}
-                  {/* Attachment indicator → expand the card so the files show
-                  inline (in-thread, not a detached popover). */}
-                  {m.hasAttachment && (
-                    <button
-                      onClick={() => setOpen((prev) => new Set(prev).add(m.id))}
-                      title="添付ファイル（展開して表示）"
-                      aria-label="添付ファイルを表示"
-                      className="grid size-7 shrink-0 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
-                    >
-                      <Paperclip className="size-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => toggle(m.id)}
-                    className="flex shrink-0 items-center gap-1"
-                  >
-                    <span className="text-xs text-fg-subtle">
-                      {fullTime(m.date)}
                     </span>
-                    <ChevronDown
-                      className={cn(
-                        "size-4 text-fg-subtle transition-transform",
-                        expanded && "rotate-180",
-                      )}
-                    />
+                    {m.to.length > 0 && (
+                      <span
+                        title={recipientTitle(m)}
+                        className={cn(
+                          "block text-xs text-fg-subtle",
+                          // Open the card → recipients expand with the body (one click).
+                          expanded
+                            ? "whitespace-normal break-words"
+                            : "truncate",
+                        )}
+                      >
+                        宛先: {m.to.map((a) => a.name || a.email).join("、")}
+                        {m.cc?.length
+                          ? `（CC: ${m.cc.map((a) => a.name || a.email).join("、")}）`
+                          : ""}
+                      </span>
+                    )}
+                    {!expanded && (
+                      <p className="truncate text-xs text-fg-subtle">
+                        {m.snippet}
+                      </p>
+                    )}
+                  </div>
+                </button>
+                {/* 📎 → download bubble right here (no scrolling up to the top). */}
+                {/* Attachment indicator → expand the card so the files show
+                  inline (in-thread, not a detached popover). */}
+                {m.hasAttachment && (
+                  <button
+                    onClick={() => setOpen((prev) => new Set(prev).add(m.id))}
+                    title="添付ファイル（展開して表示）"
+                    aria-label="添付ファイルを表示"
+                    className="grid size-7 shrink-0 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
+                  >
+                    <Paperclip className="size-4" />
                   </button>
-                </div>
-                {expanded && (
-                  <div className="rounded-b-xl border-t border-border bg-surface px-4 py-4">
-                    {/* Per-message actions: same split buttons as the reader bar
+                )}
+                <button
+                  onClick={() => toggle(m.id)}
+                  className="flex shrink-0 items-center gap-1"
+                >
+                  <span className="text-xs text-fg-subtle">
+                    {fullTime(m.date)}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "size-4 text-fg-subtle transition-transform",
+                      expanded && "rotate-180",
+                    )}
+                  />
+                </button>
+              </div>
+              {expanded && (
+                <div className="rounded-b-xl border-t border-border bg-surface px-4 py-4">
+                  {/* Per-message actions: same split buttons as the reader bar
                     (返信/AIで返信＋メニューに 全員に返信/AIで全員に返信/転送) so
                     it's clear which mail you're answering — no scrolling up. */}
-                    {(onReplyMessage || (onOpen && m.id !== selectedId)) && (
-                      <div className="mb-3 flex flex-wrap items-center gap-2">
-                        {onReplyMessage && (
-                          <>
-                            <ReplyButton
-                              onReply={(kind, mode) =>
-                                onReplyMessage(m.id, kind, mode)
-                              }
-                            />
-                            <AiReplyButton
-                              onReply={(kind, mode) =>
-                                onReplyMessage(m.id, kind, mode)
-                              }
-                            />
-                          </>
-                        )}
-                        {onOpen && m.id !== selectedId && (
-                          <button
-                            onClick={() => onOpen(m.id)}
-                            title="このメールをリーダーで開く（重要学習などに使えます）"
-                            className="ml-auto flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
-                          >
-                            このメールを開く
-                            <ArrowUpRight className="size-3" />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {/* Each message's attachments render inline in its own card —
+                  {(onReplyMessage || (onOpen && m.id !== selectedId)) && (
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      {onReplyMessage && (
+                        <>
+                          <ReplyButton
+                            onReply={(kind, mode) =>
+                              onReplyMessage(m.id, kind, mode)
+                            }
+                          />
+                          <AiReplyButton
+                            onReply={(kind, mode) =>
+                              onReplyMessage(m.id, kind, mode)
+                            }
+                          />
+                        </>
+                      )}
+                      {onOpen && m.id !== selectedId && (
+                        <button
+                          onClick={() => onOpen(m.id)}
+                          title="このメールをリーダーで開く（重要学習などに使えます）"
+                          className="ml-auto flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                        >
+                          このメールを開く
+                          <ArrowUpRight className="size-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {/* Each message's attachments render inline in its own card —
                     including the anchor — so the whole thread is consistent.
                     Gate on the actually-fetched list, not the cached
                     hasAttachment flag (which can be stale and hide real files). */}
-                    {full?.attachments?.length ? (
-                      <AttachmentList
-                        emailId={m.id}
-                        attachments={full.attachments}
-                      />
-                    ) : m.hasAttachment ? (
-                      <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-xs text-fg-muted">
-                        <Loader2 className="size-3.5 animate-spin" />
-                        添付ファイルを読み込み中…
-                      </div>
-                    ) : null}
-                    {/* Body: rich HTML (indented quotes + inline images) once loaded;
+                  {full?.attachments?.length ? (
+                    <AttachmentList
+                      emailId={m.id}
+                      attachments={full.attachments}
+                    />
+                  ) : m.hasAttachment ? (
+                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-xs text-fg-muted">
+                      <Loader2 className="size-3.5 animate-spin" />
+                      添付ファイルを読み込み中…
+                    </div>
+                  ) : null}
+                  {/* Body: rich HTML (indented quotes + inline images) once loaded;
                     plain text fallback while fetching or when there's no HTML. */}
-                    {full?.html ? (
-                      <HtmlMailView
-                        html={full.html}
-                        embedded
-                        highlight={highlight}
-                      />
-                    ) : loading.has(m.id) && !m.body ? (
-                      <p className="flex items-center gap-1.5 text-xs text-fg-subtle">
-                        <Loader2 className="size-3.5 animate-spin" />{" "}
-                        読み込み中…
-                      </p>
-                    ) : (
-                      <SelectableText className="whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
-                        <QuotedText text={m.body} highlight={highlight} />
-                      </SelectableText>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Document-style outline rail: an always-visible table of contents beside the
- * conversation. One line per message; the message you're reading (現在地) is
- * highlighted via scroll-spy, and clicking jumps to it. Sticky so it stays put
- * while you scroll the thread. Hidden on narrow viewports (no room).
- */
-function ThreadOutlineRail({
-  messages,
-  activeId,
-  onJump,
-}: {
-  messages: Email[];
-  activeId: string;
-  onJump: (id: string) => void;
-}) {
-  return (
-    <nav
-      aria-label="スレッドのアウトライン"
-      className="sticky top-12 hidden max-h-[calc(100vh-9rem)] w-56 shrink-0 self-start overflow-y-auto lg:block"
-    >
-      <ul className="flex flex-col">
-        {messages.map((m) => {
-          const active = m.id === activeId;
-          const sent = m.state === "sent";
-          const who = sent ? "自分" : displayName(m.from);
-          const d = new Date(m.date);
-          const md = `${d.getMonth() + 1}/${d.getDate()}`;
-          // 件名はスレッド内で共通なので、各メッセージの区別は差出人＋本文の要点で行う。
-          // 宛名・定型挨拶・引用をスキップした「意味のある冒頭」を出す（AI不要）。
-          const preview = bodyPreview(m) || "（本文なし）";
-          return (
-            <li key={m.id}>
-              <button
-                onClick={() => onJump(m.id)}
-                title={`${who}｜${preview}`}
-                className={cn(
-                  "flex w-full flex-col gap-0.5 border-l-2 py-1.5 pl-2 pr-1.5 text-left leading-tight transition-colors",
-                  active
-                    ? "border-accent bg-accent-soft/50 text-fg"
-                    : "border-border text-fg-subtle hover:border-fg-subtle hover:text-fg",
-                )}
-              >
-                <span className="flex w-full items-center gap-1.5 text-[11px]">
-                  <span
-                    className="size-1.5 shrink-0 rounded-full"
-                    style={{ background: avatarColor(m.from.email) }}
-                  />
-                  <span className={cn("truncate", active && "font-semibold")}>
-                    {who}
-                  </span>
-                  {m.hasAttachment && (
-                    <Paperclip className="size-2.5 shrink-0 opacity-70" />
+                  {full?.html ? (
+                    <HtmlMailView
+                      html={full.html}
+                      embedded
+                      highlight={highlight}
+                    />
+                  ) : loading.has(m.id) && !m.body ? (
+                    <p className="flex items-center gap-1.5 text-xs text-fg-subtle">
+                      <Loader2 className="size-3.5 animate-spin" /> 読み込み中…
+                    </p>
+                  ) : (
+                    <SelectableText className="whitespace-pre-wrap text-[15px] leading-7 text-fg/90">
+                      <QuotedText text={m.body} highlight={highlight} />
+                    </SelectableText>
                   )}
-                  <span className="ml-auto shrink-0 text-[10px] tabular-nums opacity-70">
-                    {md}
-                  </span>
-                </span>
-                <span className="line-clamp-2 w-full text-[10px] text-fg-subtle">
-                  {preview}
-                </span>
-              </button>
-            </li>
+                </div>
+              )}
+            </div>
           );
         })}
-      </ul>
-    </nav>
+      </div>
+    </div>
   );
 }
 
