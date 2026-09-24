@@ -578,17 +578,29 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     }
   }, []);
 
-  // Load the conversation for the opened email (cache/server-side threading).
+  // Load the conversation for the opened email. Cache-first (instant, ~20ms)
+  // then revalidate live in the background — the live provider.thread() can take
+  // ~8s for a big Gmail thread (and IMAP get ~15s), which used to block the
+  // whole conversation (rail + cards) from appearing. stale-while-revalidate.
   const loadThread = useCallback(async (email: Email) => {
     const token = ++threadToken.current;
     setThread(null);
     if (!email.account || !email.threadId) return;
+    const key = encodeURIComponent(`${email.account}/${email.threadId}`);
+    // 1) Cache-first paint — the conversation shows immediately.
     try {
-      const res = await fetch(
-        `/api/threads/${encodeURIComponent(`${email.account}/${email.threadId}`)}`,
-      );
+      const cdata = await fetch(`/api/threads/${key}?cached=1`).then((r) => r.json());
+      if (token === threadToken.current && cdata.messages?.length) {
+        setThread(cdata.messages);
+      }
+    } catch {
+      /* cache is best-effort — fall through to live */
+    }
+    // 2) Revalidate live (server-side threading / freshest state) and replace.
+    try {
+      const res = await fetch(`/api/threads/${key}`);
       const data = await res.json();
-      if (token === threadToken.current) setThread(data.messages ?? null);
+      if (token === threadToken.current && data.messages) setThread(data.messages);
     } catch {
       /* thread view is progressive enhancement */
     }
