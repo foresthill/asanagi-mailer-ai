@@ -343,8 +343,11 @@ export function EmailReader({
 
       {/* Body — a left outline rail (thread only, toggle in toolbar) beside the
           content column, so the mail body keeps its width. */}
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-6 py-7">
-        <div className="flex gap-5">
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-6 pb-7">
+        {/* Top spacing on the inner row (not the scroller) so the thread's
+            sticky カード/会話 bar pins flush to the top — a py on the scroll
+            container leaves a gap above sticky top-0 that cards show through. */}
+        <div className="flex gap-5 pt-7">
           {isThread && showTree && (
             <ThreadOutlineRail
               messages={thread}
