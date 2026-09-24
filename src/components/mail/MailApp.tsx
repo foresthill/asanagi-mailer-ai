@@ -188,6 +188,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [counts, setCounts] = useState<Partial<Record<FolderView, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
   const [draftsCount, setDraftsCount] = useState(0);
+  // Unsent drafts left untouched for 3+ days — inbox aged-draft reminder.
+  const [agedDraftCount, setAgedDraftCount] = useState(0);
   // 実際の下書き一覧（メールから「続きを書く」で呼び出す・一覧に📝を出すため）。
   const [drafts, setDrafts] = useState<SavedDraft[]>([]);
   // Email ids that have a private note (自分用メモ) — for the list 📝 badge.
@@ -212,6 +214,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       const list = (data.drafts ?? []) as SavedDraft[];
       setDraftsCount(list.length);
       setDrafts(list);
+      const agedBefore = Date.now() - 3 * 24 * 60 * 60 * 1000;
+      setAgedDraftCount(
+        list.filter((d) => new Date(d.updatedAt).getTime() < agedBefore).length,
+      );
     } catch {
       /* count badge is non-critical */
     }
@@ -1216,6 +1222,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onTrash={trash}
       onToggleStar={toggleStar}
       onRefresh={() => loadList(folder, account)}
+      agedDraftCount={agedDraftCount}
+      onOpenDrafts={() => setShowDrafts(true)}
       width={listWidth}
       horizontal={layout === "geek"}
       height={listHeight}
