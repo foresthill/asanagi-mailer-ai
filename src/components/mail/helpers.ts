@@ -97,10 +97,16 @@ export function bodyPreview(email: {
     /^>/.test(l) || // 引用
     /^[-—=_*]{2,}$/.test(l); // 区切り線
   const kept = lines.filter((l) => !isBoiler(l));
-  const text = (kept.length ? kept : lines)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  let text = (kept.length ? kept : lines).join(" ").replace(/\s+/g, " ").trim();
+  // Strip a leading self-introduction「〜の〜です。」(会社の氏名です) — it repeats
+  // across a thread and crowds out the real content. Require a「の」so short
+  // content sentences ending in「です。」aren't dropped.
+  const selfIntro = text.match(
+    /^[^。.！？!?]{2,30}の[^。.！？!?]{1,15}(です|でございます|と申します)[。.]/,
+  );
+  if (selfIntro && text.length > selfIntro[0].length + 4) {
+    text = text.slice(selfIntro[0].length).trim();
+  }
   return text || email.snippet || email.subject || "";
 }
 
