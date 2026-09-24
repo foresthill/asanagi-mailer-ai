@@ -17,6 +17,7 @@ import {
   Check,
   List,
   PenLine,
+  ShieldAlert,
 } from "lucide-react";
 import type { Email, FolderView, Importance, SavedDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ export function EmailReader({
   onReplyMessage,
   onToggleStar,
   onImportanceFeedback,
+  onReportSpam,
   onNoteSaved,
   onOpenMessage,
   highlight,
@@ -70,6 +72,8 @@ export function EmailReader({
   onReplyMessage?: (id: string, kind: ComposeKind, mode: ComposeAI) => void;
   onToggleStar: () => void;
   onImportanceFeedback: (importance: Importance) => void;
+  /** Report as spam/phishing → learn the sender + move to trash. */
+  onReportSpam?: () => void;
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
   onNoteSaved?: () => void;
   /** Re-anchor the reader to a thread message (open it as the current email). */
@@ -264,6 +268,14 @@ export function EmailReader({
             onClick={onRestore}
           />
         )}
+        {onReportSpam && folder !== "trashed" && folder !== "sent" && (
+          <IconBtn
+            icon={ShieldAlert}
+            title={t("reader.reportSpam")}
+            onClick={onReportSpam}
+            tone="danger"
+          />
+        )}
 
         <Divider />
 
@@ -339,6 +351,22 @@ export function EmailReader({
             {t("draft.resume")}
           </span>
         </button>
+      )}
+
+      {/* 危険メール警告（フィッシング/スパム）— リンクや認証情報の入力を促す詐欺への
+          注意喚起。重要度とは別軸で、開いた瞬間に最上部で警告する。 */}
+      {email.threat && (
+        <div className="flex items-start gap-2 border-b border-high/40 bg-high-soft px-5 py-2.5 text-xs text-high">
+          <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+          <p className="leading-relaxed">
+            <span className="font-semibold">
+              {email.threat === "phishing"
+                ? t("threat.phishing.title")
+                : t("threat.spam.title")}
+            </span>
+            {email.threat === "phishing" && <> {t("threat.phishing.body")}</>}
+          </p>
+        </div>
       )}
 
       {/* Body — a left outline rail (thread only, toggle in toolbar) beside the

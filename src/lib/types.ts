@@ -76,6 +76,9 @@ export interface Email {
   /** Total cached messages in this conversation (spans folders). Labels the
    *  list's conversation badge with the true size = what inline expansion shows. */
   threadCount?: number;
+  /** Detected threat class — dangerous mail is a different axis from importance:
+   *  a newsletter is "low" but safe, phishing is "low" AND dangerous. */
+  threat?: "spam" | "phishing";
   /** Meeting invite found in this mail (live fetches only — not cached). */
   invite?: MeetingInvite;
   /** Attachments on this mail (metadata only — bytes fetched on demand). */
@@ -101,7 +104,8 @@ export interface Draft {
   body: string;
 }
 
-export type SendStatus = "scheduled" | "sending" | "sent" | "failed" | "canceled";
+export type SendStatus =
+  "scheduled" | "sending" | "sent" | "failed" | "canceled";
 
 /**
  * An outgoing attachment carried with a send/draft/schedule. Bytes travel as

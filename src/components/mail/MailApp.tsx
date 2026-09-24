@@ -597,6 +597,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       const patch = {
         importance: data.importance as Importance,
         importanceReason: data.reason,
+        threat: (data.threat as Email["threat"]) ?? undefined,
       };
       setSelected((s) => (s && s.id === email.id ? { ...s, ...patch } : s));
       setEmails((list) =>
@@ -835,6 +836,24 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     mutateState(ids, "trashed", "ゴミ箱に移動しました");
   const restore = (ids: string[]) =>
     mutateState(ids, "inbox", "受信箱に戻しました");
+
+  // 迷惑メール報告: 差出人/ドメインを危険として学習し、ゴミ箱へ移動する。
+  const reportSpam = async (email: Email) => {
+    try {
+      await fetch(`/api/emails/${encodeURIComponent(email.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reportSpam: { fromEmail: email.from.email } }),
+      });
+    } catch {
+      /* learning is best-effort */
+    }
+    await mutateState(
+      [email.id],
+      "trashed",
+      "迷惑メールとして報告し、ゴミ箱へ移動しました",
+    );
+  };
 
   const toggleGrouping = () =>
     setGrouping((v) => {
@@ -1215,6 +1234,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onReplyMessage={replyToMessage}
       onToggleStar={() => selected && toggleStar(selected.id)}
       onImportanceFeedback={onImportanceFeedback}
+      onReportSpam={() => selected && reportSpam(selected)}
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
       onOpenMessage={selectEmail}

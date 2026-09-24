@@ -8,8 +8,9 @@ import {
   threadCounts,
   upsertEmails,
 } from "@/lib/db";
-import { getEmailSettings, listSignals } from "@/lib/store";
+import { getEmailSettings, listSignals, listThreatSenders } from "@/lib/store";
 import { annotateImportance } from "@/lib/importance";
+import { detectThreat } from "@/lib/threat";
 import type { Email, FolderView } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -48,15 +49,20 @@ function markReplied(account: string, emails: Email[]): Email[] {
 async function finalize(lists: Email[][], state: FolderView): Promise<Email[]> {
   const cfg = state === "inbox" ? await getEmailSettings() : null;
   const cutoffMs: Record<string, number> = {
-    gmail: cfg ? +new Date(cfg.gmail?.inboxCutoff ?? cfg.inboxCutoff ?? NaN) : NaN,
-    imap: cfg ? +new Date(cfg.imap?.inboxCutoff ?? cfg.inboxCutoff ?? NaN) : NaN,
+    gmail: cfg
+      ? +new Date(cfg.gmail?.inboxCutoff ?? cfg.inboxCutoff ?? NaN)
+      : NaN,
+    imap: cfg
+      ? +new Date(cfg.imap?.inboxCutoff ?? cfg.inboxCutoff ?? NaN)
+      : NaN,
   };
   const afterHorizon = (e: Email) => {
     const ms = cutoffMs[e.account ?? ""];
     return ms === undefined || Number.isNaN(ms) || +new Date(e.date) >= ms;
   };
   const signals = await listSignals();
-  return annotateImportance(
+  const threatSenders = await listThreatSenders();
+  const annotated = annotateImportance(
     lists
       .flat()
       .filter(afterHorizon)
@@ -64,6 +70,12 @@ async function finalize(lists: Email[][], state: FolderView): Promise<Email[]> {
       .slice(0, LIST_CAP),
     signals,
   );
+  // Flag dangerous mail (phishing/spam) for the list — free, offline, distinct
+  // from importance. The AI refines this on open.
+  return annotated.map((e) => {
+    const threat = detectThreat(e, threatSenders);
+    return threat ? { ...e, threat } : e;
+  });
 }
 
 /** How many messages the list shows. The provider live-fetches only its newest
@@ -85,7 +97,8 @@ export async function GET(req: Request) {
 
   try {
     const accounts = await listAccounts();
-    const targets = account === "all" ? accounts : accounts.filter((a) => a.key === account);
+    const targets =
+      account === "all" ? accounts : accounts.filter((a) => a.key === account);
     if (!targets.length) {
       return NextResponse.json({ emails: [], accounts, stale: [] });
     }
@@ -96,7 +109,11 @@ export async function GET(req: Request) {
       const signals = await listSignals();
       const emails = annotateImportance(
         targets
-          .flatMap((a) => markReplied(a.key, cachedStarred([a.key])).map((e) => tag(a.key, e)))
+          .flatMap((a) =>
+            markReplied(a.key, cachedStarred([a.key])).map((e) =>
+              tag(a.key, e),
+            ),
+          )
           .sort((a, b) => +new Date(b.date) - +new Date(a.date)),
         signals,
       );
@@ -108,10 +125,16 @@ export async function GET(req: Request) {
     // in the background (stale-while-revalidate). stale = all targets.
     if (url.searchParams.get("cached") === "1") {
       const lists = targets.map((a) =>
-        markReplied(a.key, cachedList([a.key], state)).map((e) => tag(a.key, e)),
+        markReplied(a.key, cachedList([a.key], state)).map((e) =>
+          tag(a.key, e),
+        ),
       );
       const emails = await finalize(lists, state);
-      return NextResponse.json({ emails, accounts, stale: targets.map((a) => a.key) });
+      return NextResponse.json({
+        emails,
+        accounts,
+        stale: targets.map((a) => a.key),
+      });
     }
 
     const stale: string[] = [];
@@ -129,11 +152,15 @@ export async function GET(req: Request) {
             cachedList([a.key], state, LIST_CAP).map((e) => [e.id, e]),
           );
           for (const e of live) merged.set(e.id, e);
-          return markReplied(a.key, [...merged.values()]).map((e) => tag(a.key, e));
+          return markReplied(a.key, [...merged.values()]).map((e) =>
+            tag(a.key, e),
+          );
         } catch {
           // Provider unreachable → serve the local cache for this account.
           stale.push(a.key);
-          return markReplied(a.key, cachedList([a.key], state)).map((e) => tag(a.key, e));
+          return markReplied(a.key, cachedList([a.key], state)).map((e) =>
+            tag(a.key, e),
+          );
         }
       }),
     );
@@ -154,9 +181,15 @@ export async function GET(req: Request) {
             const missing = ids.filter((id) => !have.has(id)).slice(0, 50);
             if (!missing.length) continue;
             const fetched = (
-              await Promise.all(missing.map((id) => provider.get(id).catch(() => null)))
+              await Promise.all(
+                missing.map((id) => provider.get(id).catch(() => null)),
+              )
             ).filter((e): e is Email => !!e);
-            if (fetched.length) upsertEmails(a.key, fetched.map((e) => ({ ...e, html: undefined })));
+            if (fetched.length)
+              upsertEmails(
+                a.key,
+                fetched.map((e) => ({ ...e, html: undefined })),
+              );
           } catch {
             /* backfill is best-effort */
           }

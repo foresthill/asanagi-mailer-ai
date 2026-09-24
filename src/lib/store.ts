@@ -11,6 +11,7 @@ import type {
   ScheduledSend,
   SavedDraft,
 } from "@/lib/types";
+import type { ThreatSenders } from "./threat";
 
 /**
  * Tiny file-backed JSON store. Good enough for local MVP persistence
@@ -19,7 +20,8 @@ import type {
  */
 // Desktop (Tauri) builds set ASANAGI_DATA_DIR to the OS app-data dir; dev/web
 // fall back to ./.data (current behavior unchanged).
-const DATA_DIR = process.env.ASANAGI_DATA_DIR || path.join(process.cwd(), ".data");
+const DATA_DIR =
+  process.env.ASANAGI_DATA_DIR || path.join(process.cwd(), ".data");
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
   try {
@@ -32,7 +34,11 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
 
 async function writeJson<T>(file: string, data: T): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(path.join(DATA_DIR, file), JSON.stringify(data, null, 2), "utf8");
+  await fs.writeFile(
+    path.join(DATA_DIR, file),
+    JSON.stringify(data, null, 2),
+    "utf8",
+  );
   // Learned state (signals / メモ / 署名 / notes) → local-only git history
   // (best-effort, debounced; secrets & the DB are never tracked). See
   // learning-history.ts. Non-learning files (secrets etc.) are skipped.
@@ -85,7 +91,9 @@ export async function getEmailSettings(): Promise<EmailSettings> {
  * Merge a patch into stored email settings. Within `gmail` / `imap`, blank
  * strings clear that field (e.g. disconnect = { gmail: { refreshToken: "" } }).
  */
-export async function saveEmailSettings(patch: EmailSettings): Promise<EmailSettings> {
+export async function saveEmailSettings(
+  patch: EmailSettings,
+): Promise<EmailSettings> {
   const cur = await getEmailSettings();
   const next: EmailSettings = { ...cur };
   if (patch.active) next.active = patch.active;
@@ -145,7 +153,9 @@ export async function updateScheduled(
 /** Return scheduled sends whose time has arrived and are still pending. */
 export async function dueScheduled(now = new Date()): Promise<ScheduledSend[]> {
   const all = await listScheduled();
-  return all.filter((s) => s.status === "scheduled" && new Date(s.sendAt) <= now);
+  return all.filter(
+    (s) => s.status === "scheduled" && new Date(s.sendAt) <= now,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +199,11 @@ export async function getNote(id: string): Promise<string> {
 /** Set (or clear, when blank) the private note for one email id. */
 export async function setNote(id: string, text: string): Promise<void> {
   const all = await readJson<NoteMap>(NOTES, {});
-  if (text.trim()) all[id] = { text: text.slice(0, 4000), updatedAt: new Date().toISOString() };
+  if (text.trim())
+    all[id] = {
+      text: text.slice(0, 4000),
+      updatedAt: new Date().toISOString(),
+    };
   else delete all[id];
   await writeJson(NOTES, all);
 }
@@ -261,7 +275,10 @@ export async function getReplySignature(account?: string): Promise<string> {
   return all[account] ?? "";
 }
 
-export async function saveReplySignature(account: string, text: string): Promise<void> {
+export async function saveReplySignature(
+  account: string,
+  text: string,
+): Promise<void> {
   const all = await getReplySignatures();
   const trimmed = text.slice(0, 2000);
   if (trimmed.trim()) all[account] = trimmed;
@@ -294,7 +311,9 @@ export async function recordImportanceFeedback(
 
   const upsert = (pattern: string, kind: ImportanceSignal["kind"]) => {
     if (!pattern) return;
-    const existing = signals.find((s) => s.kind === kind && s.pattern === pattern);
+    const existing = signals.find(
+      (s) => s.kind === kind && s.pattern === pattern,
+    );
     if (existing) {
       // If the user flips their judgment, move toward the new label and reset weight.
       if (existing.importance === importance) {
@@ -327,6 +346,53 @@ export async function recordImportanceFeedback(
     upsert(domain, "domain");
   }
   await writeJson(SIGNALS, signals);
+}
+
+// ---------------------------------------------------------------------------
+// 迷惑メール報告の学習 — ユーザーが「迷惑メール/フィッシング」と報告した差出人/
+// ドメインを憶えて、以降そのメールを危険として自動フラグ（detectThreat が参照）。
+// ---------------------------------------------------------------------------
+const THREAT_SENDERS = "threat-senders.json";
+
+interface ThreatSenderEntry {
+  pattern: string;
+  kind: "sender" | "domain";
+  weight: number;
+  updatedAt: string;
+}
+
+export async function listThreatSenders(): Promise<ThreatSenders> {
+  const rows = await readJson<ThreatSenderEntry[]>(THREAT_SENDERS, []);
+  return {
+    senders: new Set(
+      rows.filter((r) => r.kind === "sender").map((r) => r.pattern),
+    ),
+    domains: new Set(
+      rows.filter((r) => r.kind === "domain").map((r) => r.pattern),
+    ),
+  };
+}
+
+/** Remember "this sender is spam/phishing" (sender + domain). */
+export async function recordThreatReport(
+  fromEmail: string,
+  now = new Date(),
+): Promise<void> {
+  const rows = await readJson<ThreatSenderEntry[]>(THREAT_SENDERS, []);
+  const domain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
+  const upsert = (pattern: string, kind: ThreatSenderEntry["kind"]) => {
+    if (!pattern) return;
+    const ex = rows.find((r) => r.kind === kind && r.pattern === pattern);
+    if (ex) {
+      ex.weight += 1;
+      ex.updatedAt = now.toISOString();
+    } else {
+      rows.push({ pattern, kind, weight: 1, updatedAt: now.toISOString() });
+    }
+  };
+  upsert(fromEmail, "sender");
+  upsert(domain, "domain");
+  await writeJson(THREAT_SENDERS, rows);
 }
 
 // ---------------------------------------------------------------------------
@@ -371,7 +437,13 @@ export async function recordSweepAction(
       }
       ex.updatedAt = now.toISOString();
     } else {
-      all.push({ pattern, kind, action, weight: 1, updatedAt: now.toISOString() });
+      all.push({
+        pattern,
+        kind,
+        action,
+        weight: 1,
+        updatedAt: now.toISOString(),
+      });
     }
   };
   upsert(fromEmail, "sender");
@@ -385,7 +457,9 @@ export function guessSweepAction(
   all: SweepActionSignal[],
 ): SweepLearnAction | undefined {
   const domain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
-  const sender = all.find((s) => s.kind === "sender" && s.pattern === fromEmail);
+  const sender = all.find(
+    (s) => s.kind === "sender" && s.pattern === fromEmail,
+  );
   if (sender) return sender.action;
   return all.find((s) => s.kind === "domain" && s.pattern === domain)?.action;
 }
@@ -399,11 +473,15 @@ export function guessFromSignals(
   // Most specific first: project (repo) > sender > domain. So a per-project
   // rule overrides a broad「github.com は低」and vice-versa.
   if (projectKey) {
-    const proj = signals.find((s) => s.kind === "project" && s.pattern === projectKey);
+    const proj = signals.find(
+      (s) => s.kind === "project" && s.pattern === projectKey,
+    );
     if (proj) return proj.importance;
   }
   const domain = fromEmail.includes("@") ? fromEmail.split("@")[1] : "";
-  const sender = signals.find((s) => s.kind === "sender" && s.pattern === fromEmail);
+  const sender = signals.find(
+    (s) => s.kind === "sender" && s.pattern === fromEmail,
+  );
   if (sender) return sender.importance;
   const dom = signals.find((s) => s.kind === "domain" && s.pattern === domain);
   if (dom) return dom.importance;
