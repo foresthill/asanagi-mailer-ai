@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ScrollText, Loader2, ChevronRight } from "lucide-react";
 import { relativeTime } from "./helpers";
+import { useI18n } from "@/lib/i18n";
 import { CostDashboard } from "./CostDashboard";
 
 interface AiLogEntry {
@@ -24,20 +25,20 @@ function parseAudit(
 ): { total: number; residual: number; masked: Record<string, number> } | null {
   if (!raw) return null;
   try {
-    const a = JSON.parse(raw) as { total?: number; residual?: number; masked?: Record<string, number> };
-    return { total: a.total ?? 0, residual: a.residual ?? 0, masked: a.masked ?? {} };
+    const a = JSON.parse(raw) as {
+      total?: number;
+      residual?: number;
+      masked?: Record<string, number>;
+    };
+    return {
+      total: a.total ?? 0,
+      residual: a.residual ?? 0,
+      masked: a.masked ?? {},
+    };
   } catch {
     return null;
   }
 }
-
-const KIND_LABEL: Record<string, string> = {
-  reply: "返信生成",
-  digest: "経緯要約",
-  suggest: "添削",
-  classify: "重要度判定",
-  sweep: "朝の一凪",
-};
 
 function usd(n: number): string {
   return n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
@@ -49,6 +50,7 @@ function usd(n: number): string {
  * (local-first): nothing here is sent anywhere.
  */
 export function AiLogView() {
+  const { t } = useI18n();
   const [entries, setEntries] = useState<AiLogEntry[] | null>(null);
   const [openId, setOpenId] = useState<number | null>(null);
 
@@ -68,12 +70,15 @@ export function AiLogView() {
     <div className="flex flex-1 flex-col overflow-hidden bg-bg">
       <div className="flex items-center gap-3 border-b border-border bg-surface px-6 py-3.5">
         <ScrollText className="size-4 text-accent" />
-        <h1 className="text-sm font-semibold">AIログ</h1>
-        {entries && <span className="text-xs text-fg-subtle">直近 {entries.length}件</span>}
+        <h1 className="text-sm font-semibold">{t("nav.ailog")}</h1>
+        {entries && (
+          <span className="text-xs text-fg-subtle">
+            {t("ailog.recent").replace("{n}", String(entries.length))}
+          </span>
+        )}
       </div>
       <p className="border-b border-border bg-surface-2 px-6 py-2 text-[11px] text-fg-muted">
-        この端末が<strong>実際にAIへ送った内容</strong>（PIIマスク有効時は匿名化後＝端末から出た形そのまま）と返答を、
-        新しい順に記録しています。すべて<strong>端末内のみ</strong>に保存（直近2,000件）。
+        {t("ailog.intro")}
       </p>
 
       <CostDashboard />
@@ -86,14 +91,17 @@ export function AiLogView() {
             </div>
           ) : entries.length === 0 ? (
             <p className="py-10 text-center text-sm text-fg-subtle">
-              まだAIを呼び出していません。返信生成・添削・重要度判定・朝の一凪で記録されます。
+              {t("ailog.empty")}
             </p>
           ) : (
             entries.map((e) => {
               const open = openId === e.id;
               const audit = parseAudit(e.maskAudit);
               return (
-                <div key={e.id} className="rounded-xl border border-border bg-surface">
+                <div
+                  key={e.id}
+                  className="rounded-xl border border-border bg-surface"
+                >
                   <button
                     onClick={() => setOpenId(open ? null : e.id)}
                     className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
@@ -102,15 +110,25 @@ export function AiLogView() {
                       className={`size-3.5 shrink-0 text-fg-subtle transition-transform ${open ? "rotate-90" : ""}`}
                     />
                     <span className="shrink-0 rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                      {KIND_LABEL[e.kind] ?? e.kind}
+                      {t(`ailog.kind.${e.kind}`) === `ailog.kind.${e.kind}`
+                        ? e.kind
+                        : t(`ailog.kind.${e.kind}`)}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{e.model}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">
+                      {e.model}
+                    </span>
                     {audit && (
                       <span
                         title={
                           audit.residual > 0
-                            ? `マスクを素通りした構造化PIIが ${audit.residual} 件（人名・住所は未検出）`
-                            : `構造化PII ${audit.total} 件をマスク・素通り0`
+                            ? t("ailog.audit.residualTitle").replace(
+                                "{n}",
+                                String(audit.residual),
+                              )
+                            : t("ailog.audit.cleanTitle").replace(
+                                "{n}",
+                                String(audit.total),
+                              )
                         }
                         className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
                           audit.residual > 0
@@ -124,7 +142,9 @@ export function AiLogView() {
                     )}
                     <span className="shrink-0 text-[11px] tabular-nums text-fg-subtle">
                       in {e.inputTokens ?? "?"} / out {e.outputTokens ?? "?"}
-                      {typeof e.estUsd === "number" ? ` ≈ ${usd(e.estUsd)}` : ""}
+                      {typeof e.estUsd === "number"
+                        ? ` ≈ ${usd(e.estUsd)}`
+                        : ""}
                     </span>
                     <span className="shrink-0 text-[11px] text-fg-subtle">
                       {relativeTime(e.createdAt)}
@@ -135,10 +155,13 @@ export function AiLogView() {
                       {audit && (
                         <div>
                           <p className="mb-1 text-[10px] font-semibold uppercase text-fg-subtle">
-                            マスキング監査
+                            {t("ailog.audit.heading")}
                           </p>
                           <p className="text-[11px] leading-relaxed text-fg-muted">
-                            マスク {audit.total} 件
+                            {t("ailog.audit.masked").replace(
+                              "{n}",
+                              String(audit.total),
+                            )}
                             {Object.keys(audit.masked).length > 0 && (
                               <>
                                 （
@@ -149,29 +172,38 @@ export function AiLogView() {
                               </>
                             )}
                             {" ・ "}
-                            <span className={audit.residual > 0 ? "font-semibold text-high" : ""}>
-                              素通り {audit.residual} 件
+                            <span
+                              className={
+                                audit.residual > 0
+                                  ? "font-semibold text-high"
+                                  : ""
+                              }
+                            >
+                              {t("ailog.audit.passed").replace(
+                                "{n}",
+                                String(audit.residual),
+                              )}
                             </span>
                           </p>
                           <p className="mt-0.5 text-[10px] text-fg-subtle">
-                            ※構造化PII（メール/電話/番号）のみ計測。人名・住所は未検出（NER未導入）。
+                            {t("ailog.audit.note")}
                           </p>
                         </div>
                       )}
                       <div>
                         <p className="mb-1 text-[10px] font-semibold uppercase text-fg-subtle">
-                          送信内容（プロンプト）
+                          {t("ailog.prompt")}
                         </p>
                         <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-3 text-[11px] leading-relaxed text-fg">
-                          {e.prompt ?? "(記録なし)"}
+                          {e.prompt ?? t("ailog.noRecord")}
                         </pre>
                       </div>
                       <div>
                         <p className="mb-1 text-[10px] font-semibold uppercase text-fg-subtle">
-                          返答
+                          {t("ailog.response")}
                         </p>
                         <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-3 text-[11px] leading-relaxed text-fg">
-                          {e.response ?? "(記録なし)"}
+                          {e.response ?? t("ailog.noRecord")}
                         </pre>
                       </div>
                     </div>
