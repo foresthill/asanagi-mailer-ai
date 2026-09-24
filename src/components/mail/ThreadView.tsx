@@ -302,9 +302,10 @@ export function ThreadView({
 
   // Pin the mode switcher: in a long thread the reader auto-scrolls down to the
   // opened message, so a top-anchored toolbar would be buried far above. Sticky
-  // keeps カード/会話 reachable while reading anywhere in the thread.
+  // keeps カード/会話 reachable while reading anywhere. Opaque bg + bottom border
+  // so cards scroll cleanly UNDER it (translucent bg made it look overlapping).
   const switcherBar = (
-    <div className="sticky top-0 z-20 mb-1 flex justify-end bg-bg/85 py-2 backdrop-blur">
+    <div className="sticky top-0 z-20 mb-1 flex justify-end border-b border-border bg-bg py-2">
       {switcher}
     </div>
   );
