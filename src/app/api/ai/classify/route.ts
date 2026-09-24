@@ -4,7 +4,7 @@ import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { CLASSIFY_SYSTEM, classifyContext, profileBlock } from "@/lib/ai/prompts";
 import { getJudgmentProfile, guessFromSignals, listSignals } from "@/lib/store";
-import { heuristicImportance } from "@/lib/importance";
+import { heuristicImportance, projectKeyFromSubject } from "@/lib/importance";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage, logJudgment } from "@/lib/db";
 import type { Email, Importance } from "@/lib/types";
@@ -40,7 +40,11 @@ export async function POST(req: Request) {
 
   // Heuristic short-circuit: if the user has already taught us about this
   // sender/domain, trust that immediately (fast + free + personalized).
-  const learned = guessFromSignals(email.from.email, signals);
+  const learned = guessFromSignals(
+    email.from.email,
+    signals,
+    projectKeyFromSubject(email.subject),
+  );
   if (learned) {
     const reason = "あなたの過去の判断（学習済み）に基づく判定です。";
     record(email, learned, reason, "learned");

@@ -8,6 +8,18 @@ import { guessFromSignals } from "@/lib/store";
  *   2. keyword heuristic — generic fallback
  */
 
+/**
+ * A project key for mail that shares one sender across many projects — chiefly
+ * GitHub/GitLab notifications (all from notifications@github.com), where the
+ * repo is the real unit of interest. Extracted from the subject's「[owner/repo]」.
+ * Lets the user teach importance PER PROJECT (自社repo=中 / bitcoin/bips=低) even
+ * though the sender is identical. Returns e.g. "repo:bitcoin/bips" or null.
+ */
+export function projectKeyFromSubject(subject?: string): string | undefined {
+  const m = (subject ?? "").match(/\[([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)\]/);
+  return m ? `repo:${m[1].toLowerCase()}` : undefined;
+}
+
 /** Generic keyword guess; cheap enough to run on every list item. */
 export function heuristicImportance(email: Email): Importance {
   const subj = email.subject;
@@ -34,7 +46,7 @@ export function heuristicImportance(email: Email): Importance {
 export function annotateImportance(emails: Email[], signals: ImportanceSignal[]): Email[] {
   return emails.map((e) => {
     if (e.importance) return e;
-    const learned = guessFromSignals(e.from.email, signals);
+    const learned = guessFromSignals(e.from.email, signals, projectKeyFromSubject(e.subject));
     return { ...e, importance: learned ?? heuristicImportance(e) };
   });
 }

@@ -3,6 +3,7 @@ import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
 import { cachedGet, removeCached, setJudgmentVerdict, updateCached, upsertEmails } from "@/lib/db";
 import { recordImportanceFeedback } from "@/lib/store";
+import { projectKeyFromSubject } from "@/lib/importance";
 import type { EmailProvider } from "@/lib/email";
 import type { Importance, MailboxState } from "@/lib/types";
 
@@ -128,10 +129,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       if (account) updateCached(account, id, { starred: body.starred });
     }
     if (body.importanceFeedback) {
-      // Teach the per-user knowledge base from explicit feedback.
+      // Teach the per-user knowledge base from explicit feedback. Also learn the
+      // project (GitHub repo from the subject) so same-sender-different-project
+      // mail (e.g. notifications@github.com) can be judged per repo.
+      const subject = account ? cachedGet(account, id)?.subject : undefined;
       await recordImportanceFeedback(
         body.importanceFeedback.fromEmail,
         body.importanceFeedback.importance,
+        projectKeyFromSubject(subject),
       );
       // Keep the triage review in sync: feedback given from the reader is
       // the same supervision as a verdict click on the 仕分けレビュー screen.

@@ -177,9 +177,9 @@ export interface SavedDraft extends OutgoingMessage {
  */
 export interface ImportanceSignal {
   id: string;
-  /** Matching key — a sender email, domain, or keyword. */
+  /** Matching key — a sender email, domain, keyword, or project (repo等). */
   pattern: string;
-  kind: "sender" | "domain" | "keyword";
+  kind: "sender" | "domain" | "keyword" | "project";
   importance: Importance;
   /** How many times the user has confirmed this signal. */
   weight: number;
