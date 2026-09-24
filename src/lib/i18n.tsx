@@ -43,6 +43,27 @@ const ja: Dict = {
   "nav.projects.title": "メール履歴から抽出した案件の進捗・次アクション",
   "nav.triage": "仕分けレビュー",
   "nav.triage.title": "AI判定の確認と是正（教師データ作り）",
+  "triage.stats": "判定 {total}件・レビュー済み {reviewed}件",
+  "triage.accuracy": "・一致率 {accuracy}%",
+  "triage.intro":
+    "AI/簡易判定の結果を確認して、正しい重要度を選んでください。あなたの判断はその場で学習され（次の一覧表示から反映）、将来のローカル分類器の教師データとして蓄積されます。",
+  "triage.profile.heading": "AIへのメモ（嗜好プロファイル）",
+  "triage.profile.desc":
+    "あなたのルールを自然文で書くと、朝の一凪と個別の重要度判定に反映されます。例:「ニュースレターは全部アーカイブ」「上司の田中さんからは必ず重要」「請求書・契約は必ず残す」。",
+  "triage.profile.placeholder":
+    "例: 取引先Acmeの返信要求は重要。SaaSの自動通知は低。CC止まりは低。",
+  "triage.profile.note": "端末内に保存（AI判定にのみ使用）",
+  "triage.save": "保存",
+  "triage.saved": "保存しました",
+  "triage.empty":
+    "まだ判定ログがありません。メールを開くと判定が記録されていきます。",
+  "triage.judgedBy": "{source}判定",
+  "triage.source.ai": "AI",
+  "triage.source.heuristic": "簡易",
+  "triage.source.learned": "学習済み",
+  "triage.yourVerdict": "あなたの判断:",
+  "triage.agree": "判定と一致",
+  "triage.corrected": "是正済み（学習に反映）",
   "nav.ailog": "AIログ",
   "nav.ailog.title": "AIに送った内容・返答・コストのログ",
   "nav.sweep": "朝の一凪",
@@ -328,6 +349,27 @@ const en: Dict = {
     "Projects extracted from mail history — progress & next actions",
   "nav.triage": "Triage review",
   "nav.triage.title": "Review & correct AI decisions (build training data)",
+  "triage.stats": "{total} judged · {reviewed} reviewed",
+  "triage.accuracy": " · {accuracy}% match",
+  "triage.intro":
+    "Review the AI/quick judgments and pick the correct importance. Your choice is learned immediately (applied from the next list view) and accumulates as training data for the future local classifier.",
+  "triage.profile.heading": "Notes for the AI (preference profile)",
+  "triage.profile.desc":
+    "Write your rules in plain language and they apply to the morning sweep and per-email importance. e.g. 'Archive all newsletters', 'Always important from my manager Tanaka', 'Always keep invoices and contracts'.",
+  "triage.profile.placeholder":
+    "e.g. Replies requested by client Acme are important. SaaS auto-notices are low. CC-only is low.",
+  "triage.profile.note": "Saved on this device (used only for AI judgments)",
+  "triage.save": "Save",
+  "triage.saved": "Saved",
+  "triage.empty":
+    "No judgment log yet. Judgments are recorded as you open mail.",
+  "triage.judgedBy": "{source}",
+  "triage.source.ai": "AI",
+  "triage.source.heuristic": "Quick",
+  "triage.source.learned": "Learned",
+  "triage.yourVerdict": "Your call:",
+  "triage.agree": "Matches",
+  "triage.corrected": "Corrected (learned)",
   "nav.ailog": "AI log",
   "nav.ailog.title": "Log of what was sent to AI, its responses & cost",
   "nav.sweep": "Morning Calm",
@@ -616,6 +658,28 @@ const fr: Dict = {
   "nav.triage": "Revue de tri",
   "nav.triage.title":
     "Vérifier et corriger les décisions de l'IA (données d'entraînement)",
+  "triage.stats": "{total} jugés · {reviewed} vérifiés",
+  "triage.accuracy": " · {accuracy}% de concordance",
+  "triage.intro":
+    "Vérifiez les jugements IA/rapides et choisissez la bonne importance. Votre choix est appris immédiatement (appliqué dès la prochaine vue de liste) et s’accumule comme données d’entraînement pour le futur classifieur local.",
+  "triage.profile.heading": "Notes pour l’IA (profil de préférences)",
+  "triage.profile.desc":
+    "Écrivez vos règles en langage naturel ; elles s’appliquent au « calme du matin » et à l’importance de chaque e-mail. Ex. : « Archiver toutes les newsletters », « Toujours important venant de mon responsable Tanaka », « Toujours conserver factures et contrats ».",
+  "triage.profile.placeholder":
+    "Ex. : Les réponses demandées par le client Acme sont importantes. Les notifications SaaS sont faibles. En copie seulement = faible.",
+  "triage.profile.note":
+    "Enregistré sur cet appareil (utilisé uniquement pour les jugements IA)",
+  "triage.save": "Enregistrer",
+  "triage.saved": "Enregistré",
+  "triage.empty":
+    "Aucun journal de jugement. Les jugements sont enregistrés à l’ouverture des e-mails.",
+  "triage.judgedBy": "{source}",
+  "triage.source.ai": "IA",
+  "triage.source.heuristic": "Rapide",
+  "triage.source.learned": "Appris",
+  "triage.yourVerdict": "Votre avis :",
+  "triage.agree": "Concorde",
+  "triage.corrected": "Corrigé (appris)",
   "nav.ailog": "Journal IA",
   "nav.ailog.title": "Journal des envois à l'IA, des réponses et des coûts",
   "nav.sweep": "Calme du matin",
