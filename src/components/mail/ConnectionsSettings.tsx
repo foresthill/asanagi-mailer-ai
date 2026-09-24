@@ -1,8 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { X, Loader2, Check, AlertCircle, KeyRound, Sparkles } from "lucide-react";
+import {
+  X,
+  Loader2,
+  Check,
+  AlertCircle,
+  KeyRound,
+  Sparkles,
+} from "lucide-react";
 import type { AIProvider } from "@/lib/types";
+import { useI18n } from "@/lib/i18n";
 import { EmailConnectSection } from "./EmailConnectSection";
 import { ReplySignatureSection } from "./ReplySignatureSection";
 import { WritingNoteSection } from "./WritingNoteSection";
@@ -33,12 +41,44 @@ interface View {
   };
 }
 
-const PROVIDER_OPTIONS: { value: ProviderChoice; label: string; hint: string; needsKey: boolean }[] = [
-  { value: "openrouter", label: "OpenRouter", hint: "1キーで多モデル（推奨）", needsKey: true },
-  { value: "anthropic", label: "Claude (Anthropic)", hint: "Claude を直接", needsKey: true },
-  { value: "openai", label: "OpenAI", hint: "GPT 系", needsKey: true },
-  { value: "gateway", label: "Vercel AI Gateway", hint: "キーは環境変数/OIDC", needsKey: false },
-  { value: "auto", label: "自動検出", hint: "設定済みキーから自動選択", needsKey: false },
+// Brand labels stay verbatim; only "auto" and the hints are localized (by key).
+const PROVIDER_OPTIONS: {
+  value: ProviderChoice;
+  label?: string;
+  labelKey?: string;
+  hintKey: string;
+  needsKey: boolean;
+}[] = [
+  {
+    value: "openrouter",
+    label: "OpenRouter",
+    hintKey: "conn.provider.openrouter.hint",
+    needsKey: true,
+  },
+  {
+    value: "anthropic",
+    label: "Claude (Anthropic)",
+    hintKey: "conn.provider.anthropic.hint",
+    needsKey: true,
+  },
+  {
+    value: "openai",
+    label: "OpenAI",
+    hintKey: "conn.provider.openai.hint",
+    needsKey: true,
+  },
+  {
+    value: "gateway",
+    label: "Vercel AI Gateway",
+    hintKey: "conn.provider.gateway.hint",
+    needsKey: false,
+  },
+  {
+    value: "auto",
+    labelKey: "conn.provider.auto.label",
+    hintKey: "conn.provider.auto.hint",
+    needsKey: false,
+  },
 ];
 
 const KEY_PLACEHOLDER: Record<AIProvider, string> = {
@@ -57,6 +97,7 @@ export function ConnectionsSettings({
   onClose: () => void;
   onSaved: (configured: boolean) => void;
 }) {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -67,7 +108,9 @@ export function ConnectionsSettings({
   // OpenAI-compatible endpoint (e.g. Ollama /v1) — on-prem inference.
   const [baseUrl, setBaseUrl] = useState("");
   // Keys the user typed this session (per provider). Empty string = clear.
-  const [keyInputs, setKeyInputs] = useState<Partial<Record<AIProvider, string>>>({});
+  const [keyInputs, setKeyInputs] = useState<
+    Partial<Record<AIProvider, string>>
+  >({});
   const [test, setTest] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -79,7 +122,11 @@ export function ConnectionsSettings({
       setView(data);
       // Default the picker to OpenRouter on a pristine ("auto") state so the
       // key field is visible immediately; "auto" stays selectable explicitly.
-      setProvider(data.provider && data.provider !== "auto" ? data.provider : "openrouter");
+      setProvider(
+        data.provider && data.provider !== "auto"
+          ? data.provider
+          : "openrouter",
+      );
       setModel(data.model ?? "");
       setJudgmentModel(data.judgmentModel ?? "");
       setBaseUrl(data.baseUrl ?? "");
@@ -134,32 +181,45 @@ export function ConnectionsSettings({
     try {
       await persist(); // save current form first so the test uses it
       const res = await fetch("/api/settings/ai/test", { method: "POST" });
-      const data = (await res.json()) as { ok: boolean; label?: string; sample?: string; error?: string };
+      const data = (await res.json()) as {
+        ok: boolean;
+        label?: string;
+        sample?: string;
+        error?: string;
+      };
       setTest(
         data.ok
-          ? { ok: true, msg: `接続OK — ${data.label}` }
-          : { ok: false, msg: data.error ?? "接続テストに失敗しました" },
+          ? {
+              ok: true,
+              msg: t("conn.test.ok").replace("{label}", data.label ?? ""),
+            }
+          : { ok: false, msg: data.error ?? t("conn.test.fail") },
       );
     } catch {
-      setTest({ ok: false, msg: "接続テストに失敗しました" });
+      setTest({ ok: false, msg: t("conn.test.fail") });
     } finally {
       setTesting(false);
     }
   }
 
   const currentKeyStatus = keyProvider ? view?.keys[keyProvider] : undefined;
-  const defaultModel = view && provider !== "auto" ? view.defaultModels[provider] : "";
-  const cheapModel = view && provider !== "auto" ? view.cheapModels[provider] : "";
+  const defaultModel =
+    view && provider !== "auto" ? view.defaultModels[provider] : "";
+  const cheapModel =
+    view && provider !== "auto" ? view.cheapModels[provider] : "";
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+      onClick={onClose}
+    >
       <div
         className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3.5">
           <KeyRound className="size-4 text-accent" />
-          <h2 className="text-sm font-semibold">接続設定（AI・メール）</h2>
+          <h2 className="text-sm font-semibold">{t("conn.header")}</h2>
           <button
             onClick={onClose}
             className="ml-auto grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
@@ -176,11 +236,13 @@ export function ConnectionsSettings({
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 text-accent" />
-              <h3 className="text-xs font-semibold">AI（BYOK）</h3>
+              <h3 className="text-xs font-semibold">{t("conn.byok")}</h3>
             </div>
             {/* Provider */}
             <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-fg-muted">プロバイダ</span>
+              <span className="text-xs font-medium text-fg-muted">
+                {t("conn.provider.label")}
+              </span>
               <select
                 value={provider}
                 onChange={(e) => {
@@ -191,7 +253,7 @@ export function ConnectionsSettings({
               >
                 {PROVIDER_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
-                    {o.label} — {o.hint}
+                    {o.label ?? t(o.labelKey!)} — {t(o.hintKey)}
                   </option>
                 ))}
               </select>
@@ -201,10 +263,13 @@ export function ConnectionsSettings({
             {keyProvider ? (
               <label className="flex flex-col gap-1.5">
                 <span className="flex items-center gap-2 text-xs font-medium text-fg-muted">
-                  API キー
+                  {t("conn.apiKey")}
                   {currentKeyStatus?.set && (
                     <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
-                      設定済み ••••{currentKeyStatus.last4}
+                      {t("conn.keySet").replace(
+                        "{last4}",
+                        currentKeyStatus.last4 ?? "",
+                      )}
                     </span>
                   )}
                 </span>
@@ -213,45 +278,59 @@ export function ConnectionsSettings({
                   autoComplete="off"
                   value={keyInputs[keyProvider] ?? ""}
                   onChange={(e) =>
-                    setKeyInputs((k) => ({ ...k, [keyProvider]: e.target.value }))
+                    setKeyInputs((k) => ({
+                      ...k,
+                      [keyProvider]: e.target.value,
+                    }))
                   }
                   placeholder={
-                    currentKeyStatus?.set ? "変更する場合のみ入力" : KEY_PLACEHOLDER[keyProvider]
+                    currentKeyStatus?.set
+                      ? t("conn.keyPlaceholder.change")
+                      : KEY_PLACEHOLDER[keyProvider]
                   }
                   className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
                 />
                 {currentKeyStatus?.set && (
                   <button
                     type="button"
-                    onClick={() => setKeyInputs((k) => ({ ...k, [keyProvider]: "" }))}
+                    onClick={() =>
+                      setKeyInputs((k) => ({ ...k, [keyProvider]: "" }))
+                    }
                     className="self-start text-[11px] text-fg-subtle underline hover:text-high"
                   >
-                    保存済みキーをクリア
+                    {t("conn.keyClear")}
                   </button>
                 )}
                 <span className="text-[11px] text-fg-subtle">
-                  キーはこの端末のローカル（.data）にのみ保存されます。
+                  {t("conn.keyLocal")}
                 </span>
               </label>
             ) : (
               <p className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-subtle">
                 {provider === "gateway"
-                  ? "Gateway のキーは環境変数（AI_GATEWAY_API_KEY / OIDC）で設定します。"
-                  : "設定済みのキーから自動でプロバイダを選びます。"}
+                  ? t("conn.gatewayNote")
+                  : t("conn.autoNote")}
               </p>
             )}
 
             {/* Model */}
             <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-fg-muted">モデル ID（任意）</span>
+              <span className="text-xs font-medium text-fg-muted">
+                {t("conn.model")}
+              </span>
               <input
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder={defaultModel ? `既定: ${defaultModel}` : "プロバイダの現行モデルIDを指定"}
+                placeholder={
+                  defaultModel
+                    ? t("conn.model.default").replace("{model}", defaultModel)
+                    : t("conn.model.placeholder")
+                }
                 className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
               />
               <span className="text-[11px] text-fg-subtle">
-                モデルIDは変わります。空欄なら既定値を使用。{selectedOpt ? "" : ""}
+                {t("conn.model.note")}
+                {selectedOpt ? "" : ""}
               </span>
             </label>
 
@@ -260,18 +339,16 @@ export function ConnectionsSettings({
             {provider === "openai" && (
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-fg-muted">
-                  エンドポイントURL（任意・OpenAI互換）
+                  {t("conn.endpoint")}
                 </span>
                 <input
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="例: http://localhost:11434/v1（Ollama）"
+                  placeholder={t("conn.endpoint.placeholder")}
                   className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
                 />
                 <span className="text-[11px] text-fg-subtle">
-                  空欄なら OpenAI 本家。社内 Ollama 等の OpenAI 互換サーバに向けると
-                  本文が社外に出ません。トークンで保護する場合は上の「APIキー」に入れると
-                  Bearer として送られます。
+                  {t("conn.endpoint.note")}
                 </span>
               </label>
             )}
@@ -279,13 +356,20 @@ export function ConnectionsSettings({
             {/* Judgment model — cheap model for 朝の一凪 / 重要度判定 */}
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-fg-muted">
-                判定用モデル ID（朝の一凪・重要度判定／任意）
+                {t("conn.judge")}
               </span>
               <div className="flex items-center gap-2">
                 <input
                   value={judgmentModel}
                   onChange={(e) => setJudgmentModel(e.target.value)}
-                  placeholder={cheapModel ? `安価な例: ${cheapModel}` : "空欄ならメインと同じ"}
+                  placeholder={
+                    cheapModel
+                      ? t("conn.judge.placeholder.cheap").replace(
+                          "{model}",
+                          cheapModel,
+                        )
+                      : t("conn.judge.placeholder.same")
+                  }
                   className="flex-1 rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
                 />
                 {cheapModel && (
@@ -294,28 +378,40 @@ export function ConnectionsSettings({
                     onClick={() => setJudgmentModel(cheapModel)}
                     className="shrink-0 rounded-lg border border-border px-2.5 py-2 text-xs text-fg-muted hover:border-accent hover:text-accent"
                   >
-                    安価モデルを使う
+                    {t("conn.judge.useCheap")}
                   </button>
                 )}
               </div>
               <span className="text-[11px] text-fg-subtle">
-                朝の一凪・重要度判定は本文を送らない軽い仕分けなので、安価なモデルでコストを大きく下げられます。
-                <strong>空欄ならメインと同じ</strong>。返信生成・添削は常にメインのモデルを使います。
+                {t("conn.judge.note.a")}
+                <strong>{t("conn.judge.note.b")}</strong>
+                {t("conn.judge.note.c")}
               </span>
             </label>
 
             {/* Active status */}
             {view && (
               <div className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-muted">
-                現在の有効設定: <span className="font-mono">{view.active.provider}:{view.active.model}</span>{" "}
+                {t("conn.active.current")}
+                <span className="font-mono">
+                  {view.active.provider}:{view.active.model}
+                </span>{" "}
                 {view.active.configured ? (
-                  <span className="text-emerald-600">（接続可・{view.active.source}）</span>
+                  <span className="text-emerald-600">
+                    {t("conn.active.ok").replace(
+                      "{source}",
+                      view.active.source,
+                    )}
+                  </span>
                 ) : (
-                  <span className="text-high">（キー未設定）</span>
+                  <span className="text-high">{t("conn.active.noKey")}</span>
                 )}
                 {view.active.judgmentModel !== view.active.model && (
                   <span className="mt-0.5 block">
-                    判定用: <span className="font-mono">{view.active.judgmentModel}</span>
+                    {t("conn.active.judge")}
+                    <span className="font-mono">
+                      {view.active.judgmentModel}
+                    </span>
                   </span>
                 )}
               </div>
@@ -325,10 +421,16 @@ export function ConnectionsSettings({
             {test && (
               <div
                 className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-                  test.ok ? "bg-emerald-500/10 text-emerald-600" : "bg-high-soft text-high"
+                  test.ok
+                    ? "bg-emerald-500/10 text-emerald-600"
+                    : "bg-high-soft text-high"
                 }`}
               >
-                {test.ok ? <Check className="size-4" /> : <AlertCircle className="size-4" />}
+                {test.ok ? (
+                  <Check className="size-4" />
+                ) : (
+                  <AlertCircle className="size-4" />
+                )}
                 <span className="break-all">{test.msg}</span>
               </div>
             )}
@@ -349,11 +451,11 @@ export function ConnectionsSettings({
                 className="mt-0.5 size-4 accent-[var(--accent,#6d5ae6)]"
               />
               <span className="flex flex-col gap-0.5 text-xs">
-                <span className="font-medium">個人情報マスキング（推奨・既定ON）</span>
+                <span className="font-medium">{t("conn.pii.title")}</span>
                 <span className="text-[11px] leading-relaxed text-fg-subtle">
-                  本文中のメールアドレス・電話番号・クレジットカード番号・12桁番号・郵便番号を
-                  端末内で <code>[EMAIL_1]</code> 等に置換してからAIへ送り、AIの出力では原文に復元します
-                  （可逆なので品質への影響は最小）。人名・社名のマスキングは下の設定で追加できます。
+                  {t("conn.pii.note.a")}
+                  <code>[EMAIL_1]</code>
+                  {t("conn.pii.note.b")}
                 </span>
               </span>
             </label>
@@ -379,12 +481,13 @@ export function ConnectionsSettings({
                 className="mt-0.5 size-4 accent-[var(--accent,#6d5ae6)]"
               />
               <span className="flex flex-col gap-0.5 text-xs">
-                <span className="font-medium">人名・社名もマスク（ローカルNER・実験的）</span>
+                <span className="font-medium">{t("conn.ner.title")}</span>
                 <span className="text-[11px] leading-relaxed text-fg-subtle">
-                  端末内のAIモデルで本文中の人名・会社名を検出し <code>[NAME_1]</code>・
-                  <code>[ORG_1]</code> に置換してからAIへ送ります（出力では原文に復元）。完全ローカルで
-                  外部送信なし。<strong>初回のみモデル読込に時間がかかり</strong>、メモリを数百MB使います。
-                  上の「個人情報マスキング」がONのときのみ有効。
+                  {t("conn.ner.note.a")}
+                  <code>[NAME_1]</code>・<code>[ORG_1]</code>
+                  {t("conn.ner.note.b")}
+                  <strong>{t("conn.ner.note.strong")}</strong>
+                  {t("conn.ner.note.c")}
                 </span>
               </span>
             </label>
@@ -408,7 +511,7 @@ export function ConnectionsSettings({
             className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2 disabled:opacity-50"
           >
             {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            AI 接続テスト
+            {t("conn.test.btn")}
           </button>
           <button
             onClick={handleSave}
@@ -416,7 +519,7 @@ export function ConnectionsSettings({
             className="ml-auto flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            AI 設定を保存
+            {t("conn.save")}
           </button>
         </div>
       </div>
@@ -430,11 +533,24 @@ export function ConnectionsSettings({
  * the provider dashboard's job (prices vary by model/plan, we don't guess).
  */
 function AiUsageSection() {
+  const { t } = useI18n();
   const [stats, setStats] = useState<{
     total: { calls: number; inputTokens: number; outputTokens: number };
     recent: { calls: number; inputTokens: number; outputTokens: number };
-    byModel: { model: string; calls: number; inputTokens: number; outputTokens: number; estUsd?: number }[];
-    byKind: { kind: string; calls: number; inputTokens: number; outputTokens: number; estUsd?: number }[];
+    byModel: {
+      model: string;
+      calls: number;
+      inputTokens: number;
+      outputTokens: number;
+      estUsd?: number;
+    }[];
+    byKind: {
+      kind: string;
+      calls: number;
+      inputTokens: number;
+      outputTokens: number;
+      estUsd?: number;
+    }[];
     totalEstUsd?: number | null;
   } | null>(null);
 
@@ -450,55 +566,77 @@ function AiUsageSection() {
   }, []);
 
   if (!stats || stats.total.calls === 0) return null;
-  const fmt = (n: number) => n.toLocaleString("ja-JP");
-  const usd = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`);
-  const KIND_LABEL: Record<string, string> = {
-    reply: "返信生成",
-    digest: "経緯要約",
-    suggest: "添削",
-    classify: "重要度判定",
-    sweep: "朝の一凪",
+  const fmt = (n: number) => n.toLocaleString();
+  const usd = (n: number) =>
+    n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
+  const kindLabel = (kind: string) => {
+    const k = t(`conn.usage.kind.${kind}`);
+    return k === `conn.usage.kind.${kind}` ? kind : k;
   };
 
   return (
     <div className="border-t border-border pt-4">
-      <p className="text-xs font-semibold">AI 使用量（この端末のログ）</p>
+      <p className="text-xs font-semibold">{t("conn.usage.title")}</p>
       <p className="mt-1 text-[11px] text-fg-subtle">
-        直近30日: {fmt(stats.recent.calls)}回・入力 {fmt(stats.recent.inputTokens)} / 出力{" "}
-        {fmt(stats.recent.outputTokens)} トークン（累計 {fmt(stats.total.calls)}回・入力{" "}
-        {fmt(stats.total.inputTokens)} / 出力 {fmt(stats.total.outputTokens)}）
+        {t("conn.usage.recent")
+          .replace("{rcalls}", fmt(stats.recent.calls))
+          .replace("{rin}", fmt(stats.recent.inputTokens))
+          .replace("{rout}", fmt(stats.recent.outputTokens))
+          .replace("{tcalls}", fmt(stats.total.calls))
+          .replace("{tin}", fmt(stats.total.inputTokens))
+          .replace("{tout}", fmt(stats.total.outputTokens))}
       </p>
       {typeof stats.totalEstUsd === "number" && (
         <p className="mt-1 text-sm font-semibold text-fg">
-          累計の目安金額: {usd(stats.totalEstUsd)}
+          {t("conn.usage.est")}
+          {usd(stats.totalEstUsd)}
           <span className="ml-1.5 text-[10px] font-normal text-fg-subtle">
-            OpenRouter公表単価で計算
+            {t("conn.usage.estNote")}
           </span>
         </p>
       )}
       <div className="mt-2 space-y-0.5">
         {stats.byKind.map((k) => (
-          <p key={k.kind} className="flex justify-between text-[11px] text-fg-muted">
-            <span>{KIND_LABEL[k.kind] ?? k.kind}</span>
+          <p
+            key={k.kind}
+            className="flex justify-between text-[11px] text-fg-muted"
+          >
+            <span>{kindLabel(k.kind)}</span>
             <span className="tabular-nums">
-              {fmt(k.calls)}回 / in {fmt(k.inputTokens)} / out {fmt(k.outputTokens)}
+              {t("conn.usage.rowKind")
+                .replace("{calls}", fmt(k.calls))
+                .replace("{in}", fmt(k.inputTokens))
+                .replace("{out}", fmt(k.outputTokens))}
               {typeof k.estUsd === "number" ? ` ≈ ${usd(k.estUsd)}` : ""}
             </span>
           </p>
         ))}
         {stats.byModel.map((m) => (
-          <p key={m.model} className="flex justify-between text-[11px] text-fg-subtle">
+          <p
+            key={m.model}
+            className="flex justify-between text-[11px] text-fg-subtle"
+          >
             <span className="truncate">{m.model}</span>
             <span className="shrink-0 tabular-nums">
-              in {fmt(m.inputTokens)} / out {fmt(m.outputTokens)}
+              {t("conn.usage.rowModel")
+                .replace("{in}", fmt(m.inputTokens))
+                .replace("{out}", fmt(m.outputTokens))}
               {typeof m.estUsd === "number" ? ` ≈ ${usd(m.estUsd)}` : ""}
             </span>
           </p>
         ))}
       </div>
       <p className="mt-1.5 text-[10px] text-fg-subtle">
-        金額は<a className="underline" href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener noreferrer">OpenRouterの公表単価</a>
-        から計算した目安です。正確な請求はプロバイダのダッシュボードで確認してください。
+        {t("conn.usage.foot.a")}
+        <a
+          className="underline"
+          href="https://openrouter.ai/api/v1/models"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {t("conn.usage.foot.link")}
+        </a>
+        {t("conn.usage.foot.b")}
       </p>
     </div>
   );
