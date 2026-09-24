@@ -24,7 +24,12 @@ import { ProjectsView } from "./ProjectsView";
 import { SweepDialog } from "./SweepDialog";
 import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
-import { buildCompose, type ComposeAI, type ComposeInit, type ComposeKind } from "./compose";
+import {
+  buildCompose,
+  type ComposeAI,
+  type ComposeInit,
+  type ComposeKind,
+} from "./compose";
 import { buildRows } from "./threadList";
 import type { GroupAxis } from "./EmailList";
 import type { SearchDigest } from "@/app/api/ai/search-digest/route";
@@ -74,7 +79,9 @@ function loadLayout(): Layout {
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<FolderView>("inbox");
   // "mail" = folders; "contacts" = auto-derived address book (mini-CRM).
-  const [view, setView] = useState<"mail" | "contacts" | "triage" | "ailog" | "projects">("mail");
+  const [view, setView] = useState<
+    "mail" | "contacts" | "triage" | "ailog" | "projects"
+  >("mail");
   // "all" = unified inbox across accounts; otherwise a single account key.
   const [account, setAccount] = useState("all");
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
@@ -233,7 +240,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         const list: Email[] = data.emails ?? [];
         setEmails(list);
         if (data.accounts) setAccounts(data.accounts);
-        setCounts((c) => ({ ...c, [f]: list.filter((e) => !e.read || f !== "inbox").length }));
+        setCounts((c) => ({
+          ...c,
+          [f]: list.filter((e) => !e.read || f !== "inbox").length,
+        }));
       };
       const base = `/api/emails?state=${f}&account=${encodeURIComponent(acct)}`;
       // Parse defensively: a broken/empty response (e.g. dev server mid-rebuild)
@@ -258,7 +268,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         if (data) {
           apply(data);
           if (data.stale?.length) {
-            setToast(`オフライン表示: ${data.stale.join(", ")} はキャッシュから表示中`);
+            setToast(
+              `オフライン表示: ${data.stale.join(", ")} はキャッシュから表示中`,
+            );
             setTimeout(() => setToast(null), 4000);
           }
         }
@@ -298,7 +310,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // 永遠の再表示を防ぐ）。
   useEffect(() => {
     if (sweepPrompted.current || showSweep) return;
-    if (view !== "mail" || folder !== "inbox" || compose || searchResults !== null) return;
+    if (
+      view !== "mail" ||
+      folder !== "inbox" ||
+      compose ||
+      searchResults !== null
+    )
+      return;
     if (emails.length < 5) return;
     const last = Number(localStorage.getItem("asanagi:last-sweep") ?? 0);
     if (Date.now() - last < 12 * 3600_000) return;
@@ -401,7 +419,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     }
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+        const res = await fetch(
+          `/api/search?q=${encodeURIComponent(searchQuery)}`,
+        );
         if (!res.ok) throw new Error(`search ${res.status}`);
         const data = await res.json();
         setSearchError(false);
@@ -477,7 +497,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         const res = await fetch("/api/schedule");
         const data = await res.json();
         setScheduledCount(
-          (data.items ?? []).filter((s: { status: string }) => s.status === "scheduled").length,
+          (data.items ?? []).filter(
+            (s: { status: string }) => s.status === "scheduled",
+          ).length,
         );
         if (data.flushed > 0 && folder !== "inbox") loadList(folder, account);
       } catch {
@@ -500,7 +522,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     if (!q || serverSearching) return;
     setServerSearching(true);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&scope=server`);
+      const res = await fetch(
+        `/api/search?q=${encodeURIComponent(q)}&scope=server`,
+      );
       const data = await res.json();
       setSearchResults(data.emails ?? []);
       setServerSearched(true);
@@ -570,9 +594,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       });
       const data = await res.json();
       if (token !== classifyToken.current) return; // a newer selection won
-      const patch = { importance: data.importance as Importance, importanceReason: data.reason };
+      const patch = {
+        importance: data.importance as Importance,
+        importanceReason: data.reason,
+      };
       setSelected((s) => (s && s.id === email.id ? { ...s, ...patch } : s));
-      setEmails((list) => list.map((e) => (e.id === email.id ? { ...e, ...patch } : e)));
+      setEmails((list) =>
+        list.map((e) => (e.id === email.id ? { ...e, ...patch } : e)),
+      );
     } finally {
       if (token === classifyToken.current) setClassifying(false);
     }
@@ -589,7 +618,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     const key = encodeURIComponent(`${email.account}/${email.threadId}`);
     // 1) Cache-first paint — the conversation shows immediately.
     try {
-      const cdata = await fetch(`/api/threads/${key}?cached=1`).then((r) => r.json());
+      const cdata = await fetch(`/api/threads/${key}?cached=1`).then((r) =>
+        r.json(),
+      );
       if (token === threadToken.current && cdata.messages?.length) {
         setThread(cdata.messages);
       }
@@ -600,7 +631,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     try {
       const res = await fetch(`/api/threads/${key}`);
       const data = await res.json();
-      if (token === threadToken.current && data.messages) setThread(data.messages);
+      if (token === threadToken.current && data.messages)
+        setThread(data.messages);
     } catch {
       /* thread view is progressive enhancement */
     }
@@ -609,18 +641,21 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // List-side inline expansion: fetch a thread's members from the local cache
   // (instant, cross-folder — your own sent replies included). Best-effort; an
   // empty result just means the row won't expand.
-  const loadThreadMembers = useCallback(async (email: Email): Promise<Email[]> => {
-    if (!email.account || !email.threadId) return [];
-    try {
-      const res = await fetch(
-        `/api/threads/${encodeURIComponent(`${email.account}/${email.threadId}`)}?cached=1`,
-      );
-      const data = await res.json();
-      return (data.messages as Email[]) ?? [];
-    } catch {
-      return [];
-    }
-  }, []);
+  const loadThreadMembers = useCallback(
+    async (email: Email): Promise<Email[]> => {
+      if (!email.account || !email.threadId) return [];
+      try {
+        const res = await fetch(
+          `/api/threads/${encodeURIComponent(`${email.account}/${email.threadId}`)}?cached=1`,
+        );
+        const data = await res.json();
+        return (data.messages as Email[]) ?? [];
+      } catch {
+        return [];
+      }
+    },
+    [],
+  );
 
   const selectEmail = useCallback(
     async (id: string) => {
@@ -629,12 +664,16 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       if (
         compose !== null &&
         !composeMinimized &&
-        !window.confirm("作成中のメールを破棄しますか？（まだ送信されていません）")
+        !window.confirm(
+          "作成中のメールを破棄しますか？（まだ送信されていません）",
+        )
       )
         return;
       setSelectedId(id);
       if (!composeMinimized) setCompose(null);
-      setEmails((list) => list.map((e) => (e.id === id ? { ...e, read: true } : e)));
+      setEmails((list) =>
+        list.map((e) => (e.id === id ? { ...e, read: true } : e)),
+      );
 
       const token = ++selectToken.current;
       const enc = encodeURIComponent(id);
@@ -642,7 +681,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
       // 1) Cache-first paint — instant, no provider round-trip (offline-safe).
       try {
-        const cdata = await fetch(`/api/emails/${enc}?cached=1`).then((r) => r.json());
+        const cdata = await fetch(`/api/emails/${enc}?cached=1`).then((r) =>
+          r.json(),
+        );
         if (token === selectToken.current && cdata?.email) {
           setSelected(cdata.email);
           loadThread(cdata.email);
@@ -731,7 +772,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         const senders = [
           ...new Set(
             ids
-              .map((id) => emailsRef.current.find((e) => e.id === id)?.from.email)
+              .map(
+                (id) => emailsRef.current.find((e) => e.id === id)?.from.email,
+              )
               .filter((v): v is string => Boolean(v)),
           ),
         ];
@@ -774,19 +817,24 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     [selectedId, folder, account, loadList],
   );
 
-  const archive = (ids: string[]) => mutateState(ids, "archived", "アーカイブしました");
+  const archive = (ids: string[]) =>
+    mutateState(ids, "archived", "アーカイブしました");
 
   /** 朝の一掃の実行: 推奨ごとにまとめて移動し、スヌーズ時刻を記録。 */
   const applySweep = async (archiveIds: string[], trashIds: string[]) => {
     // await = サーバ反映まで待つ（mutateState が settle promise を返す）。
-    if (archiveIds.length) await mutateState(archiveIds, "archived", "一凪: アーカイブ");
-    if (trashIds.length) await mutateState(trashIds, "trashed", "一凪: ゴミ箱へ");
+    if (archiveIds.length)
+      await mutateState(archiveIds, "archived", "一凪: アーカイブ");
+    if (trashIds.length)
+      await mutateState(trashIds, "trashed", "一凪: ゴミ箱へ");
     localStorage.setItem("asanagi:last-sweep", String(Date.now()));
     // 反映後に受信箱を再取得（新着の取り込み＋実状態に同期）。
     if (archiveIds.length || trashIds.length) loadList(folder, account);
   };
-  const trash = (ids: string[]) => mutateState(ids, "trashed", "ゴミ箱に移動しました");
-  const restore = (ids: string[]) => mutateState(ids, "inbox", "受信箱に戻しました");
+  const trash = (ids: string[]) =>
+    mutateState(ids, "trashed", "ゴミ箱に移動しました");
+  const restore = (ids: string[]) =>
+    mutateState(ids, "inbox", "受信箱に戻しました");
 
   const toggleGrouping = () =>
     setGrouping((v) => {
@@ -812,7 +860,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // 返信になりがち）が前面に出て、クリックしたいヒット本体が裏に隠れてしまうため。
   // 「一覧で見えているメール＝クリックで開くメール」の WYSIWYG を検索で担保する。
   // 通常フォルダはトグルどおり会話グルーピング。
-  const rows = buildRows(searchResults ?? emails, searchResults !== null ? false : grouping);
+  const rows = buildRows(
+    searchResults ?? emails,
+    searchResults !== null ? false : grouping,
+  );
 
   // Bulk selection: rows are checked by representative id; an action expands
   // each checked row to its full conversation (ThreadRow.ids).
@@ -836,16 +887,50 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   }, []);
 
   const bulkAct = async (state: MailboxState, label: string) => {
-    const ids = rows.filter((r) => checked.has(r.email.id)).flatMap((r) => r.ids);
+    const ids = rows
+      .filter((r) => checked.has(r.email.id))
+      .flatMap((r) => r.ids);
     if (!ids.length) return;
     setChecked(new Set());
     await mutateState(ids, state, label);
   };
 
+  // Bulk importance — mark every checked conversation's mail as 重要/通常/低.
+  // Each is a per-sender training signal (教師データ), so the AI's future
+  // judgments improve. Acts on the representative (差出人) of each checked row.
+  const bulkImportance = async (importance: Importance) => {
+    const targets = rows
+      .filter((r) => checked.has(r.email.id))
+      .map((r) => r.email);
+    if (!targets.length) return;
+    setChecked(new Set());
+    setEmails((list) =>
+      list.map((e) =>
+        targets.some((t) => t.id === e.id) ? { ...e, importance } : e,
+      ),
+    );
+    await Promise.all(
+      targets.map((e) =>
+        fetch(`/api/emails/${encodeURIComponent(e.id)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            importanceFeedback: { importance, fromEmail: e.from.email },
+          }),
+        }).catch(() => {}),
+      ),
+    );
+    const label =
+      importance === "high" ? "重要" : importance === "low" ? "低" : "通常";
+    showToast(`${targets.length}件を「${label}」として学習しました`);
+  };
+
   /** Star toggle — optimistic UI, server-synced (Gmail STARRED / IMAP \Flagged). */
   const toggleStar = useCallback(
     async (id: string) => {
-      const target = emails.find((e) => e.id === id) ?? (selected?.id === id ? selected : null);
+      const target =
+        emails.find((e) => e.id === id) ??
+        (selected?.id === id ? selected : null);
       const next = !target?.starred;
       setEmails((list) =>
         // In the starred view, unstarring removes the row right away.
@@ -864,7 +949,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         showToast(next ? "スターを付けました" : "スターを外しました");
       } catch {
         // Roll back the optimistic update on failure.
-        setEmails((list) => list.map((e) => (e.id === id ? { ...e, starred: !next } : e)));
+        setEmails((list) =>
+          list.map((e) => (e.id === id ? { ...e, starred: !next } : e)),
+        );
         setSelected((s) => (s && s.id === id ? { ...s, starred: !next } : s));
         showToast("スターの更新に失敗しました");
       }
@@ -874,7 +961,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   const onImportanceFeedback = async (importance: Importance) => {
     if (!selected) return;
-    setSelected({ ...selected, importance, importanceReason: "あなたが指定した重要度です。" });
+    setSelected({
+      ...selected,
+      importance,
+      importanceReason: "あなたが指定した重要度です。",
+    });
     setEmails((list) =>
       list.map((e) => (e.id === selected.id ? { ...e, importance } : e)),
     );
@@ -898,10 +989,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       // Starting a new compose while one is open would replace the draft.
       if (
         compose !== null &&
-        !window.confirm("作成中のメールを破棄しますか？（まだ送信されていません）")
+        !window.confirm(
+          "作成中のメールを破棄しますか？（まだ送信されていません）",
+        )
       )
         return;
-      const selfAddresses = accounts.map((a) => a.address).filter((s): s is string => !!s);
+      const selfAddresses = accounts
+        .map((a) => a.address)
+        .filter((s): s is string => !!s);
       const init = buildCompose(kind, mode, src ?? undefined, selfAddresses);
       // New mail from a specific account view sends from that account.
       if (kind === "new" && account !== "all") init.account = account;
@@ -915,7 +1010,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   /** Reply/forward to a specific thread message (per-message action buttons). */
   const replyToMessage = useCallback(
     (id: string, kind: ComposeKind, mode: ComposeAI) => {
-      const m = thread?.find((x) => x.id === id) ?? (selected?.id === id ? selected : undefined);
+      const m =
+        thread?.find((x) => x.id === id) ??
+        (selected?.id === id ? selected : undefined);
       openCompose(kind, mode, m ?? undefined);
     },
     [thread, selected, openCompose],
@@ -927,7 +1024,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setCompose(null);
     if (wasReply && selected && folder === "inbox") {
       // Send & archive — keep the inbox clean (replies only; not forward/new).
-      mutateState([selected.id], "archived", kind === "sent" ? "送信してアーカイブしました" : "予約してアーカイブしました");
+      mutateState(
+        [selected.id],
+        "archived",
+        kind === "sent"
+          ? "送信してアーカイブしました"
+          : "予約してアーカイブしました",
+      );
     } else {
       showToast(kind === "sent" ? "送信しました" : "予約しました");
     }
@@ -981,7 +1084,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       const rowIds = idx >= 0 ? rows[idx].ids : selectedId ? [selectedId] : [];
       if (e.key === "j") {
         e.preventDefault();
-        selectEmail(rows[Math.min(rows.length - 1, idx + 1)]?.email.id ?? rows[0].email.id);
+        selectEmail(
+          rows[Math.min(rows.length - 1, idx + 1)]?.email.id ??
+            rows[0].email.id,
+        );
       } else if (e.key === "k") {
         e.preventDefault();
         selectEmail(rows[Math.max(0, idx - 1)]?.email.id ?? rows[0].email.id);
@@ -993,9 +1099,18 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         e.preventDefault();
         const row = rows.find((r) => r.email.id === selectedId);
         if (row) toggleChecked(row.email.id);
-      } else if (e.key === "e" && rowIds.length && folder !== "archived" && folder !== "sent") {
+      } else if (
+        e.key === "e" &&
+        rowIds.length &&
+        folder !== "archived" &&
+        folder !== "sent"
+      ) {
         archive(rowIds);
-      } else if ((e.key === "#" || e.key === "Backspace") && rowIds.length && folder !== "trashed") {
+      } else if (
+        (e.key === "#" || e.key === "Backspace") &&
+        rowIds.length &&
+        folder !== "trashed"
+      ) {
         trash(rowIds);
       } else if (e.key === "r" && selected) {
         e.preventDefault();
@@ -1048,7 +1163,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onChangeGroupAxis={changeGroupAxis}
       accountLabels={
         accounts.length > 1 && (account === "all" || searchResults !== null)
-          ? Object.fromEntries(accounts.map((a) => [a.key, a.address ?? a.label]))
+          ? Object.fromEntries(
+              accounts.map((a) => [a.key, a.address ?? a.label]),
+            )
           : null
       }
       serverSearched={serverSearched}
@@ -1060,6 +1177,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onClearChecked={() => setChecked(new Set())}
       onBulkArchive={() => bulkAct("archived", "一括アーカイブしました")}
       onBulkTrash={() => bulkAct("trashed", "一括でゴミ箱に移動しました")}
+      onBulkImportance={bulkImportance}
       onServerSearch={searchServer}
       onSearchChange={setSearchQuery}
       onToggleGrouping={toggleGrouping}
@@ -1151,21 +1269,27 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       {view === "mail" && layout === "classic" && (
         <>
           {(!replying || composeMinimized) && emailListEl}
-          {(!replying || composeMinimized) && (!compose || composeMinimized) && (
-            <ResizeHandle onResize={resizeList} />
-          )}
+          {(!replying || composeMinimized) &&
+            (!compose || composeMinimized) && (
+              <ResizeHandle onResize={resizeList} />
+            )}
           {(!compose || composeMinimized) && readerEl}
         </>
       )}
       {/* geek: 一覧(上・件名がずらり)｜本文(下)・高さドラッグ可変。返信中(占有)は
           この段を退避し composer が受け持つ（v1）。 */}
-      {view === "mail" && layout === "geek" && (!replying || composeMinimized) && (
-        <div className="flex min-w-0 flex-1 flex-col">
-          {emailListEl}
-          <ResizeHandle orientation="horizontal" onResize={resizeListHeight} />
-          {(!compose || composeMinimized) && readerEl}
-        </div>
-      )}
+      {view === "mail" &&
+        layout === "geek" &&
+        (!replying || composeMinimized) && (
+          <div className="flex min-w-0 flex-1 flex-col">
+            {emailListEl}
+            <ResizeHandle
+              orientation="horizontal"
+              onResize={resizeListHeight}
+            />
+            {(!compose || composeMinimized) && readerEl}
+          </div>
+        )}
       {/* Composer: stays mounted while minimized so the draft is preserved. */}
       {compose && (
         <ReplyComposer
@@ -1196,7 +1320,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           accountLabels={
             // どのアカウントのメールかを行ごとに表示（複数アカウント接続時のみ）。
             accounts.length > 1
-              ? Object.fromEntries(accounts.map((a) => [a.key, a.address ?? a.label]))
+              ? Object.fromEntries(
+                  accounts.map((a) => [a.key, a.address ?? a.label]),
+                )
               : null
           }
           onApply={applySweep}
@@ -1213,7 +1339,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         onClose={() => setShowSettings(false)}
         onSaved={setAiOk}
       />
-      <ScheduledPanel open={showScheduled} onClose={() => setShowScheduled(false)} />
+      <ScheduledPanel
+        open={showScheduled}
+        onClose={() => setShowScheduled(false)}
+      />
       <DraftsPanel
         open={showDrafts}
         onClose={() => setShowDrafts(false)}

@@ -94,6 +94,8 @@ const ja: Dict = {
   "bulk.clear": "選択を解除",
   "bulk.archive.title": "選択した会話をすべてアーカイブ",
   "bulk.trash.title": "選択した会話をすべてゴミ箱へ",
+  "bulk.importance.hint":
+    "選択したメールの重要度をまとめて学習（差出人ごとのAI教師データ）",
   "action.archive": "アーカイブ",
   "action.trash": "ゴミ箱",
   "search.placeholder": "検索（件名・本文・差出人）",
@@ -363,6 +365,8 @@ const en: Dict = {
   "bulk.clear": "Clear selection",
   "bulk.archive.title": "Archive all selected conversations",
   "bulk.trash.title": "Move all selected conversations to Trash",
+  "bulk.importance.hint":
+    "Teach importance for all selected mail (per-sender AI training)",
   "action.archive": "Archive",
   "action.trash": "Trash",
   "search.placeholder": "Search (subject, body, sender)",
@@ -633,6 +637,8 @@ const fr: Dict = {
   "bulk.archive.title": "Archiver toutes les conversations sélectionnées",
   "bulk.trash.title":
     "Mettre à la corbeille toutes les conversations sélectionnées",
+  "bulk.importance.hint":
+    "Apprendre l’importance des mails sélectionnés (données d’entraînement par expéditeur)",
   "action.archive": "Archiver",
   "action.trash": "Corbeille",
   "search.placeholder": "Rechercher (objet, corps, expéditeur)",
