@@ -1,6 +1,6 @@
 {
   "name": "asanagi",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Asanagi（朝凪） — AIネイティブなメールクライアント。返信提案・会話で一箇所ずつ添削・スケジュール送信・AI重要度学習。",
   "license": "MIT",
