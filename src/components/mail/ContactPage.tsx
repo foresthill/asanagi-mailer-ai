@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, SquarePen, Sparkles } from "lucide-react";
-import type { Email, EmailAddress, Importance } from "@/lib/types";
+import { Loader2, SquarePen, Sparkles, Check } from "lucide-react";
+import type {
+  ContactLabel,
+  Email,
+  EmailAddress,
+  Importance,
+  ResolvedContactMeta,
+} from "@/lib/types";
 import { avatarColor } from "./helpers";
 import { useI18n } from "@/lib/i18n";
 import { ConversationBubbles } from "./ConversationBubbles";
@@ -154,6 +160,9 @@ export function ContactPage({
         </button>
       </div>
 
+      {/* key=email → remount per contact, so state resets without effect churn. */}
+      <ContactMetaEditor key={contact.email} email={contact.email} />
+
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mx-auto max-w-2xl">
           {messages === null ? (
@@ -170,6 +179,175 @@ export function ContactPage({
           <div ref={bottomRef} />
         </div>
       </div>
+    </div>
+  );
+}
+
+const LABELS: ContactLabel[] = ["vip", "normal", "spam"];
+const LABEL_STYLE: Record<ContactLabel, string> = {
+  vip: "border-amber-400 bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300",
+  normal: "border-border bg-surface-2 text-fg-muted",
+  spam: "border-high/40 bg-high-soft text-high",
+};
+
+/**
+ * Per-contact metadata editor (label / company / honorific / tags). Edits the
+ * PERSON-scope entry; the company(domain) defaults show as placeholders so you
+ * see what is inherited. local-first: saved to .data only. Values are never
+ * fabricated — company/honorific are typed by the user (or, later, AI-copied
+ * from the signature for confirmation).
+ */
+function ContactMetaEditor({ email }: { email: string }) {
+  const { t } = useI18n();
+  const domain = email.split("@")[1] ?? "";
+  const [loaded, setLoaded] = useState(false);
+  const [label, setLabel] = useState<ContactLabel | undefined>();
+  const [company, setCompany] = useState("");
+  const [honorific, setHonorific] = useState("");
+  const [tags, setTags] = useState("");
+  const [inherited, setInherited] = useState<ResolvedContactMeta | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    // Component is keyed by email (remounts per contact), so state starts fresh;
+    // this effect only loads. setState happens in the async callback (allowed).
+    let active = true;
+    (async () => {
+      try {
+        // All entries → pick this person's own row + the domain defaults.
+        const res = await fetch("/api/contacts/meta");
+        const data = (await res.json()) as {
+          entries?: {
+            key: string;
+            scope: string;
+            label?: ContactLabel;
+            company?: string;
+            honorific?: string;
+            tags?: string[];
+          }[];
+        };
+        if (!active) return;
+        const rows = data.entries ?? [];
+        const person = rows.find(
+          (r) =>
+            r.scope === "person" && r.key.toLowerCase() === email.toLowerCase(),
+        );
+        const dom = rows.find(
+          (r) => r.scope === "domain" && r.key === domain.toLowerCase(),
+        );
+        setLabel(person?.label);
+        setCompany(person?.company ?? "");
+        setHonorific(person?.honorific ?? "");
+        setTags((person?.tags ?? []).join(", "));
+        setInherited(
+          dom
+            ? {
+                label: dom.label,
+                company: dom.company,
+                honorific: dom.honorific,
+                tags: dom.tags ?? [],
+              }
+            : null,
+        );
+      } catch {
+        /* editor is best-effort */
+      } finally {
+        if (active) setLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [email, domain]);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await fetch("/api/contacts/meta", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          key: email,
+          scope: "person",
+          label: label ?? null,
+          company,
+          honorific,
+          tags: tags
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        }),
+      });
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!loaded) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface-2 px-6 py-2.5 text-xs">
+      <span className="flex items-center gap-1">
+        {LABELS.map((l) => (
+          <button
+            key={l}
+            onClick={() => {
+              setLabel((cur) => (cur === l ? undefined : l));
+              setSaved(false);
+            }}
+            className={
+              "rounded-full border px-2 py-0.5 font-medium transition-colors " +
+              (label === l
+                ? LABEL_STYLE[l]
+                : "border-border text-fg-subtle hover:text-fg")
+            }
+          >
+            {t(`contact.meta.${l}`)}
+          </button>
+        ))}
+      </span>
+      <input
+        value={company}
+        onChange={(e) => {
+          setCompany(e.target.value);
+          setSaved(false);
+        }}
+        placeholder={inherited?.company || t("contact.meta.company")}
+        className="w-40 rounded-md border border-border bg-bg px-2 py-1 outline-none focus:border-accent"
+        title={t("contact.meta.company.hint")}
+      />
+      <input
+        value={honorific}
+        onChange={(e) => {
+          setHonorific(e.target.value);
+          setSaved(false);
+        }}
+        placeholder={inherited?.honorific || t("contact.meta.honorific")}
+        className="w-20 rounded-md border border-border bg-bg px-2 py-1 outline-none focus:border-accent"
+      />
+      <input
+        value={tags}
+        onChange={(e) => {
+          setTags(e.target.value);
+          setSaved(false);
+        }}
+        placeholder={t("contact.meta.tags")}
+        className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1 outline-none focus:border-accent"
+      />
+      <button
+        onClick={save}
+        disabled={saving}
+        className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
+      >
+        {saving ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : saved ? (
+          <Check className="size-3" />
+        ) : null}
+        {saved ? t("contact.meta.saved") : t("contact.meta.save")}
+      </button>
     </div>
   );
 }

@@ -10,6 +10,8 @@ import type {
   ProjectHub,
   ScheduledSend,
   SavedDraft,
+  ContactMeta,
+  ResolvedContactMeta,
 } from "@/lib/types";
 import type { ThreatSenders } from "./threat";
 
@@ -505,4 +507,74 @@ export async function addSweptIds(ids: string[]): Promise<void> {
   // 新しいものを末尾に積み、上限超過分は古いものから捨てる。
   const merged = [...cur.filter((id) => !ids.includes(id)), ...ids];
   await writeJson(SWEPT_IDS, merged.slice(-SWEPT_CAP));
+}
+
+// ── 連絡先メタデータ（ラベル/会社名/敬称/タグ）─────────────────────────
+// 会社(ドメイン)単位を既定に、個人(アドレス)単位で上書き。実メールの宛名に
+// 使うため creation は禁止（署名どおり／手入力のみ）。
+const CONTACT_META = "contact-meta.json";
+
+function domainOf(email: string): string {
+  const at = email.lastIndexOf("@");
+  return at >= 0 ? email.slice(at + 1).toLowerCase() : "";
+}
+
+export async function listContactMeta(): Promise<ContactMeta[]> {
+  return readJson<ContactMeta[]>(CONTACT_META, []);
+}
+
+/**
+ * Upsert one entry (matched by scope+key). An entry with no meaningful fields
+ * (no label/company/honorific/tags) is removed instead — so clearing the form
+ * deletes the row rather than leaving an empty shell.
+ */
+export async function saveContactMeta(
+  entry: Omit<ContactMeta, "updatedAt">,
+  now = new Date(),
+): Promise<ContactMeta[]> {
+  const rows = await readJson<ContactMeta[]>(CONTACT_META, []);
+  const key = entry.scope === "domain" ? entry.key.toLowerCase() : entry.key;
+  const tags = (entry.tags ?? []).map((t) => t.trim()).filter(Boolean);
+  const empty =
+    !entry.label &&
+    !entry.company?.trim() &&
+    !entry.honorific?.trim() &&
+    tags.length === 0;
+  const idx = rows.findIndex((r) => r.scope === entry.scope && r.key === key);
+  if (empty) {
+    if (idx >= 0) rows.splice(idx, 1);
+  } else {
+    const next: ContactMeta = {
+      key,
+      scope: entry.scope,
+      label: entry.label,
+      company: entry.company?.trim() || undefined,
+      honorific: entry.honorific?.trim() || undefined,
+      tags: tags.length ? tags : undefined,
+      aiSuggested: entry.aiSuggested,
+      updatedAt: now.toISOString(),
+    };
+    if (idx >= 0) rows[idx] = next;
+    else rows.push(next);
+  }
+  await writeJson(CONTACT_META, rows);
+  return rows;
+}
+
+/** Merge the company(domain) defaults with the person override for one address. */
+export async function resolveContactMeta(
+  email: string,
+): Promise<ResolvedContactMeta> {
+  const rows = await readJson<ContactMeta[]>(CONTACT_META, []);
+  const dom = domainOf(email);
+  const domain = rows.find((r) => r.scope === "domain" && r.key === dom);
+  const person = rows.find(
+    (r) => r.scope === "person" && r.key.toLowerCase() === email.toLowerCase(),
+  );
+  return {
+    label: person?.label ?? domain?.label,
+    company: person?.company ?? domain?.company,
+    honorific: person?.honorific ?? domain?.honorific,
+    tags: [...(domain?.tags ?? []), ...(person?.tags ?? [])],
+  };
 }
