@@ -914,6 +914,35 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     await mutateState(ids, state, label);
   };
 
+  // Bulk 迷惑メール報告: report every checked conversation as spam/phishing.
+  // Learns once per distinct sender (教師データ) then trashes all of them.
+  const bulkReportSpam = async () => {
+    const targetRows = rows.filter((r) => checked.has(r.email.id));
+    if (!targetRows.length) return;
+    const ids = targetRows.flatMap((r) => r.ids);
+    // One learning report per distinct sender (representative email id).
+    const bySender = new Map<string, Email>();
+    for (const r of targetRows) {
+      if (!bySender.has(r.email.from.email))
+        bySender.set(r.email.from.email, r.email);
+    }
+    setChecked(new Set());
+    await Promise.all(
+      Array.from(bySender.values()).map((e) =>
+        fetch(`/api/emails/${encodeURIComponent(e.id)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ reportSpam: { fromEmail: e.from.email } }),
+        }).catch(() => {}),
+      ),
+    );
+    await mutateState(
+      ids,
+      "trashed",
+      `${targetRows.length}件を迷惑メールとして報告しました`,
+    );
+  };
+
   // Mark a set of mails' importance — a per-sender training signal (教師データ)
   // for each, so the AI's future judgments improve. Shared by the conversation
   // bulk bar and the per-message (thread sub-row) selection.
@@ -1205,6 +1234,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onClearChecked={() => setChecked(new Set())}
       onBulkArchive={() => bulkAct("archived", "一括アーカイブしました")}
       onBulkTrash={() => bulkAct("trashed", "一括でゴミ箱に移動しました")}
+      onBulkReportSpam={bulkReportSpam}
       onBulkImportance={bulkImportance}
       onImportanceFor={importanceForEmails}
       onServerSearch={searchServer}
