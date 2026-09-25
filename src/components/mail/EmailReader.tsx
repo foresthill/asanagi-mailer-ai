@@ -19,7 +19,13 @@ import {
   PenLine,
   ShieldAlert,
 } from "lucide-react";
-import type { Email, FolderView, Importance, SavedDraft } from "@/lib/types";
+import type {
+  Email,
+  FolderView,
+  Importance,
+  SavedDraft,
+  ContactLabel,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -52,6 +58,7 @@ export function EmailReader({
   onReplyMessage,
   onToggleStar,
   onMarkUnread,
+  senderLabel,
   onImportanceFeedback,
   onReportSpam,
   onNoteSaved,
@@ -74,6 +81,8 @@ export function EmailReader({
   onToggleStar: () => void;
   /** Mark this (already-read) mail back to unread. */
   onMarkUnread?: () => void;
+  /** Correspondent's label (重要取引先/迷惑) for the header badge. */
+  senderLabel?: ContactLabel;
   onImportanceFeedback: (importance: Importance) => void;
   /** Report as spam/phishing → learn the sender + move to trash. */
   onReportSpam?: () => void;
@@ -413,7 +422,21 @@ export function EmailReader({
                   {initials(email.from)}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-fg">{name}</p>
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-fg">
+                    <span className="truncate">{name}</span>
+                    {(senderLabel === "vip" || senderLabel === "spam") && (
+                      <span
+                        className={cn(
+                          "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold",
+                          senderLabel === "vip"
+                            ? "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300"
+                            : "bg-high-soft text-high",
+                        )}
+                      >
+                        {t(`contact.meta.${senderLabel}`)}
+                      </span>
+                    )}
+                  </p>
                   <p className="truncate text-xs text-fg-subtle">
                     {email.from.email}
                   </p>

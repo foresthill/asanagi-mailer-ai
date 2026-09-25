@@ -8,6 +8,8 @@ import type {
   Importance,
   MailboxState,
   SavedDraft,
+  ContactLabel,
+  ContactMeta,
 } from "@/lib/types";
 import { Sidebar } from "./Sidebar";
 import { EmailList } from "./EmailList";
@@ -200,6 +202,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [drafts, setDrafts] = useState<SavedDraft[]>([]);
   // Email ids that have a private note (自分用メモ) — for the list 📝 badge.
   const [noteIds, setNoteIds] = useState<Set<string>>(new Set());
+  // Contact labels (重要取引先/迷惑) — resolved from the contacts store for badges.
+  const [contactMeta, setContactMeta] = useState<ContactMeta[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
   const selectToken = useRef(0);
@@ -238,6 +242,35 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       /* note indicator is non-critical */
     }
   }, []);
+
+  const loadContactMeta = useCallback(async () => {
+    try {
+      const res = await fetch("/api/contacts/meta");
+      const data = await res.json();
+      setContactMeta((data.entries ?? []) as ContactMeta[]);
+    } catch {
+      /* label badges are non-critical */
+    }
+  }, []);
+
+  // Resolve a contact's label: person override → company(domain) default.
+  const contactLabel = useCallback(
+    (email?: string): ContactLabel | undefined => {
+      if (!email) return undefined;
+      const e = email.toLowerCase();
+      const at = e.lastIndexOf("@");
+      const dom = at >= 0 ? e.slice(at + 1) : "";
+      const person = contactMeta.find(
+        (m) => m.scope === "person" && m.key.toLowerCase() === e,
+      );
+      if (person?.label) return person.label;
+      const domain = contactMeta.find(
+        (m) => m.scope === "domain" && m.key.toLowerCase() === dom,
+      );
+      return domain?.label;
+    },
+    [contactMeta],
+  );
 
   // Newest request wins: a slow live response must never overwrite a fresher
   // folder/account the user has since switched to.
@@ -316,6 +349,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch
     loadNoteIds();
   }, [loadNoteIds, selectedId]);
+
+  useEffect(() => {
+    // Load contact labels on mount and whenever we return to the mail view (so
+    // labels edited in Contacts show up on the list). eslint-disable justified:
+    // this only kicks off an async fetch that sets state in its callback.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch
+    if (view === "mail") loadContactMeta();
+  }, [loadContactMeta, view]);
 
   // 朝の一掃: 受信箱が読み込まれた直後に1日の最初だけポップアップ。
   // 判断済みを除いた「未さばき」が5通以上あるときだけ開く（空ポップアップや
@@ -1283,6 +1324,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       grouping={grouping}
       groupAxis={groupAxis}
       noteIds={noteIds}
+      contactLabel={contactLabel}
       draftThreadIds={draftThreadIds}
       onChangeGroupAxis={changeGroupAxis}
       accountLabels={
@@ -1333,6 +1375,15 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onReplyMessage={replyToMessage}
       onToggleStar={() => selected && toggleStar(selected.id)}
       onMarkUnread={() => selected && markUnread(selected.id)}
+      senderLabel={
+        selected
+          ? contactLabel(
+              selected.state === "sent" && selected.to[0]
+                ? selected.to[0].email
+                : selected.from.email,
+            )
+          : undefined
+      }
       onImportanceFeedback={onImportanceFeedback}
       onReportSpam={() => selected && reportSpam(selected)}
       onNoteSaved={loadNoteIds}
