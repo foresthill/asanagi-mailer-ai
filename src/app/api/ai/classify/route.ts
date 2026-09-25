@@ -6,6 +6,7 @@ import {
   CLASSIFY_SYSTEM,
   classifyContext,
   profileBlock,
+  langDirective,
 } from "@/lib/ai/prompts";
 import {
   getJudgmentProfile,
@@ -52,7 +53,10 @@ function record(
 }
 
 export async function POST(req: Request) {
-  const { email } = (await req.json()) as { email: Email };
+  const { email, locale } = (await req.json()) as {
+    email: Email;
+    locale?: string;
+  };
   const signals = await listSignals();
   // Dangerous-mail flag (phishing/spam) — independent of importance, always
   // applied so a "learned low" or heuristic result still carries the warning.
@@ -107,6 +111,7 @@ export async function POST(req: Request) {
     const prompt =
       classifyContext(target, signals, cfg.piiMask ? masker : undefined) +
       profileBlock(profile);
+    const system = CLASSIFY_SYSTEM + langDirective(locale);
     const { object, usage } = await generateObject({
       // 重要度判定は安価な判定用モデルで（未設定ならメインと同じ）。
       model: resolveModel({ ...cfg, model: cfg.judgmentModel }),
@@ -114,11 +119,11 @@ export async function POST(req: Request) {
       // (64k) and fail the affordability check when credits run low.
       maxOutputTokens: 300,
       schema,
-      system: CLASSIFY_SYSTEM,
+      system,
       prompt,
     });
     record(email, object.importance, object.reason, "ai");
-    const logged = `[system]\n${CLASSIFY_SYSTEM}\n\n[prompt]\n${prompt}`;
+    const logged = `[system]\n${system}\n\n[prompt]\n${prompt}`;
     logAiUsage(
       "classify",
       cfg.judgmentModel,

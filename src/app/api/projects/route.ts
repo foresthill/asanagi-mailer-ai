@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
-import { PROJECTS_SYSTEM, projectsContext } from "@/lib/ai/prompts";
+import {
+  PROJECTS_SYSTEM,
+  projectsContext,
+  langDirective,
+} from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { cachedList, logAiUsage } from "@/lib/db";
 import { listAccounts } from "@/lib/email/accounts";
@@ -33,7 +37,10 @@ const schema = z.object({
       statusLabel: z.string().describe("進捗の一言（例: NDA締結・提案準備）"),
       pct: z.number().min(0).max(100).describe("進捗率の推定"),
       priority: z.enum(["高", "中", "低"]),
-      due: z.string().describe("期限・次の予定（あれば。例: 打合せ 7/30 10:00）").optional(),
+      due: z
+        .string()
+        .describe("期限・次の予定（あれば。例: 打合せ 7/30 10:00）")
+        .optional(),
       next: z.string().describe("次アクション（具体的に）"),
       memo: z.string().describe("備考（推定である旨など）").optional(),
       sources: z
@@ -49,10 +56,18 @@ const schema = z.object({
  * (never the provider directly), masks structured PII before the AI call, and
  * saves the result to `.data/projects.json` (実データは端末外に出さない).
  */
-export async function POST() {
+export async function POST(req: Request) {
+  // Body is optional ({ locale }); tolerate an empty/absent body.
+  const locale = await req
+    .json()
+    .then((b) => (b as { locale?: string })?.locale)
+    .catch(() => undefined);
   const cfg = await loadAIConfig();
   if (!cfg.configured) {
-    return NextResponse.json({ error: "AIキーが未設定です（接続設定から設定してください）" }, { status: 400 });
+    return NextResponse.json(
+      { error: "AIキーが未設定です（接続設定から設定してください）" },
+      { status: 400 },
+    );
   }
 
   // 1) Gather candidate threads from the cache (inbox + archive), newest message
@@ -61,25 +76,37 @@ export async function POST() {
   //    files) before recency, then take the top 60 within ~60 days. This keeps
   //    the AI focused on actual projects instead of one-off blasts.
   const accounts = (await listAccounts()).map((a) => a.key);
-  const pool: Email[] = [...cachedList(accounts, "inbox", 800), ...cachedList(accounts, "archived", 400)];
+  const pool: Email[] = [
+    ...cachedList(accounts, "inbox", 800),
+    ...cachedList(accounts, "archived", 400),
+  ];
   const count = new Map<string, number>();
   const byThread = new Map<string, Email>();
   for (const e of pool) {
     count.set(e.threadId, (count.get(e.threadId) ?? 0) + 1);
     const cur = byThread.get(e.threadId);
-    if (!cur || +new Date(e.date) > +new Date(cur.date)) byThread.set(e.threadId, e);
+    if (!cur || +new Date(e.date) > +new Date(cur.date))
+      byThread.set(e.threadId, e);
   }
   const since = Date.now() - 60 * 864e5;
   const threads = [...byThread.values()]
     .filter((e) => +new Date(e.date) >= since)
-    .map((e) => ({ e, score: (count.get(e.threadId) ?? 1) * 10 + (e.hasAttachment ? 6 : 0) }))
-    .sort((a, b) => b.score - a.score || +new Date(b.e.date) - +new Date(a.e.date))
+    .map((e) => ({
+      e,
+      score: (count.get(e.threadId) ?? 1) * 10 + (e.hasAttachment ? 6 : 0),
+    }))
+    .sort(
+      (a, b) => b.score - a.score || +new Date(b.e.date) - +new Date(a.e.date),
+    )
     .slice(0, 60)
     .map((x) => x.e)
     .sort((a, b) => +new Date(b.date) - +new Date(a.date));
 
   if (!threads.length) {
-    return NextResponse.json({ error: "対象メールが見つかりませんでした（キャッシュが空の可能性）" }, { status: 400 });
+    return NextResponse.json(
+      { error: "対象メールが見つかりませんでした（キャッシュが空の可能性）" },
+      { status: 400 },
+    );
   }
 
   try {
@@ -95,19 +122,22 @@ export async function POST() {
     }));
     const prompt = projectsContext(rows);
 
+    const system = PROJECTS_SYSTEM + langDirective(locale);
     const { object, usage } = await generateObject({
       model: resolveModel(cfg),
       maxOutputTokens: 4000,
       schema,
-      system: PROJECTS_SYSTEM,
+      system,
       prompt,
     });
 
-    const logged = `[system]\n${PROJECTS_SYSTEM}\n\n[prompt]\n${prompt}`;
+    const logged = `[system]\n${system}\n\n[prompt]\n${prompt}`;
     logAiUsage("projects", cfg.model, usage?.inputTokens, usage?.outputTokens, {
       prompt: logged,
       response: JSON.stringify(object, null, 2),
-      maskAudit: cfg.piiMask ? auditOutgoing("projects", masker, logged) : undefined,
+      maskAudit: cfg.piiMask
+        ? auditOutgoing("projects", masker, logged)
+        : undefined,
     });
 
     // Restore any masked tokens the model echoed back, then materialize.
@@ -118,14 +148,19 @@ export async function POST() {
     const anchorOf = (sources?: number[]): string | undefined => {
       const cands = (sources ?? []).map((n) => threads[n - 1]).filter(Boolean);
       if (!cands.length) return undefined;
-      const latest = cands.reduce((a, b) => (+new Date(b.date) > +new Date(a.date) ? b : a));
+      const latest = cands.reduce((a, b) =>
+        +new Date(b.date) > +new Date(a.date) ? b : a,
+      );
       return latest.account ? `${latest.account}/${latest.id}` : latest.id;
     };
     const projects: Project[] = object.projects.map((p, i) => ({
       id: String(i),
       name: un(p.name) ?? "",
       tag: un(p.tag),
-      parties: p.parties.map((pt) => ({ org: un(pt.org) ?? "", person: un(pt.person) })),
+      parties: p.parties.map((pt) => ({
+        org: un(pt.org) ?? "",
+        person: un(pt.person),
+      })),
       status: p.status,
       statusLabel: un(p.statusLabel) ?? "",
       pct: Math.max(0, Math.min(100, Math.round(p.pct))),

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
-import { DIGEST_SYSTEM } from "@/lib/ai/prompts";
+import { DIGEST_SYSTEM, langDirective } from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage } from "@/lib/db";
 import type { Email } from "@/lib/types";
@@ -19,9 +19,15 @@ const schema = z.object({
   summary: z.string().describe("会話の経緯を2〜4行で"),
   decisions: z.array(z.string()).describe("決まったこと（合意・確定事項）"),
   open: z.array(z.string()).describe("未決・宿題・保留中の論点"),
-  nextActions: z.array(z.string()).describe("次にやるべきこと（担当が分かれば添える）"),
-  keyDates: z.array(z.string()).describe("重要な日付・締切（例: 9/14 会議, 月末納品）"),
-  participants: z.array(z.string()).describe("主な登場人物と役割（分かる範囲で）"),
+  nextActions: z
+    .array(z.string())
+    .describe("次にやるべきこと（担当が分かれば添える）"),
+  keyDates: z
+    .array(z.string())
+    .describe("重要な日付・締切（例: 9/14 会議, 月末納品）"),
+  participants: z
+    .array(z.string())
+    .describe("主な登場人物と役割（分かる範囲で）"),
 });
 
 export type ThreadDigest = z.infer<typeof schema>;
@@ -31,7 +37,10 @@ const MAX_MESSAGES = 40;
 const MAX_BODY = 1200;
 
 export async function POST(req: Request) {
-  const { messages } = (await req.json()) as { messages: Email[] };
+  const { messages, locale } = (await req.json()) as {
+    messages: Email[];
+    locale?: string;
+  };
   if (!messages?.length) {
     return NextResponse.json({ error: "スレッドが空です" }, { status: 400 });
   }
@@ -39,13 +48,18 @@ export async function POST(req: Request) {
   const cfg = await loadAIConfig();
   if (!cfg.configured) {
     return NextResponse.json(
-      { error: "AIが未設定です（接続設定でキー、またはローカルOllamaのエンドポイントを設定してください）" },
+      {
+        error:
+          "AIが未設定です（接続設定でキー、またはローカルOllamaのエンドポイントを設定してください）",
+      },
       { status: 400 },
     );
   }
 
   // Oldest → newest; keep the most recent window if very long.
-  const ordered = [...messages].sort((a, b) => +new Date(a.date) - +new Date(b.date));
+  const ordered = [...messages].sort(
+    (a, b) => +new Date(a.date) - +new Date(b.date),
+  );
   const window = ordered.slice(-MAX_MESSAGES);
 
   try {
@@ -55,11 +69,15 @@ export async function POST(req: Request) {
         window.flatMap((m) => [m.from?.name, m.subject, m.body || m.snippet]),
       );
     }
-    const m = (s: string | undefined) => (cfg.piiMask ? masker.mask(s ?? "") : (s ?? ""));
+    const m = (s: string | undefined) =>
+      cfg.piiMask ? masker.mask(s ?? "") : (s ?? "");
 
     const transcript = window
       .map((e, i) => {
-        const who = e.state === "sent" ? "自分" : `${m(e.from?.name) || m(e.from?.email)}`;
+        const who =
+          e.state === "sent"
+            ? "自分"
+            : `${m(e.from?.name) || m(e.from?.email)}`;
         const date = e.date ? new Date(e.date).toLocaleString("ja-JP") : "";
         const body = m(e.body || e.snippet).slice(0, MAX_BODY);
         return `--- [${i + 1}] ${date} / ${who} / 件名: ${m(e.subject)}\n${body}`;
@@ -72,11 +90,12 @@ export async function POST(req: Request) {
       transcript,
     ].join("\n");
 
+    const system = DIGEST_SYSTEM + langDirective(locale);
     const { object, usage } = await generateObject({
       model: resolveModel(cfg), // 品質重視でメインモデル
       maxOutputTokens: 2000,
       schema,
-      system: DIGEST_SYSTEM,
+      system,
       prompt,
     });
 
@@ -91,18 +110,26 @@ export async function POST(req: Request) {
       participants: object.participants.map(u),
     };
 
-    const logged = `[system]\n${DIGEST_SYSTEM}\n\n[prompt]\n${prompt}`;
+    const logged = `[system]\n${system}\n\n[prompt]\n${prompt}`;
     logAiUsage("digest", cfg.model, usage?.inputTokens, usage?.outputTokens, {
       prompt: logged,
       response: JSON.stringify(digest, null, 2),
-      maskAudit: cfg.piiMask ? auditOutgoing("digest", masker, logged) : undefined,
+      maskAudit: cfg.piiMask
+        ? auditOutgoing("digest", masker, logged)
+        : undefined,
     });
 
     return NextResponse.json({ digest });
   } catch (err) {
-    console.warn("[thread-digest] AI失敗:", err instanceof Error ? err.message : err);
+    console.warn(
+      "[thread-digest] AI失敗:",
+      err instanceof Error ? err.message : err,
+    );
     return NextResponse.json(
-      { error: "要約を作成できませんでした（AIの呼び出しに失敗）。時間をおいて再度お試しください。" },
+      {
+        error:
+          "要約を作成できませんでした（AIの呼び出しに失敗）。時間をおいて再度お試しください。",
+      },
       { status: 500 },
     );
   }

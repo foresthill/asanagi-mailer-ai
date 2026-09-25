@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
-import { SWEEP_SYSTEM, profileBlock } from "@/lib/ai/prompts";
+import { SWEEP_SYSTEM, profileBlock, langDirective } from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage } from "@/lib/db";
 import {
@@ -69,7 +69,10 @@ function heuristicItem(e: Email): SweepItem {
 const SWEEP_WINDOW_MS = 36 * 3600 * 1000; // ≒「昨日〜今日」
 
 export async function POST(req: Request) {
-  const { emails } = (await req.json()) as { emails: Email[] };
+  const { emails, locale } = (await req.json()) as {
+    emails: Email[];
+    locale?: string;
+  };
   if (!emails?.length) return NextResponse.json({ items: [] });
 
   // 直近の新着だけを対象に（古い既読/保留メールを毎回蒸し返さない）。
@@ -101,7 +104,13 @@ export async function POST(req: Request) {
         source: "learned",
       });
     } else if (learned) {
-      items.push({ id: e.id, ...disp(e), action: "keep", reason: "学習済みの相手", source: "learned" });
+      items.push({
+        id: e.id,
+        ...disp(e),
+        action: "keep",
+        reason: "学習済みの相手",
+        source: "learned",
+      });
     } else {
       undecided.push(e);
     }
@@ -125,11 +134,16 @@ export async function POST(req: Request) {
     const lines = undecided.map((e, i) => {
       // Address always masked; the display name only when NER learned it as a
       // person/company (mask() is a no-op otherwise, so triage keeps the name).
-      const fromName = cfg.piiMask ? masker.mask(e.from.name ?? "") : (e.from.name ?? "");
+      const fromName = cfg.piiMask
+        ? masker.mask(e.from.name ?? "")
+        : (e.from.name ?? "");
       const fromEmail = cfg.piiMask ? masker.mask(e.from.email) : e.from.email;
       const from = `${fromName} <${fromEmail}>`.trim();
       const subject = cfg.piiMask ? masker.mask(e.subject) : e.subject;
-      const preview = (cfg.piiMask ? masker.mask(e.snippet) : e.snippet).slice(0, 140);
+      const preview = (cfg.piiMask ? masker.mask(e.snippet) : e.snippet).slice(
+        0,
+        140,
+      );
       return `${i}. From: ${from}\n   件名: ${subject}\n   冒頭: ${preview}`;
     });
     const prompt = [
@@ -138,6 +152,7 @@ export async function POST(req: Request) {
       "",
       ...lines,
     ].join("\n");
+    const system = SWEEP_SYSTEM + langDirective(locale);
     const { object, usage } = await generateObject({
       // 朝の一凪は安価な判定用モデルで（未設定ならメインと同じ）。
       model: resolveModel({ ...cfg, model: cfg.judgmentModel }),
@@ -145,15 +160,23 @@ export async function POST(req: Request) {
       // (64k) and fail the affordability check when credits run low.
       maxOutputTokens: 4000,
       schema,
-      system: SWEEP_SYSTEM,
+      system,
       prompt,
     });
-    const logged = `[system]\n${SWEEP_SYSTEM}\n\n[prompt]\n${prompt}`;
-    logAiUsage("sweep", cfg.judgmentModel, usage?.inputTokens, usage?.outputTokens, {
-      prompt: logged,
-      response: JSON.stringify(object.items, null, 2),
-      maskAudit: cfg.piiMask ? auditOutgoing("sweep", masker, logged) : undefined,
-    });
+    const logged = `[system]\n${system}\n\n[prompt]\n${prompt}`;
+    logAiUsage(
+      "sweep",
+      cfg.judgmentModel,
+      usage?.inputTokens,
+      usage?.outputTokens,
+      {
+        prompt: logged,
+        response: JSON.stringify(object.items, null, 2),
+        maskAudit: cfg.piiMask
+          ? auditOutgoing("sweep", masker, logged)
+          : undefined,
+      },
+    );
 
     const byIndex = new Map(object.items.map((r) => [r.index, r]));
     undecided.forEach((e, i) => {
@@ -172,7 +195,10 @@ export async function POST(req: Request) {
     // 全体を500で落とすと「朝の一掃」自体が使えなくなるため。
     // 技術的な詳細（トークン数・課金URL等）はサーバログにだけ出し、UIには
     // 簡潔なメッセージだけ返す。
-    console.warn("[sweep] AI判定フォールバック:", err instanceof Error ? err.message : err);
+    console.warn(
+      "[sweep] AI判定フォールバック:",
+      err instanceof Error ? err.message : err,
+    );
     for (const e of undecided) items.push(heuristicItem(e));
     return NextResponse.json({
       items,
