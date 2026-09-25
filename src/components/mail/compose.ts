@@ -44,7 +44,9 @@ const KIND_LABEL: Record<ComposeKind, string> = {
 };
 
 export function composeTitle(init: ComposeInit): string {
-  return init.mode === "ai" ? `AIで${KIND_LABEL[init.kind]}` : KIND_LABEL[init.kind];
+  return init.mode === "ai"
+    ? `AIで${KIND_LABEL[init.kind]}`
+    : KIND_LABEL[init.kind];
 }
 
 function rePrefix(subject: string): string {
@@ -84,11 +86,17 @@ export function splitQuotedDraft(
   if (!quote) return { head: body, tail: "" };
   const idx = body.lastIndexOf(quote);
   if (idx >= 0) {
-    return { head: body.slice(0, idx).replace(/\s+$/, ""), tail: body.slice(idx) };
+    return {
+      head: body.slice(0, idx).replace(/\s+$/, ""),
+      tail: body.slice(idx),
+    };
   }
   const lines = body.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    if (/<[^@\s]+@[^>\s]+>\s*:\s*$/.test(lines[i]) && /^>/.test(lines[i + 1] ?? "")) {
+    if (
+      /<[^@\s]+@[^>\s]+>\s*:\s*$/.test(lines[i]) &&
+      /^>/.test(lines[i + 1] ?? "")
+    ) {
       return {
         head: lines.slice(0, i).join("\n").replace(/\s+$/, ""),
         tail: lines.slice(i).join("\n"),
@@ -98,8 +106,48 @@ export function splitQuotedDraft(
   return { head: body, tail: "" };
 }
 
+/** Recipient metadata (from the contacts store) used to format the salutation. */
+export interface RecipientMeta {
+  company?: string;
+  honorific?: string;
+}
+
+/**
+ * Salutation block. With a company (stored verbatim, so 前株/後株 is preserved)
+ * it becomes two lines「会社名 / 担当者 敬称」— the standard JP business form.
+ * Honorific defaults to「様」. Never fabricates a company (only what's stored).
+ */
+export function greeting(name: string, meta?: RecipientMeta): string {
+  const h = meta?.honorific?.trim() || "様";
+  const company = meta?.company?.trim();
+  const person = name?.trim() ?? "";
+  if (company && person) return `${company}\n${person} ${h}\n\n`;
+  if (company) return `${company} ${h}\n\n`;
+  return `${person} ${h}\n\n`;
+}
+
+/** The address a reply/replyAll salutation is addressed to (for meta lookup). */
+export function greetTargetOf(
+  kind: ComposeKind,
+  source?: Email,
+  selfAddresses: string[] = [],
+): EmailAddress | undefined {
+  if (!source || (kind !== "reply" && kind !== "replyAll")) return undefined;
+  const self = new Set(selfAddresses.map((s) => s.toLowerCase()));
+  const ownMail = self.has(source.from.email.toLowerCase());
+  if (kind === "reply") {
+    const replyTo = ownMail ? others(source.to, self) : [source.from];
+    return replyTo[0] ?? source.from;
+  }
+  const to = others([source.from, ...source.to], self);
+  return to[0] ?? source.from;
+}
+
 /** Everyone on the original mail except our own addresses, de-duplicated. */
-function others(list: EmailAddress[] | undefined, self: Set<string>): EmailAddress[] {
+function others(
+  list: EmailAddress[] | undefined,
+  self: Set<string>,
+): EmailAddress[] {
   const seen = new Set<string>();
   return (list ?? []).filter((a) => {
     const key = a.email.toLowerCase();
@@ -114,11 +162,19 @@ export function buildCompose(
   mode: ComposeAI,
   source?: Email,
   selfAddresses: string[] = [],
+  recipientMeta?: RecipientMeta,
 ): ComposeInit {
   const self = new Set(selfAddresses.map((s) => s.toLowerCase()));
 
   if (kind === "new" || !source) {
-    return { kind: "new", mode: "plain", to: [], cc: [], subject: "", body: "" };
+    return {
+      kind: "new",
+      mode: "plain",
+      to: [],
+      cc: [],
+      subject: "",
+      body: "",
+    };
   }
 
   const base = { account: source.account, source };
@@ -138,7 +194,7 @@ export function buildCompose(
         to: replyTo.length ? replyTo : [source.from],
         cc: [],
         subject: rePrefix(source.subject),
-        body: `${displayName(greetTarget)} 様\n\n`,
+        body: greeting(displayName(greetTarget), recipientMeta),
         inReplyTo: source.messageId,
         threadId: source.threadId,
         quote: quoteOriginal(source),
@@ -153,7 +209,7 @@ export function buildCompose(
         to: to.length ? to : [source.from],
         cc: others(source.cc, self),
         subject: rePrefix(source.subject),
-        body: `${displayName(to[0] ?? source.from)} 様\n\n`,
+        body: greeting(displayName(to[0] ?? source.from), recipientMeta),
         inReplyTo: source.messageId,
         threadId: source.threadId,
         quote: quoteOriginal(source),
@@ -166,7 +222,9 @@ export function buildCompose(
         mode, // "ai" = AI drafts the forwarding note above the quote
         to: [],
         cc: [],
-        subject: source.subject.startsWith("Fwd:") ? source.subject : `Fwd: ${source.subject}`,
+        subject: source.subject.startsWith("Fwd:")
+          ? source.subject
+          : `Fwd: ${source.subject}`,
         body: [
           "",
           "",
@@ -204,10 +262,15 @@ export function parseAddressList(input: string): EmailAddress[] {
 /** Loose validity check used to enable the send button. */
 export function looksLikeAddressList(input: string): boolean {
   const list = parseAddressList(input);
-  return list.length > 0 && list.every((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email));
+  return (
+    list.length > 0 &&
+    list.every((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email))
+  );
 }
 
 /** Display form: `名前 <a@b.c>` when the name is known, bare address otherwise. */
 export function formatAddressList(list: EmailAddress[]): string {
-  return list.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ");
+  return list
+    .map((a) => (a.name ? `${a.name} <${a.email}>` : a.email))
+    .join(", ");
 }
