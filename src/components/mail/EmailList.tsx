@@ -508,6 +508,87 @@ export function EmailList({
     );
   };
 
+  // Bulk selection controls (clear / count / select-all / importance / actions).
+  // Placed in the top header for classic (左右), and in the group-bar row for
+  // geek (上下) so they appear right where the 「選択」 button is (相手＝一覧の近く).
+  const bulkControls = (
+    <>
+      <button
+        onClick={onClearChecked}
+        title={t("bulk.clear")}
+        className="grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
+      >
+        <X className="size-4" />
+      </button>
+      <span className="text-sm font-semibold tabular-nums">
+        {checkedIds.size}
+        {t("bulk.selectedSuffix")}
+      </span>
+      <button
+        onClick={onCheckAll}
+        className="rounded-md px-1.5 py-0.5 text-xs text-accent hover:bg-accent-soft"
+      >
+        {t("bulk.selectAll")}
+      </button>
+      {/* 重要度を一括学習（AI教師データ）: 選択メールの差出人ごとに学習シグナルを送る。 */}
+      <span
+        className="ml-1 flex items-center gap-0.5 rounded-lg border border-border p-0.5"
+        title={t("bulk.importance.hint")}
+      >
+        <button
+          onClick={() => onBulkImportance("high")}
+          className="rounded-md px-1.5 py-1 text-[11px] font-medium text-high hover:bg-high-soft"
+        >
+          {t("importance.high")}
+        </button>
+        <button
+          onClick={() => onBulkImportance("normal")}
+          className="rounded-md px-1.5 py-1 text-[11px] text-fg-muted hover:bg-surface-2"
+        >
+          {t("importance.normal")}
+        </button>
+        <button
+          onClick={() => onBulkImportance("low")}
+          className="rounded-md px-1.5 py-1 text-[11px] text-fg-subtle hover:bg-surface-2"
+        >
+          {t("importance.low")}
+        </button>
+      </span>
+      <span className="ml-auto flex items-center gap-1">
+        {folder !== "archived" && folder !== "sent" && (
+          <button
+            onClick={onBulkArchive}
+            title={t("bulk.archive.title")}
+            className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-accent"
+          >
+            <Archive className="size-3.5" />
+            {t("action.archive")}
+          </button>
+        )}
+        {folder !== "sent" && (
+          <button
+            onClick={onBulkReportSpam}
+            title={t("bulk.reportSpam.title")}
+            className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-high hover:text-high"
+          >
+            <ShieldAlert className="size-3.5" />
+            {t("bulk.reportSpam")}
+          </button>
+        )}
+        {folder !== "trashed" && (
+          <button
+            onClick={onBulkTrash}
+            title={t("bulk.trash.title")}
+            className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-high hover:text-high"
+          >
+            <Trash2 className="size-3.5" />
+            {t("action.trash")}
+          </button>
+        )}
+      </span>
+    </>
+  );
+
   return (
     <div
       style={horizontal ? { height } : width ? { width } : undefined}
@@ -520,82 +601,10 @@ export function EmailList({
             : "w-[384px] border-r border-border",
       )}
     >
-      {selectionActive ? (
-        // Bulk action bar — replaces the header while rows are checked.
+      {selectionActive && !horizontal ? (
+        // Classic (左右): bulk controls replace the top header.
         <header className="flex flex-wrap items-center gap-1.5 px-4 pb-2 pt-5">
-          <button
-            onClick={onClearChecked}
-            title={t("bulk.clear")}
-            className="grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
-          >
-            <X className="size-4" />
-          </button>
-          <span className="text-sm font-semibold tabular-nums">
-            {checkedIds.size}
-            {t("bulk.selectedSuffix")}
-          </span>
-          <button
-            onClick={onCheckAll}
-            className="rounded-md px-1.5 py-0.5 text-xs text-accent hover:bg-accent-soft"
-          >
-            {t("bulk.selectAll")}
-          </button>
-          {/* 重要度を一括学習（AI教師データ）: 選択メールの差出人ごとに学習シグナルを送る。 */}
-          <span
-            className="ml-1 flex items-center gap-0.5 rounded-lg border border-border p-0.5"
-            title={t("bulk.importance.hint")}
-          >
-            <button
-              onClick={() => onBulkImportance("high")}
-              className="rounded-md px-1.5 py-1 text-[11px] font-medium text-high hover:bg-high-soft"
-            >
-              {t("importance.high")}
-            </button>
-            <button
-              onClick={() => onBulkImportance("normal")}
-              className="rounded-md px-1.5 py-1 text-[11px] text-fg-muted hover:bg-surface-2"
-            >
-              {t("importance.normal")}
-            </button>
-            <button
-              onClick={() => onBulkImportance("low")}
-              className="rounded-md px-1.5 py-1 text-[11px] text-fg-subtle hover:bg-surface-2"
-            >
-              {t("importance.low")}
-            </button>
-          </span>
-          <span className="ml-auto flex items-center gap-1">
-            {folder !== "archived" && folder !== "sent" && (
-              <button
-                onClick={onBulkArchive}
-                title={t("bulk.archive.title")}
-                className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-accent"
-              >
-                <Archive className="size-3.5" />
-                {t("action.archive")}
-              </button>
-            )}
-            {folder !== "sent" && (
-              <button
-                onClick={onBulkReportSpam}
-                title={t("bulk.reportSpam.title")}
-                className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-high hover:text-high"
-              >
-                <ShieldAlert className="size-3.5" />
-                {t("bulk.reportSpam")}
-              </button>
-            )}
-            {folder !== "trashed" && (
-              <button
-                onClick={onBulkTrash}
-                title={t("bulk.trash.title")}
-                className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-high hover:text-high"
-              >
-                <Trash2 className="size-3.5" />
-                {t("action.trash")}
-              </button>
-            )}
-          </span>
+          {bulkControls}
         </header>
       ) : (
         <header className="flex items-center gap-2 px-5 pb-2 pt-5">
@@ -727,40 +736,44 @@ export function EmailList({
       </div>
 
       {/* グループ化軸: なし / アカウント別 / 送信者ドメイン別（折りたたみ表示）。 */}
-      {!searching && (
-        <div className="flex items-center gap-1.5 px-4 pb-2 text-[11px] text-fg-subtle">
-          {/* 上下(geek): 「選択」開始ボタンを一覧の直上・左端に置く（目に付く位置）。
-              グループはその右へ寄せる（label に ml-auto）。左右(classic)では
-              選択はヘッダにあり、ここはグループのみを左に並べる。 */}
-          {horizontal && rows.length > 0 && (
-            <button
-              onClick={onCheckAll}
-              title={t("list.selectAll.title")}
-              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-fg-subtle transition-colors hover:bg-surface-2 hover:text-accent"
-            >
-              <span className="grid size-3.5 place-items-center rounded-[3px] border border-current" />
-              {t("list.select")}
-            </button>
-          )}
-          <span className={cn(horizontal && "ml-auto")}>
-            {t("group.label")}
-          </span>
-          {(["none", "account", "sender"] as GroupAxis[]).map((a) => (
-            <button
-              key={a}
-              onClick={() => onChangeGroupAxis(a)}
-              className={cn(
-                "rounded-md border px-2 py-0.5 transition-colors",
-                groupAxis === a
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border hover:border-accent hover:text-accent",
-              )}
-            >
-              {t(`group.${a}`)}
-            </button>
-          ))}
-        </div>
-      )}
+      {!searching &&
+        (selectionActive && horizontal ? (
+          // 上下(geek)で選択中: 一括操作を「選択」の場所（一覧の直上）に出す。
+          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2 text-[11px] text-fg-subtle">
+            {bulkControls}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 px-4 pb-2 text-[11px] text-fg-subtle">
+            {/* 上下(geek): 「選択」開始ボタンを一覧の直上・左端に。グループは右へ。 */}
+            {horizontal && rows.length > 0 && (
+              <button
+                onClick={onCheckAll}
+                title={t("list.selectAll.title")}
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-fg-subtle transition-colors hover:bg-surface-2 hover:text-accent"
+              >
+                <span className="grid size-3.5 place-items-center rounded-[3px] border border-current" />
+                {t("list.select")}
+              </button>
+            )}
+            <span className={cn(horizontal && "ml-auto")}>
+              {t("group.label")}
+            </span>
+            {(["none", "account", "sender"] as GroupAxis[]).map((a) => (
+              <button
+                key={a}
+                onClick={() => onChangeGroupAxis(a)}
+                className={cn(
+                  "rounded-md border px-2 py-0.5 transition-colors",
+                  groupAxis === a
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border hover:border-accent hover:text-accent",
+                )}
+              >
+                {t(`group.${a}`)}
+              </button>
+            ))}
+          </div>
+        ))}
 
       {/* Aged-draft reminder — old unsent drafts, surfaced at the top of the inbox. */}
       {showDraftReminder && (
