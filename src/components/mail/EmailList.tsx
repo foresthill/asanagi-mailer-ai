@@ -635,7 +635,9 @@ export function EmailList({
               >
                 <Layers className="size-3.5" />
               </button>
-              {rows.length > 0 && (
+              {/* 左右(classic)はヘッダに置く。上下(geek)は一覧が下に離れるため、
+                  グループ行（行の直上）へ移す（下記）。 */}
+              {!horizontal && rows.length > 0 && (
                 <button
                   onClick={onCheckAll}
                   title={t("list.selectAll.title")}
@@ -742,6 +744,17 @@ export function EmailList({
               {t(`group.${a}`)}
             </button>
           ))}
+          {/* 上下(geek)レイアウト: 「選択」開始ボタンを一覧の直上（この行）に置く。 */}
+          {horizontal && rows.length > 0 && (
+            <button
+              onClick={onCheckAll}
+              title={t("list.selectAll.title")}
+              className="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-fg-subtle transition-colors hover:bg-surface-2 hover:text-accent"
+            >
+              <span className="grid size-3.5 place-items-center rounded-[3px] border border-current" />
+              {t("list.select")}
+            </button>
+          )}
         </div>
       )}
 
