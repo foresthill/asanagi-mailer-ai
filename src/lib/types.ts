@@ -324,3 +324,35 @@ export interface ProjectHub {
   /** 生成日時（ISO） */
   generatedAt?: string;
 }
+
+/** 連絡先ラベル: 重要取引先 / 通常 / 迷惑（スパム）。 */
+export type ContactLabel = "vip" | "normal" | "spam";
+
+/**
+ * 連絡先メタデータ（手入力＋AI抽出）。会社(ドメイン)単位を既定に、個人(アドレス)
+ * 単位で上書きする。`company` は署名どおり verbatim に持つ（"株式会社玉那覇" /
+ * "玉那覇株式会社" の前株/後株はこの文字列がそのまま保持する＝推測しない）。
+ * 実メールの宛名に使うため、値は創作せず、署名にある文字列か手入力のみ。
+ */
+export interface ContactMeta {
+  /** scope=domain なら "example.com"、scope=person ならメールアドレス。 */
+  key: string;
+  scope: "domain" | "person";
+  label?: ContactLabel;
+  /** 会社名（署名どおり／手入力・前株後株はこの文字列が保持）。 */
+  company?: string;
+  /** 敬称（既定は「様」。会社宛なら「御中」等）。 */
+  honorific?: string;
+  tags?: string[];
+  /** AI抽出で入れた項目か（ユーザー確認前の目印）。手入力/確認後は false。 */
+  aiSuggested?: boolean;
+  updatedAt: string;
+}
+
+/** ドメイン既定＋個人上書きをマージした、呼び出し側が使う解決済みメタ。 */
+export interface ResolvedContactMeta {
+  label?: ContactLabel;
+  company?: string;
+  honorific?: string;
+  tags: string[];
+}

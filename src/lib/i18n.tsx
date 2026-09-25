@@ -359,6 +359,16 @@ const ja: Dict = {
   "contact.scope.company.title":
     "@{domain} の全員（担当が分かれても1画面で辿る）",
   "contact.compose": "メールを書く",
+  "contact.meta.vip": "重要取引先",
+  "contact.meta.normal": "通常",
+  "contact.meta.spam": "迷惑",
+  "contact.meta.company": "会社名",
+  "contact.meta.company.hint":
+    "署名どおりに入力（例: 株式会社◯◯ / ◯◯株式会社）。前株/後株はこの表記のまま宛名に使います。",
+  "contact.meta.honorific": "敬称",
+  "contact.meta.tags": "タグ（カンマ区切り）",
+  "contact.meta.save": "保存",
+  "contact.meta.saved": "保存しました",
   "contact.empty": "キャッシュにこの人とのメールがまだありません",
   // 検索モード / AIナレッジ
   "search.mode.keyword": "キーワード",
@@ -855,6 +865,16 @@ const en: Dict = {
   "contact.scope.company.title":
     "Everyone at @{domain} (follow the thread across contacts)",
   "contact.compose": "Write email",
+  "contact.meta.vip": "Key client",
+  "contact.meta.normal": "Normal",
+  "contact.meta.spam": "Spam",
+  "contact.meta.company": "Company",
+  "contact.meta.company.hint":
+    "Type it exactly as in the signature. This exact spelling is used in the salutation.",
+  "contact.meta.honorific": "Honorific",
+  "contact.meta.tags": "Tags (comma-separated)",
+  "contact.meta.save": "Save",
+  "contact.meta.saved": "Saved",
   "contact.empty": "No cached email with this person yet",
   // Search modes / AI knowledge
   "search.mode.keyword": "Keyword",
@@ -1373,6 +1393,16 @@ const fr: Dict = {
   "contact.scope.company.title":
     "Tout le monde chez @{domain} (suivre le fil entre contacts)",
   "contact.compose": "Écrire un e-mail",
+  "contact.meta.vip": "Client clé",
+  "contact.meta.normal": "Normal",
+  "contact.meta.spam": "Indésirable",
+  "contact.meta.company": "Société",
+  "contact.meta.company.hint":
+    "Saisissez-le exactement comme dans la signature. Cette orthographe est utilisée dans la formule d'appel.",
+  "contact.meta.honorific": "Civilité",
+  "contact.meta.tags": "Étiquettes (séparées par des virgules)",
+  "contact.meta.save": "Enregistrer",
+  "contact.meta.saved": "Enregistré",
   "contact.empty": "Aucun e-mail en cache avec cette personne",
   // Modes de recherche / connaissance IA
   "search.mode.keyword": "Mot-clé",
@@ -1850,6 +1880,15 @@ const zh: Dict = {
   "contact.scope.company": "整个公司",
   "contact.scope.company.title": "@{domain} 的所有人（跨联系人跟踪该往来）",
   "contact.compose": "写邮件",
+  "contact.meta.vip": "重要客户",
+  "contact.meta.normal": "普通",
+  "contact.meta.spam": "垃圾",
+  "contact.meta.company": "公司名称",
+  "contact.meta.company.hint": "请按签名原样填写。此写法将原样用于称呼。",
+  "contact.meta.honorific": "敬称",
+  "contact.meta.tags": "标签（逗号分隔）",
+  "contact.meta.save": "保存",
+  "contact.meta.saved": "已保存",
   "contact.empty": "尚无与此人的缓存邮件",
   "search.mode.keyword": "关键字",
   "search.mode.ai": "AI",
