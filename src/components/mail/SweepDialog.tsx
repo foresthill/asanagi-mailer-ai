@@ -61,7 +61,7 @@ export function SweepDialog({
   onApply: (archiveIds: string[], trashIds: string[]) => Promise<void>;
   onClose: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<SweepItem[]>([]);
   /** AI推奨を初期値に、ユーザーが行ごとに上書きできる現在の処分。 */
@@ -130,7 +130,7 @@ export function SweepDialog({
           const res = await fetch("/api/ai/sweep", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ emails: chunk }),
+            body: JSON.stringify({ emails: chunk, locale }),
           });
           const data = await res.json().catch(() => ({}));
           if (!active) return;

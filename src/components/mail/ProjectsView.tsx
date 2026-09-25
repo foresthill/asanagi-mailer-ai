@@ -73,7 +73,7 @@ export function ProjectsView({
 }: {
   onOpenEmail?: (id: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [hub, setHub] = useState<ProjectHub | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -102,7 +102,11 @@ export function ProjectsView({
     setGenerating(true);
     setError(null);
     try {
-      const res = await fetch("/api/projects", { method: "POST" });
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ locale }),
+      });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? t("projects.genFailed"));
       setHub(d);

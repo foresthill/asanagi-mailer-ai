@@ -15,6 +15,7 @@ import type { ComposeAI, ComposeKind } from "./compose";
 import { ReplyButton, AiReplyButton } from "./ReplyButtons";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName, fullTime, initials } from "./helpers";
+import { useI18n } from "@/lib/i18n";
 import { ConversationBubbles } from "./ConversationBubbles";
 import { QuotedText } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
@@ -91,6 +92,7 @@ export function ThreadView({
   /** Search query to highlight in plain-text card bodies (search mode only). */
   highlight?: string;
 }) {
+  const { locale } = useI18n();
   const lastId = messages[messages.length - 1]?.id;
   const [view, setView] = useState<ViewMode>(loadViewPref);
   const [open, setOpen] = useState<Set<string>>(
@@ -213,7 +215,7 @@ export function ThreadView({
       const res = await fetch("/api/ai/thread-digest", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({ messages, locale }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "要約に失敗しました");

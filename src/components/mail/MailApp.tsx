@@ -31,6 +31,7 @@ import {
   type ComposeKind,
 } from "./compose";
 import { buildRows } from "./threadList";
+import { useI18n } from "@/lib/i18n";
 import type { GroupAxis } from "./EmailList";
 import type { SearchDigest } from "@/app/api/ai/search-digest/route";
 
@@ -77,6 +78,9 @@ function loadLayout(): Layout {
 }
 
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
+  // Current UI language — sent to AI routes so user-facing output (importance
+  // reasons, digests, project summaries) is written in the user's language.
+  const { locale } = useI18n();
   const [folder, setFolder] = useState<FolderView>("inbox");
   // "mail" = folders; "contacts" = auto-derived address book (mini-CRM).
   const [view, setView] = useState<
@@ -556,7 +560,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       const res = await fetch("/api/ai/search-digest", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query: q, messages: msgs }),
+        body: JSON.stringify({ query: q, messages: msgs, locale }),
       });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
@@ -564,7 +568,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     } catch {
       setSearchDigest("error");
     }
-  }, [searchQuery, searchResults]);
+  }, [searchQuery, searchResults, locale]);
 
   // 検索語が変われば経緯はやり直し（古い経緯を残さない）。
   useEffect(() => {
@@ -588,31 +592,34 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
-  const classify = useCallback(async (email: Email) => {
-    if (email.importance) return;
-    const token = ++classifyToken.current;
-    setClassifying(true);
-    try {
-      const res = await fetch("/api/ai/classify", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      if (token !== classifyToken.current) return; // a newer selection won
-      const patch = {
-        importance: data.importance as Importance,
-        importanceReason: data.reason,
-        threat: (data.threat as Email["threat"]) ?? undefined,
-      };
-      setSelected((s) => (s && s.id === email.id ? { ...s, ...patch } : s));
-      setEmails((list) =>
-        list.map((e) => (e.id === email.id ? { ...e, ...patch } : e)),
-      );
-    } finally {
-      if (token === classifyToken.current) setClassifying(false);
-    }
-  }, []);
+  const classify = useCallback(
+    async (email: Email) => {
+      if (email.importance) return;
+      const token = ++classifyToken.current;
+      setClassifying(true);
+      try {
+        const res = await fetch("/api/ai/classify", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, locale }),
+        });
+        const data = await res.json();
+        if (token !== classifyToken.current) return; // a newer selection won
+        const patch = {
+          importance: data.importance as Importance,
+          importanceReason: data.reason,
+          threat: (data.threat as Email["threat"]) ?? undefined,
+        };
+        setSelected((s) => (s && s.id === email.id ? { ...s, ...patch } : s));
+        setEmails((list) =>
+          list.map((e) => (e.id === email.id ? { ...e, ...patch } : e)),
+        );
+      } finally {
+        if (token === classifyToken.current) setClassifying(false);
+      }
+    },
+    [locale],
+  );
 
   // Load the conversation for the opened email. Cache-first (instant, ~20ms)
   // then revalidate live in the background — the live provider.thread() can take

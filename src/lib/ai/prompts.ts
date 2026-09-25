@@ -5,6 +5,27 @@ function formatAddr(a: { name?: string; email: string }): string {
   return a.name ? `${a.name} <${a.email}>` : a.email;
 }
 
+/** UI-language names for the output-language directive (user-facing AI output). */
+const LANG_NAME: Record<string, string> = {
+  ja: "日本語",
+  en: "English",
+  fr: "français",
+  zh: "简体中文",
+};
+
+/**
+ * Strong output-language directive appended to user-facing generation prompts
+ * (digest / search-digest / projects / importance reason / sweep reason). These
+ * are read by the USER, so they must follow the UI locale — not the language of
+ * the source mail. (Reply/subject drafting is different: it matches the
+ * correspondent's language and is handled in REPLY_SYSTEM/SUBJECT_SYSTEM.)
+ * Falls back to Japanese for an unknown/absent locale.
+ */
+export function langDirective(locale?: string): string {
+  const name = LANG_NAME[locale ?? "ja"] ?? LANG_NAME.ja;
+  return `\n\n## 出力言語（最優先）\nユーザーの表示言語は ${name} です。要約・説明・理由など、ユーザーに見せる文章は必ず ${name} で書いてください。ただしマスクトークン（[NAME_1] や [EMAIL_2] 等）・固有名詞・原文引用はそのまま残します。`;
+}
+
 /** Render an email into a compact context block for the model. */
 export function emailContext(email: Email): string {
   return [
@@ -113,7 +134,7 @@ export const PROJECTS_SYSTEM = `あなたは、業務メールの履歴から「
 - 状態は「進行中」（動いている）/「要確認」（案件化するか精査が要る）/「完了」。
 - 根拠が薄い項目は断定せず、推定である旨を statusLabel/memo に控えめに示す。
 - 事実を創作しない。件名・要約に無い固有名詞や数値を作らない。
-- 出力の言語は日本語。10〜15件程度に厳選する（重要・活発なものを優先）。
+- 出力は指定された言語で書く。10〜15件程度に厳選する（重要・活発なものを優先）。
 - 各案件で根拠にしたスレッドの番号（下の一覧の先頭の数字）を sources に入れる
   （最新メールへ飛べるようにするため。複数可）。`;
 
@@ -178,7 +199,7 @@ export function writingNoteBlock(note: string): string {
 }
 
 export const CLASSIFY_SYSTEM = `あなたはユーザーの受信メールの重要度を判定するアシスタントです。
-重要度は high / normal / low の3段階。判定の根拠を日本語で一文添えます。
+重要度は high / normal / low の3段階。判定の根拠を、指定された言語で一文添えます。
 
 判断材料:
 - 差出人との関係、緊急性、アクション要否、締切の有無。
@@ -227,7 +248,7 @@ export function classifyContext(
 }
 
 export const DIGEST_SYSTEM = `あなたは1つのメールスレッド（会話）の経緯を、後から思い出すために要約するアシスタントです。
-与えられた会話（古い順）だけを根拠に、事実に忠実に日本語でまとめます。
+与えられた会話（古い順）だけを根拠に、事実に忠実に、指定された言語でまとめます。
 
 厳守:
 - 会話に書かれていないことを推測・創作しない。分からないことは項目を空にする。
@@ -237,7 +258,7 @@ export const DIGEST_SYSTEM = `あなたは1つのメールスレッド（会話�
 - 簡潔に。要点は箇条書き、summary は2〜4行。`;
 
 export const SEARCH_DIGEST_SYSTEM = `あなたは、検索語で集められた複数のメールから「その件の経緯」を、後から思い出すために要約するアシスタントです。
-与えられた候補メール（番号付き）だけを根拠に、事実に忠実に日本語でまとめます。候補は別々のスレッド・別々の相手にまたがることがあります（同じ要件で担当が分かれる場合など）。
+与えられた候補メール（番号付き）だけを根拠に、事実に忠実に、指定された言語でまとめます。候補は別々のスレッド・別々の相手にまたがることがあります（同じ要件で担当が分かれる場合など）。
 
 厳守:
 - 候補に書かれていないことを推測・創作しない。分からないことは項目を空にする。
@@ -256,4 +277,4 @@ export const SWEEP_SYSTEM = `あなたは受信箱の一掃（消し込み）を
 - keep: 人からの個別メール、要返信・要対応の可能性があるもの
 
 判断に迷うものは必ず keep に倒す（誤って人のメールを片付けない）。
-reason は日本語で15文字以内。`;
+reason は指定された言語で簡潔に（日本語なら15文字以内、他言語も同等の短さ）。`;
