@@ -390,6 +390,7 @@ const ja: Dict = {
   // EmailReader（本文）
   "importance.normal": "通常",
   "reader.restore": "受信箱に戻す",
+  "reader.markUnread": "未読にする",
   "reader.copied": "コピーしました",
   "reader.copy": "本文をコピー（引用部分は除く）",
   "reader.zoomOut": "文字を小さく",
@@ -895,6 +896,7 @@ const en: Dict = {
   // EmailReader
   "importance.normal": "Normal",
   "reader.restore": "Move to Inbox",
+  "reader.markUnread": "Mark as unread",
   "reader.copied": "Copied",
   "reader.copy": "Copy body (excludes quotes)",
   "reader.zoomOut": "Smaller text",
@@ -1424,6 +1426,7 @@ const fr: Dict = {
   // EmailReader
   "importance.normal": "Normal",
   "reader.restore": "Remettre en boîte de réception",
+  "reader.markUnread": "Marquer comme non lu",
   "reader.copied": "Copié",
   "reader.copy": "Copier le corps (hors citations)",
   "reader.zoomOut": "Réduire le texte",
@@ -1907,6 +1910,7 @@ const zh: Dict = {
   "aisearch.empty": "请先按关键字搜索，再梳理结果。",
   "importance.normal": "普通",
   "reader.restore": "移回收件箱",
+  "reader.markUnread": "标为未读",
   "reader.copied": "已复制",
   "reader.copy": "复制正文（不含引用）",
   "reader.zoomOut": "缩小文字",

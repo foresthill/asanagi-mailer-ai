@@ -1029,6 +1029,29 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     [emails, selected, folder],
   );
 
+  /** Mark an (already-read) mail back to unread — optimistic, server-synced. */
+  const markUnread = useCallback(async (id: string) => {
+    setEmails((list) =>
+      list.map((e) => (e.id === id ? { ...e, read: false } : e)),
+    );
+    setSelected((s) => (s && s.id === id ? { ...s, read: false } : s));
+    try {
+      const res = await fetch(`/api/emails/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ read: false }),
+      });
+      if (!res.ok) throw new Error();
+      showToast("未読に戻しました");
+    } catch {
+      setEmails((list) =>
+        list.map((e) => (e.id === id ? { ...e, read: true } : e)),
+      );
+      setSelected((s) => (s && s.id === id ? { ...s, read: true } : s));
+      showToast("未読への変更に失敗しました");
+    }
+  }, []);
+
   const onImportanceFeedback = async (importance: Importance) => {
     if (!selected) return;
     setSelected({
@@ -1278,6 +1301,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onReply={openCompose}
       onReplyMessage={replyToMessage}
       onToggleStar={() => selected && toggleStar(selected.id)}
+      onMarkUnread={() => selected && markUnread(selected.id)}
       onImportanceFeedback={onImportanceFeedback}
       onReportSpam={() => selected && reportSpam(selected)}
       onNoteSaved={loadNoteIds}
