@@ -1,10 +1,19 @@
 "use client";
 
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
-import { Archive, Check, Inbox, Loader2, Sparkles, Trash2, X } from "lucide-react";
+import {
+  Archive,
+  Check,
+  Inbox,
+  Loader2,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { Email } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, displayName } from "./helpers";
+import { useI18n } from "@/lib/i18n";
 
 type SweepAction = "keep" | "archive" | "trash";
 
@@ -18,10 +27,10 @@ interface SweepItem {
   source: "learned" | "heuristic" | "ai";
 }
 
-const ACTIONS: { value: SweepAction; label: string; icon: typeof Archive }[] = [
-  { value: "keep", label: "残す", icon: Inbox },
-  { value: "archive", label: "アーカイブ", icon: Archive },
-  { value: "trash", label: "ゴミ箱", icon: Trash2 },
+const ACTIONS: { value: SweepAction; icon: typeof Archive }[] = [
+  { value: "keep", icon: Inbox },
+  { value: "archive", icon: Archive },
+  { value: "trash", icon: Trash2 },
 ];
 
 /**
@@ -44,6 +53,7 @@ export function SweepDialog({
   onApply: (archiveIds: string[], trashIds: string[]) => Promise<void>;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<SweepItem[]>([]);
   /** AI推奨を初期値に、ユーザーが行ごとに上書きできる現在の処分。 */
@@ -79,7 +89,8 @@ export function SweepDialog({
     // 呼び出しの長い待ちを避け、非同期に結果が流れ込む体感に）。各呼び出しも軽い。
     const CHUNK = 15;
     const chunks: (typeof payload)[] = [];
-    for (let i = 0; i < payload.length; i += CHUNK) chunks.push(payload.slice(i, i + CHUNK));
+    for (let i = 0; i < payload.length; i += CHUNK)
+      chunks.push(payload.slice(i, i + CHUNK));
 
     if (chunks.length === 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -96,7 +107,9 @@ export function SweepDialog({
       try {
         const u = await fetch("/api/ai/usage");
         const ud = await u.json();
-        const k = (ud.byKind ?? []).find((x: { kind: string }) => x.kind === "sweep");
+        const k = (ud.byKind ?? []).find(
+          (x: { kind: string }) => x.kind === "sweep",
+        );
         if (active && k) setSweepCost(k);
       } catch {
         /* cost line is informational */
@@ -134,10 +147,11 @@ export function SweepDialog({
           remaining -= 1;
           if (remaining === 0) {
             setStreaming(false);
-            if (anyWarning) setWarning("一部はAI判定が使えず、簡易判定（無料）で表示しています。");
+            if (anyWarning) setWarning(t("sweep.warning"));
             // 全部失敗かつ結果ゼロのときだけエラー表示（部分成功は一覧を優先）。
             setItems((cur) => {
-              if (anyError && cur.length === 0) setError("判定に失敗しました");
+              if (anyError && cur.length === 0)
+                setError(t("sweep.judgeFailed"));
               return cur;
             });
             void finishCost();
@@ -188,7 +202,8 @@ export function SweepDialog({
   // Cost transparency: how many actually hit the AI this run vs were free.
   const aiCount = items.filter((i) => i.source === "ai").length;
   const freeCount = items.length - aiCount;
-  const usd = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`);
+  const usd = (n: number) =>
+    n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
 
   /** 「なぎ払い」演出のウォッシュ色（判定＝行の運命を色で示す）。
    *  ゴミ箱=赤 / アーカイブ=青 / 残す=無し。CSS変数 --sweep-wash に渡す。 */
@@ -208,7 +223,8 @@ export function SweepDialog({
   const convert = (from: SweepAction, to: SweepAction) =>
     setActions((prev) => {
       const next = { ...prev };
-      for (const i of items) if ((prev[i.id] ?? i.action) === from) next[i.id] = to;
+      for (const i of items)
+        if ((prev[i.id] ?? i.action) === from) next[i.id] = to;
       return next;
     });
 
@@ -221,8 +237,12 @@ export function SweepDialog({
     // 払い出しが目に入るよう、アニメ分の最低時間を確保してから凪ぎ表示に移る。
     setPhase("sweeping");
     try {
-      const archiveIds = items.filter((i) => actions[i.id] === "archive").map((i) => i.id);
-      const trashIds = items.filter((i) => actions[i.id] === "trash").map((i) => i.id);
+      const archiveIds = items
+        .filter((i) => actions[i.id] === "archive")
+        .map((i) => i.id);
+      const trashIds = items
+        .filter((i) => actions[i.id] === "trash")
+        .map((i) => i.id);
       const sweepAnim = new Promise((r) => setTimeout(r, 600));
       await Promise.all([onApply(archiveIds, trashIds), sweepAnim]);
       try {
@@ -243,7 +263,11 @@ export function SweepDialog({
             const from = i.fromEmail ?? byId.get(i.id)?.from.email;
             const action = actions[i.id] ?? i.action;
             return from
-              ? { fromEmail: from, importance: action === "keep" ? "normal" : "low", action }
+              ? {
+                  fromEmail: from,
+                  importance: action === "keep" ? "normal" : "low",
+                  action,
+                }
               : null;
           })
           .filter(Boolean);
@@ -264,14 +288,21 @@ export function SweepDialog({
     } catch (e) {
       // 処分に失敗したら一覧へ戻し、理由を出す（勝手に閉じない）。
       setPhase("list");
-      setError(e instanceof Error ? `処分に失敗しました: ${e.message}` : "処分に失敗しました");
+      setError(
+        e instanceof Error
+          ? `${t("sweep.applyFailed")}: ${e.message}`
+          : t("sweep.applyFailed"),
+      );
     } finally {
       setApplying(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+      onClick={onClose}
+    >
       <div
         className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]"
         onClick={(e) => e.stopPropagation()}
@@ -282,10 +313,13 @@ export function SweepDialog({
           </div>
           <div className="flex flex-col leading-tight">
             <h2 className="text-sm font-semibold">
-              朝の一凪 <span className="text-[10px] font-normal text-fg-subtle">ひとなぎ</span>
+              {t("nav.sweep")}{" "}
+              <span className="text-[10px] font-normal text-fg-subtle">
+                {t("sweep.subtitle")}
+              </span>
             </h2>
             <span className="text-[11px] text-fg-subtle">
-              AIの推奨を各行で変更できます（本文はAIに送りません）
+              {t("sweep.desc")}
             </span>
           </div>
           <button
@@ -302,20 +336,26 @@ export function SweepDialog({
           {loading ? (
             <div className="flex flex-col items-center gap-2 py-12 text-fg-subtle">
               <Loader2 className="size-5 animate-spin text-accent" />
-              <p className="text-sm">受信箱{emails.length}通を判定中…</p>
+              <p className="text-sm">
+                {t("sweep.judging").replace("{n}", String(emails.length))}
+              </p>
             </div>
           ) : error ? (
             <p className="py-10 text-center text-sm text-high">{error}</p>
           ) : items.length === 0 ? (
             <p className="py-10 text-center text-sm text-fg-subtle">
-受信箱は凪いでいます 🌊
+              {t("sweep.calmEmpty")}
             </p>
           ) : phase === "calm" ? (
             <div className="animate-calm flex flex-col items-center gap-2 py-16 text-center">
               <span className="text-4xl">🌊</span>
-              <p className="text-sm font-medium text-fg">受信箱が凪ぎました</p>
+              <p className="text-sm font-medium text-fg">
+                {t("sweep.done.title")}
+              </p>
               <p className="text-[11px] text-fg-subtle">
-                アーカイブ{archiveCount}・ゴミ箱{trashCount}を払い出しました
+                {t("sweep.done.detail")
+                  .replace("{archive}", String(archiveCount))
+                  .replace("{trash}", String(trashCount))}
               </p>
             </div>
           ) : (
@@ -327,28 +367,39 @@ export function SweepDialog({
               )}
               {/* コスト透明性: 何通がAIに行ったか・本文は送っていないこと・累計額。 */}
               <div className="mb-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[11px] leading-relaxed text-fg-muted">
-                今回 <strong className="text-fg">{aiCount}通</strong> をAIで判定（
-                <strong>差出人・件名・冒頭140字のみ／本文は送信していません</strong>・まとめて1回の呼び出し）。
-                {freeCount > 0 && ` 学習済み・簡易判定の${freeCount}通はAIを使っていません。`}
+                {t("sweep.cost.main").replace("{n}", String(aiCount))}
+                {freeCount > 0 &&
+                  ` ${t("sweep.cost.free").replace("{n}", String(freeCount))}`}
                 {sweepCost && (
                   <>
-                    {" "}朝の一凪の累計: {sweepCost.calls.toLocaleString("ja-JP")}回
-                    {typeof sweepCost.estUsd === "number" ? `・約 ${usd(sweepCost.estUsd)}` : ""}
-                    <span className="text-fg-subtle">（詳細は 接続設定 → AI使用量）</span>
+                    {" "}
+                    {t("sweep.cost.total").replace(
+                      "{calls}",
+                      sweepCost.calls.toLocaleString(),
+                    )}
+                    {typeof sweepCost.estUsd === "number"
+                      ? t("sweep.cost.approx").replace(
+                          "{usd}",
+                          usd(sweepCost.estUsd),
+                        )
+                      : ""}
+                    <span className="text-fg-subtle">
+                      {t("sweep.cost.detail")}
+                    </span>
                   </>
                 )}
               </div>
               {/* 一括変更 */}
               <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-fg-subtle">
                 <span className="flex items-center gap-2">
-                  すべてを:
+                  {t("sweep.setAll")}
                   {ACTIONS.map((a) => (
                     <button
                       key={a.value}
                       onClick={() => setAll(a.value)}
                       className="rounded-md border border-border px-2 py-0.5 hover:border-accent hover:text-accent"
                     >
-                      {a.label}
+                      {t(`sweep.action.${a.value}`)}
                     </button>
                   ))}
                 </span>
@@ -356,21 +407,27 @@ export function SweepDialog({
                 {archiveCount > 0 && (
                   <button
                     onClick={() => convert("archive", "trash")}
-                    title="現在アーカイブ判定のものを、まとめてゴミ箱に変更（残したい数件だけ手で戻す）"
+                    title={t("sweep.convertToTrash.title")}
                     className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 hover:border-high hover:text-high"
                   >
                     <Archive className="size-3" />→<Trash2 className="size-3" />
-                    アーカイブ{archiveCount}件をゴミ箱へ
+                    {t("sweep.convertToTrash").replace(
+                      "{n}",
+                      String(archiveCount),
+                    )}
                   </button>
                 )}
                 {trashCount > 0 && (
                   <button
                     onClick={() => convert("trash", "archive")}
-                    title="現在ゴミ箱判定のものを、まとめてアーカイブに変更"
+                    title={t("sweep.convertToArchive.title")}
                     className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 hover:border-accent hover:text-accent"
                   >
                     <Trash2 className="size-3" />→<Archive className="size-3" />
-                    ゴミ箱{trashCount}件をアーカイブへ
+                    {t("sweep.convertToArchive").replace(
+                      "{n}",
+                      String(trashCount),
+                    )}
                   </button>
                 )}
               </div>
@@ -380,12 +437,17 @@ export function SweepDialog({
                   // Prefer the fields the API echoed back; fall back to the
                   // local list, then (last resort) nothing — never the raw id.
                   const sender =
-                    i.fromName || i.fromEmail || (mail ? displayName(mail.from) : "");
+                    i.fromName ||
+                    i.fromEmail ||
+                    (mail ? displayName(mail.from) : "");
                   const subject = i.subject ?? mail?.subject ?? "";
                   const cur = actions[i.id] ?? i.action;
                   // どのメールアカウント（gmail / imap 等）のメールかを示すバッジ。
                   const acct = mail?.account;
-                  const acctLabel = accountLabels && acct ? (accountLabels[acct] ?? acct) : null;
+                  const acctLabel =
+                    accountLabels && acct
+                      ? (accountLabels[acct] ?? acct)
+                      : null;
                   return (
                     <div
                       key={i.id}
@@ -408,14 +470,14 @@ export function SweepDialog({
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline gap-2">
                           <span className="shrink-0 truncate text-xs font-medium">
-                            {sender || "(差出人不明)"}
+                            {sender || t("sweep.unknownSender")}
                           </span>
                           <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">
                             {subject}
                           </span>
                           {mail?.date && (
                             <span className="shrink-0 text-[10px] tabular-nums text-fg-subtle">
-                              {new Date(mail.date).toLocaleString("ja-JP", {
+                              {new Date(mail.date).toLocaleString(undefined, {
                                 month: "numeric",
                                 day: "numeric",
                                 hour: "2-digit",
@@ -426,7 +488,10 @@ export function SweepDialog({
                           {acctLabel && (
                             <span
                               className="flex max-w-[110px] shrink-0 items-center gap-1 rounded-full border border-border bg-surface-2 px-1.5 py-px text-[9px] text-fg-muted"
-                              title={`アカウント: ${acctLabel}`}
+                              title={t("sweep.account").replace(
+                                "{label}",
+                                acctLabel,
+                              )}
                             >
                               <span
                                 className="size-1.5 rounded-full"
@@ -436,7 +501,9 @@ export function SweepDialog({
                             </span>
                           )}
                         </span>
-                        <span className="text-[10px] text-fg-subtle">{i.reason}</span>
+                        <span className="text-[10px] text-fg-subtle">
+                          {i.reason}
+                        </span>
                       </span>
                       {/* 3択セグメント: 残す / アーカイブ / ゴミ箱 */}
                       <span className="flex shrink-0 items-center overflow-hidden rounded-lg border border-border">
@@ -446,9 +513,12 @@ export function SweepDialog({
                             <button
                               key={a.value}
                               onClick={() =>
-                                setActions((prev) => ({ ...prev, [i.id]: a.value }))
+                                setActions((prev) => ({
+                                  ...prev,
+                                  [i.id]: a.value,
+                                }))
                               }
-                              title={a.label}
+                              title={t(`sweep.action.${a.value}`)}
                               className={cn(
                                 "flex items-center gap-1 px-2 py-1 text-[11px] transition-colors",
                                 on
@@ -461,7 +531,9 @@ export function SweepDialog({
                               )}
                             >
                               <a.icon className="size-3" />
-                              {on && <span>{a.label}</span>}
+                              {on && (
+                                <span>{t(`sweep.action.${a.value}`)}</span>
+                              )}
                             </button>
                           );
                         })}
@@ -474,8 +546,13 @@ export function SweepDialog({
                 <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-fg-subtle">
                   <Sparkles className="size-3 animate-pulse text-accent" />
                   {streaming
-                    ? `受信箱を整えています… ${ordered.length}件（続けて判定中）`
-                    : `受信箱を整えています… ${revealed}/${ordered.length}`}
+                    ? t("sweep.tidying.streaming").replace(
+                        "{n}",
+                        String(ordered.length),
+                      )
+                    : t("sweep.tidying.progress")
+                        .replace("{revealed}", String(revealed))
+                        .replace("{total}", String(ordered.length))}
                 </p>
               )}
             </>
@@ -485,22 +562,29 @@ export function SweepDialog({
         <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3">
           <button
             onClick={onClose}
-            title="何も変更せず閉じます（次回また提示されます）"
+            title={t("sweep.skip.title")}
             className="rounded-lg px-3 py-2 text-sm text-fg-muted hover:bg-surface-2"
           >
-            今回はスキップ
+            {t("sweep.skip")}
           </button>
           <span className="text-[11px] text-fg-subtle">
-            アーカイブ{archiveCount}・ゴミ箱{trashCount}・残す{items.length - actionable}
+            {t("sweep.summary")
+              .replace("{archive}", String(archiveCount))
+              .replace("{trash}", String(trashCount))
+              .replace("{keep}", String(items.length - actionable))}
           </span>
           <button
             onClick={apply}
             disabled={loading || applying || items.length === 0}
-            title="この内容で確定（残したメールも含め、次回の一凪には出ません）"
+            title={t("sweep.apply.title")}
             className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg shadow-sm hover:opacity-90 disabled:opacity-50"
           >
-            {applying ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-            確定
+            {applying ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Check className="size-4" />
+            )}
+            {t("sweep.apply")}
           </button>
         </div>
       </div>

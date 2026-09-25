@@ -11,14 +11,7 @@ import {
 } from "lucide-react";
 import type { ScheduledSend, SendStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-const STATUS_LABEL: Record<SendStatus, string> = {
-  scheduled: "送信予定",
-  sending: "送信中",
-  sent: "送信済み",
-  failed: "失敗",
-  canceled: "キャンセル",
-};
+import { useI18n } from "@/lib/i18n";
 
 const STATUS_STYLE: Record<SendStatus, string> = {
   scheduled: "bg-accent-soft text-accent",
@@ -41,14 +34,23 @@ function fmtFull(iso: string): string {
 }
 
 function addrList(list?: { name?: string; email: string }[]): string {
-  return (list ?? []).map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ");
+  return (list ?? [])
+    .map((a) => (a.name ? `${a.name} <${a.email}>` : a.email))
+    .join(", ");
 }
 
 /**
  * "メール送信予定" — list of scheduled sends with one-click cancel.
  * Canceling only flips the local schedule entry; nothing is sent.
  */
-export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ScheduledPanel({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
   const [items, setItems] = useState<ScheduledSend[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -70,7 +72,9 @@ export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () =
   async function cancel(id: string) {
     setBusyId(id);
     try {
-      await fetch(`/api/schedule?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      await fetch(`/api/schedule?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
       await load();
     } finally {
       setBusyId(null);
@@ -78,14 +82,17 @@ export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () =
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+      onClick={onClose}
+    >
       <div
         className="flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3.5">
           <Clock className="size-4 text-accent" />
-          <h2 className="text-sm font-semibold">メール送信予定</h2>
+          <h2 className="text-sm font-semibold">{t("sched.title")}</h2>
           <button
             onClick={onClose}
             className="ml-auto grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2"
@@ -97,11 +104,7 @@ export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () =
         {/* 予約送信は過去に不具合が発生した実績があるため注意喚起（要検証機能）。 */}
         <div className="flex shrink-0 items-start gap-2 border-b border-high/30 bg-high-soft px-5 py-2.5 text-xs text-high">
           <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
-          <p className="leading-relaxed">
-            予約送信は不具合が報告されています。送信予定時刻のあとは、必ず
-            <span className="font-medium">送信箱で結果をご確認ください</span>
-            （未送信・重複送信の可能性）。重要なメールは手動送信を推奨します。
-          </p>
+          <p className="leading-relaxed">{t("sched.warning")}</p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -111,7 +114,7 @@ export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () =
             </div>
           ) : items.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-fg-subtle">
-              送信予定のメールはありません。「予約送信」から作成できます。
+              {t("sched.empty")}
             </p>
           ) : (
             <ul className="divide-y divide-border">
@@ -126,12 +129,12 @@ export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () =
                           STATUS_STYLE[s.status],
                         )}
                       >
-                        {STATUS_LABEL[s.status]}
+                        {t(`sched.status.${s.status}`)}
                       </span>
                       <button
                         onClick={() => setOpenId(expanded ? null : s.id)}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                        title="クリックで詳細（宛先・本文）を表示"
+                        title={t("sched.detail.toggle")}
                       >
                         <ChevronRight
                           className={cn(
@@ -141,23 +144,29 @@ export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () =
                         />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">
-                            {s.subject || "(件名なし)"}
+                            {s.subject || t("drafts.noSubject")}
                           </span>
                           <span className="block truncate text-xs text-fg-subtle">
-                            宛先: {s.to.map((a) => a.email).join(", ")}
-                            {s.account ? `・送信元: ${s.account}` : ""}
+                            {t("drafts.to")}{" "}
+                            {s.to.map((a) => a.email).join(", ")}
+                            {s.account
+                              ? `・${t("sched.detail.from")}: ${s.account}`
+                              : ""}
                             {s.error ? `・${s.error}` : ""}
                           </span>
                         </span>
                       </button>
-                      <span className="shrink-0 text-xs tabular-nums text-fg-muted" title={s.sendAt}>
+                      <span
+                        className="shrink-0 text-xs tabular-nums text-fg-muted"
+                        title={s.sendAt}
+                      >
                         {fmt(s.sendAt)}
                       </span>
                       {s.status === "scheduled" && (
                         <button
                           onClick={() => cancel(s.id)}
                           disabled={busyId === s.id}
-                          title="この予約をキャンセル"
+                          title={t("sched.cancel.title")}
                           className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-high hover:text-high disabled:opacity-50"
                         >
                           {busyId === s.id ? (
@@ -165,23 +174,41 @@ export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () =
                           ) : (
                             <Ban className="size-3" />
                           )}
-                          キャンセル
+                          {t("sched.cancel")}
                         </button>
                       )}
                     </div>
                     {expanded && (
                       <div className="mt-2 space-y-1.5 rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-xs">
-                        <Detail label="送信予定">{fmtFull(s.sendAt)}</Detail>
-                        <Detail label="送信元">{s.account ?? "（既定）"}</Detail>
-                        <Detail label="To">{addrList(s.to) || "（未設定）"}</Detail>
-                        {s.cc?.length ? <Detail label="Cc">{addrList(s.cc)}</Detail> : null}
-                        {s.bcc?.length ? <Detail label="Bcc">{addrList(s.bcc)}</Detail> : null}
-                        <Detail label="件名">{s.subject || "(件名なし)"}</Detail>
-                        {s.error ? <Detail label="エラー">{s.error}</Detail> : null}
+                        <Detail label={t("sched.detail.sendAt")}>
+                          {fmtFull(s.sendAt)}
+                        </Detail>
+                        <Detail label={t("sched.detail.from")}>
+                          {s.account ?? t("sched.default")}
+                        </Detail>
+                        <Detail label="To">
+                          {addrList(s.to) || t("drafts.noRecipient")}
+                        </Detail>
+                        {s.cc?.length ? (
+                          <Detail label="Cc">{addrList(s.cc)}</Detail>
+                        ) : null}
+                        {s.bcc?.length ? (
+                          <Detail label="Bcc">{addrList(s.bcc)}</Detail>
+                        ) : null}
+                        <Detail label={t("sched.detail.subject")}>
+                          {s.subject || t("drafts.noSubject")}
+                        </Detail>
+                        {s.error ? (
+                          <Detail label={t("sched.detail.error")}>
+                            {s.error}
+                          </Detail>
+                        ) : null}
                         <div>
-                          <p className="mb-1 font-medium text-fg-subtle">本文</p>
+                          <p className="mb-1 font-medium text-fg-subtle">
+                            {t("sched.detail.body")}
+                          </p>
                           <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-md bg-surface p-2.5 text-[13px] leading-6 text-fg/90">
-                            {s.body || "（本文なし）"}
+                            {s.body || t("sched.noBody")}
                           </pre>
                         </div>
                       </div>
@@ -197,7 +224,13 @@ export function ScheduledPanel({ open, onClose }: { open: boolean; onClose: () =
   );
 }
 
-function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+function Detail({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <p className="flex gap-2">
       <span className="w-14 shrink-0 font-medium text-fg-subtle">{label}</span>
