@@ -26,9 +26,11 @@ import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
 import {
   buildCompose,
+  greetTargetOf,
   type ComposeAI,
   type ComposeInit,
   type ComposeKind,
+  type RecipientMeta,
 } from "./compose";
 import { buildRows } from "./threadList";
 import { useI18n } from "@/lib/i18n";
@@ -1076,10 +1078,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
    *  reply source — so a per-message 返信 in the thread replies to THAT message
    *  (In-Reply-To = its Message-ID), not just whatever is anchored. */
   const openCompose = useCallback(
-    (kind: ComposeKind, mode: ComposeAI, target?: Email) => {
+    async (kind: ComposeKind, mode: ComposeAI, target?: Email) => {
       const src = target ?? selected;
       if (kind !== "new" && !src) return;
       // Starting a new compose while one is open would replace the draft.
+      // (confirm stays synchronous — before any await — to keep the intent clear.)
       if (
         compose !== null &&
         !window.confirm(
@@ -1090,7 +1093,35 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       const selfAddresses = accounts
         .map((a) => a.address)
         .filter((s): s is string => !!s);
-      const init = buildCompose(kind, mode, src ?? undefined, selfAddresses);
+      // 宛名整形: プレーン返信/全返信は、相手の連絡先メタ（会社名・敬称）を引いて
+      // 「会社名 / 担当者様」の宛名にする。AIモードは本文をAIが書くので対象外。
+      let recipientMeta: RecipientMeta | undefined;
+      if (mode === "plain" && (kind === "reply" || kind === "replyAll")) {
+        const gt = greetTargetOf(kind, src ?? undefined, selfAddresses);
+        if (gt?.email) {
+          try {
+            const r = await fetch(
+              `/api/contacts/meta?email=${encodeURIComponent(gt.email)}`,
+            );
+            const d = (await r.json()) as {
+              resolved?: { company?: string; honorific?: string };
+            };
+            const m = d.resolved;
+            if (m && (m.company || m.honorific)) {
+              recipientMeta = { company: m.company, honorific: m.honorific };
+            }
+          } catch {
+            /* fall back to the default「様」salutation */
+          }
+        }
+      }
+      const init = buildCompose(
+        kind,
+        mode,
+        src ?? undefined,
+        selfAddresses,
+        recipientMeta,
+      );
       // New mail from a specific account view sends from that account.
       if (kind === "new" && account !== "all") init.account = account;
       // Conversation so far → AI drafting context (agreed dates, open points).
