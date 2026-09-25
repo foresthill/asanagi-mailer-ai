@@ -23,7 +23,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import type { Email, FolderView, Importance } from "@/lib/types";
+import type { Email, FolderView, Importance, ContactLabel } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { avatarColor, initials, relativeTime } from "./helpers";
@@ -178,6 +178,7 @@ export function EmailList({
   grouping,
   groupAxis,
   noteIds,
+  contactLabel,
   draftThreadIds,
   onChangeGroupAxis,
   serverSearched,
@@ -237,6 +238,8 @@ export function EmailList({
   groupAxis: GroupAxis;
   /** 自分用メモがあるメールIDの集合（📝インジケータ用）。 */
   noteIds: Set<string>;
+  /** 差出人/宛先の連絡先ラベル（重要取引先/迷惑）を解決する（バッジ表示用）。 */
+  contactLabel?: (email?: string) => ContactLabel | undefined;
   /** 下書きが紐づく会話(threadId)の集合（✏️インジケータ用）。 */
   draftThreadIds: Set<string>;
   onChangeGroupAxis: (axis: GroupAxis) => void;
@@ -443,6 +446,7 @@ export function EmailList({
           onArchive={() => onArchive(row.ids)}
           onTrash={() => onTrash(row.ids)}
           onToggleStar={() => onToggleStar(row.email.id)}
+          contactLabel={contactLabel}
         />
         {isExpanded && (
           <div className="mb-1 ml-6 flex flex-col border-l border-border pl-1">
@@ -1277,6 +1281,25 @@ function ThreadMemberRow({
   );
 }
 
+/** 重要取引先/迷惑 のラベルバッジ（連絡先メタ由来）。normal は表示しない。 */
+function LabelBadge({ label }: { label?: ContactLabel }) {
+  const { t } = useI18n();
+  if (label !== "vip" && label !== "spam") return null;
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded px-1 text-[9px] font-semibold leading-tight",
+        label === "vip"
+          ? "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300"
+          : "bg-high-soft text-high",
+      )}
+      title={t(`contact.meta.${label}`)}
+    >
+      {t(`contact.badge.${label}`)}
+    </span>
+  );
+}
+
 function EmailListItem({
   row,
   active,
@@ -1296,10 +1319,13 @@ function EmailListItem({
   onArchive,
   onTrash,
   onToggleStar,
+  contactLabel,
 }: {
   row: ThreadRow;
   active: boolean;
   folder: FolderView;
+  /** Resolve the correspondent's label (重要取引先/迷惑) for the badge. */
+  contactLabel?: (email?: string) => ContactLabel | undefined;
   /** 1-line compact row (上下表示の上ペイン): sender · subject · time. */
   dense?: boolean;
   /** Active search text → show which field(s) each hit matched. Undefined when
@@ -1340,6 +1366,7 @@ function EmailListItem({
     count > 1 ? t("row.threadAll").replace("{n}", String(count)) : "";
   // Sent mail: the avatar represents the recipient (the row shows "To: …").
   const face = email.state === "sent" && email.to[0] ? email.to[0] : email.from;
+  const label = contactLabel?.(face.email);
   const showCheckbox = checked || selectionActive;
   // Bring the selected row into view when it becomes active off-screen (e.g.
   // opening a thread message that lives in this folder / after a folder switch).
@@ -1419,6 +1446,7 @@ function EmailListItem({
         >
           <Highlighted text={participants} terms={terms} />
         </span>
+        <LabelBadge label={label} />
         {accountLabel && (
           <AccountChip account={email.account ?? ""} label={accountLabel} />
         )}
@@ -1613,6 +1641,7 @@ function EmailListItem({
             >
               <Highlighted text={participants} terms={terms} />
             </span>
+            <LabelBadge label={label} />
             {showBadge &&
               (expandable ? (
                 <button

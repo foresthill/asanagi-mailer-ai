@@ -364,6 +364,8 @@ const ja: Dict = {
   "contact.meta.vip": "重要取引先",
   "contact.meta.normal": "通常",
   "contact.meta.spam": "迷惑",
+  "contact.badge.vip": "重要先",
+  "contact.badge.spam": "迷惑",
   "contact.meta.company": "会社名",
   "contact.meta.company.hint":
     "署名どおりに入力（例: 株式会社◯◯ / ◯◯株式会社）。前株/後株はこの表記のまま宛名に使います。",
@@ -880,6 +882,8 @@ const en: Dict = {
   "contact.meta.vip": "Key client",
   "contact.meta.normal": "Normal",
   "contact.meta.spam": "Spam",
+  "contact.badge.vip": "Key",
+  "contact.badge.spam": "Spam",
   "contact.meta.company": "Company",
   "contact.meta.company.hint":
     "Type it exactly as in the signature. This exact spelling is used in the salutation.",
@@ -1418,6 +1422,8 @@ const fr: Dict = {
   "contact.meta.vip": "Client clé",
   "contact.meta.normal": "Normal",
   "contact.meta.spam": "Indésirable",
+  "contact.badge.vip": "Clé",
+  "contact.badge.spam": "Indés.",
   "contact.meta.company": "Société",
   "contact.meta.company.hint":
     "Saisissez-le exactement comme dans la signature. Cette orthographe est utilisée dans la formule d'appel.",
@@ -1915,6 +1921,8 @@ const zh: Dict = {
   "contact.meta.vip": "重要客户",
   "contact.meta.normal": "普通",
   "contact.meta.spam": "垃圾",
+  "contact.badge.vip": "重要",
+  "contact.badge.spam": "垃圾",
   "contact.meta.company": "公司名称",
   "contact.meta.company.hint": "请按签名原样填写。此写法将原样用于称呼。",
   "contact.meta.honorific": "敬称",
