@@ -65,11 +65,18 @@ function domainMatches(domain: string, legit: string[]): boolean {
 export function detectThreat(
   email: ThreatInput,
   learned?: ThreatSenders,
+  safe?: ThreatSenders,
 ): "spam" | "phishing" | undefined {
   const name = email.from.name ?? "";
   const addr = email.from.email.toLowerCase();
   const domain = addr.split("@")[1] ?? "";
   const subject = email.subject ?? "";
+
+  // 「問題無し」で安全登録された差出人は、学習・偽装ヒューリスティックより優先して
+  // 危険と判定しない（誤検知の打ち消し）。
+  if (safe && (safe.senders.has(addr) || safe.domains.has(domain))) {
+    return undefined;
+  }
 
   // User-reported spam sender/domain.
   if (learned && (learned.senders.has(addr) || learned.domains.has(domain))) {

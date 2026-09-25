@@ -13,6 +13,7 @@ import {
   guessFromSignals,
   listSignals,
   listThreatSenders,
+  listSafeSenders,
 } from "@/lib/store";
 import { heuristicImportance, projectKeyFromSubject } from "@/lib/importance";
 import { detectThreat } from "@/lib/threat";
@@ -60,7 +61,11 @@ export async function POST(req: Request) {
   const signals = await listSignals();
   // Dangerous-mail flag (phishing/spam) — independent of importance, always
   // applied so a "learned low" or heuristic result still carries the warning.
-  const threat = detectThreat(email, await listThreatSenders());
+  const threat = detectThreat(
+    email,
+    await listThreatSenders(),
+    await listSafeSenders(),
+  );
 
   // Heuristic short-circuit: if the user has already taught us about this
   // sender/domain, trust that immediately (fast + free + personalized).

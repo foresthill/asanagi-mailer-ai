@@ -8,7 +8,12 @@ import {
   threadCounts,
   upsertEmails,
 } from "@/lib/db";
-import { getEmailSettings, listSignals, listThreatSenders } from "@/lib/store";
+import {
+  getEmailSettings,
+  listSignals,
+  listThreatSenders,
+  listSafeSenders,
+} from "@/lib/store";
 import { annotateImportance } from "@/lib/importance";
 import { detectThreat } from "@/lib/threat";
 import type { Email, FolderView } from "@/lib/types";
@@ -62,6 +67,7 @@ async function finalize(lists: Email[][], state: FolderView): Promise<Email[]> {
   };
   const signals = await listSignals();
   const threatSenders = await listThreatSenders();
+  const safeSenders = await listSafeSenders();
   const annotated = annotateImportance(
     lists
       .flat()
@@ -73,7 +79,7 @@ async function finalize(lists: Email[][], state: FolderView): Promise<Email[]> {
   // Flag dangerous mail (phishing/spam) for the list — free, offline, distinct
   // from importance. The AI refines this on open.
   return annotated.map((e) => {
-    const threat = detectThreat(e, threatSenders);
+    const threat = detectThreat(e, threatSenders, safeSenders);
     return threat ? { ...e, threat } : e;
   });
 }

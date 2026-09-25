@@ -397,6 +397,56 @@ export async function recordThreatReport(
   await writeJson(THREAT_SENDERS, rows);
 }
 
+// 安全な差出人（誤検知の打ち消し）。「問題無し」で登録し、以降 detectThreat が
+// この送信者/ドメインを危険と判定しない（ブランド偽装ヒューリスティックも上書き）。
+const SAFE_SENDERS = "safe-senders.json";
+
+export async function listSafeSenders(): Promise<ThreatSenders> {
+  const rows = await readJson<ThreatSenderEntry[]>(SAFE_SENDERS, []);
+  return {
+    senders: new Set(
+      rows.filter((r) => r.kind === "sender").map((r) => r.pattern),
+    ),
+    domains: new Set(
+      rows.filter((r) => r.kind === "domain").map((r) => r.pattern),
+    ),
+  };
+}
+
+/**
+ * 「問題無し」: この差出人を安全として学習（sender + domain）。同時に、誤って
+ * 迷惑報告済みなら threat-senders から取り除く（フラグを確実に消す）。
+ */
+export async function recordSafeSender(
+  fromEmail: string,
+  now = new Date(),
+): Promise<void> {
+  const addr = fromEmail.toLowerCase();
+  const domain = addr.includes("@") ? addr.split("@")[1] : "";
+  const rows = await readJson<ThreatSenderEntry[]>(SAFE_SENDERS, []);
+  const upsert = (pattern: string, kind: ThreatSenderEntry["kind"]) => {
+    if (!pattern) return;
+    const ex = rows.find((r) => r.kind === kind && r.pattern === pattern);
+    if (ex) {
+      ex.weight += 1;
+      ex.updatedAt = now.toISOString();
+    } else {
+      rows.push({ pattern, kind, weight: 1, updatedAt: now.toISOString() });
+    }
+  };
+  upsert(addr, "sender");
+  upsert(domain, "domain");
+  await writeJson(SAFE_SENDERS, rows);
+
+  // Un-flag: drop this sender/domain from any prior spam report.
+  const threat = await readJson<ThreatSenderEntry[]>(THREAT_SENDERS, []);
+  const kept = threat.filter(
+    (r) =>
+      r.pattern !== addr && r.pattern !== fromEmail && r.pattern !== domain,
+  );
+  if (kept.length !== threat.length) await writeJson(THREAT_SENDERS, kept);
+}
+
 // ---------------------------------------------------------------------------
 // 朝の一凪の「処分アクション」学習 — importance(low) だけでは archive と trash を
 // 区別できず、毎回「アーカイブ→ゴミ箱」を押し直す羽目になる。送信者/ドメイン
