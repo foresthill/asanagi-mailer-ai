@@ -277,6 +277,9 @@ const ja: Dict = {
   "list.refresh": "更新",
   "list.refreshing": "更新中…",
   "list.countSuffix": "件",
+  "list.draftReminder": "📝 数日前の未送信の下書きが {n} 件あります",
+  "list.draftReminder.open": "下書き一覧を開く",
+  "list.draftReminder.dismiss": "今日は表示しない",
   "list.select": "選択",
   "list.selectAll.title":
     "一括選択（すべて選択）— 残すものだけ外して、まとめてアーカイブ/ゴミ箱へ",
@@ -765,6 +768,9 @@ const en: Dict = {
   "list.refresh": "Refresh",
   "list.refreshing": "Refreshing…",
   "list.countSuffix": " items",
+  "list.draftReminder": "📝 {n} unsent drafts have been sitting for days",
+  "list.draftReminder.open": "Open drafts",
+  "list.draftReminder.dismiss": "Hide for today",
   "list.select": "Select",
   "list.selectAll.title":
     "Select all — uncheck what you keep, then archive/trash the rest",
@@ -1273,6 +1279,10 @@ const fr: Dict = {
   "list.refresh": "Actualiser",
   "list.refreshing": "Actualisation…",
   "list.countSuffix": " élém.",
+  "list.draftReminder":
+    "📝 {n} brouillons non envoyés attendent depuis des jours",
+  "list.draftReminder.open": "Ouvrir les brouillons",
+  "list.draftReminder.dismiss": "Masquer pour aujourd'hui",
   "list.select": "Sélectionner",
   "list.selectAll.title":
     "Tout sélectionner — décochez ce que vous gardez, puis archivez/supprimez le reste",

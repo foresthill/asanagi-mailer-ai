@@ -200,6 +200,8 @@ export function EmailList({
   onTrash,
   onToggleStar,
   onRefresh,
+  agedDraftCount,
+  onOpenDrafts,
   width,
   horizontal,
   height,
@@ -269,6 +271,10 @@ export function EmailList({
   onTrash: (ids: string[]) => void;
   onToggleStar: (id: string) => void;
   onRefresh: () => void;
+  /** Count of unsent drafts left untouched for several days (aged-draft reminder). */
+  agedDraftCount: number;
+  /** Open the drafts panel (from the reminder banner). */
+  onOpenDrafts: () => void;
   /** Pixel width for the list pane (classic left column). Omit → fixed 384px. */
   width?: number;
   /** Geek layout: render as a full-width TOP pane (件名がずらり) instead of a
@@ -279,6 +285,30 @@ export function EmailList({
 }) {
   const { t } = useI18n();
   const selectionActive = checkedIds.size > 0;
+  // Aged-draft reminder: dismissible, and the dismissal only lasts the day so it
+  // gently resurfaces each morning (local-first — the flag never leaves the device).
+  const today = new Date().toISOString().slice(0, 10);
+  const [draftReminderHidden, setDraftReminderHidden] = useState(() => {
+    // Client-only component, so read storage once at mount (empty = show).
+    try {
+      return localStorage.getItem("asanagi:draft-reminder-dismissed") === today;
+    } catch {
+      return false;
+    }
+  });
+  const showDraftReminder =
+    !searching &&
+    folder === "inbox" &&
+    agedDraftCount > 0 &&
+    !draftReminderHidden;
+  const dismissDraftReminder = () => {
+    setDraftReminderHidden(true);
+    try {
+      localStorage.setItem("asanagi:draft-reminder-dismissed", today);
+    } catch {
+      /* best-effort */
+    }
+  };
   // 折りたたんだセクションのキー（軸ごとに保持）。
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // 検索結果は横断のため軸グループ化しない（特定の1通を探す行為）。
@@ -664,6 +694,27 @@ export function EmailList({
               {t(`group.${a}`)}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Aged-draft reminder — old unsent drafts, surfaced at the top of the inbox. */}
+      {showDraftReminder && (
+        <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          <PenLine className="size-3.5 shrink-0" />
+          <button
+            onClick={onOpenDrafts}
+            className="min-w-0 flex-1 text-left hover:underline"
+            title={t("list.draftReminder.open")}
+          >
+            {t("list.draftReminder").replace("{n}", String(agedDraftCount))}
+          </button>
+          <button
+            onClick={dismissDraftReminder}
+            title={t("list.draftReminder.dismiss")}
+            className="grid size-5 shrink-0 place-items-center rounded text-amber-700/70 hover:bg-amber-500/20 hover:text-amber-800 dark:text-amber-300/70 dark:hover:text-amber-200"
+          >
+            <X className="size-3.5" />
+          </button>
         </div>
       )}
 
