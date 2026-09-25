@@ -20,6 +20,8 @@ import {
   Sparkles,
   Star,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import type { Email, FolderView, Importance } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -285,6 +287,26 @@ export function EmailList({
 }) {
   const { t } = useI18n();
   const selectionActive = checkedIds.size > 0;
+  // List zoom (行/文字の拡大率) — a lasting per-viewer preference, applied via CSS
+  // `zoom` on the rows container so padding scales too (true density change).
+  // WebKit(Linux webview) and Chromium both support `zoom`.
+  const [listZoom, setListZoom] = useState(() => {
+    try {
+      const v = parseFloat(localStorage.getItem("asanagi:list-zoom") ?? "");
+      return v >= 0.8 && v <= 1.4 ? v : 1;
+    } catch {
+      return 1;
+    }
+  });
+  const setZoom = (z: number) => {
+    const clamped = Math.min(1.4, Math.max(0.8, Math.round(z * 10) / 10));
+    setListZoom(clamped);
+    try {
+      localStorage.setItem("asanagi:list-zoom", String(clamped));
+    } catch {
+      /* per-viewer convenience only */
+    }
+  };
   // Aged-draft reminder: dismissible, and the dismissal only lasts the day so it
   // gently resurfaces each morning (local-first — the flag never leaves the device).
   const today = new Date().toISOString().slice(0, 10);
@@ -625,7 +647,33 @@ export function EmailList({
               )}
             </>
           )}
-          <span className="ml-auto text-xs text-fg-subtle">
+          {/* 一覧の拡大率: 行/文字サイズを調整（端末ごとに保持）。 */}
+          <span className="ml-auto flex items-center gap-0.5">
+            <button
+              onClick={() => setZoom(listZoom - 0.1)}
+              disabled={listZoom <= 0.8}
+              title={t("list.zoom.out")}
+              className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+            >
+              <ZoomOut className="size-3.5" />
+            </button>
+            <button
+              onClick={() => setZoom(1)}
+              title={t("list.zoom.reset")}
+              className="min-w-9 rounded-md px-1 text-[11px] tabular-nums text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
+            >
+              {Math.round(listZoom * 100)}%
+            </button>
+            <button
+              onClick={() => setZoom(listZoom + 0.1)}
+              disabled={listZoom >= 1.4}
+              title={t("list.zoom.in")}
+              className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+            >
+              <ZoomIn className="size-3.5" />
+            </button>
+          </span>
+          <span className="text-xs text-fg-subtle">
             {rows.length}
             {t("list.countSuffix")}
           </span>
@@ -718,7 +766,10 @@ export function EmailList({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-2 pb-4">
+      <div
+        className="flex-1 overflow-y-auto px-2 pb-4"
+        style={listZoom !== 1 ? { zoom: listZoom } : undefined}
+      >
         {/* AI検索: ヒット群からまとめた「経緯」を一覧の上に。根拠メールは下にずらり。 */}
         {searching && searchMode === "ai" && (
           <SearchDigestPanel
