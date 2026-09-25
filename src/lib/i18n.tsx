@@ -97,6 +97,7 @@ const ja: Dict = {
   "ailog.kind.suggest": "添削",
   "ailog.kind.classify": "重要度判定",
   "ailog.kind.sweep": "朝の一凪",
+  "ailog.kind.signature": "署名抽出",
   "ailog.audit.residualTitle":
     "マスクを素通りした構造化PIIが {n} 件（人名・住所は未検出）",
   "ailog.audit.cleanTitle": "構造化PII {n} 件をマスク・素通り0",
@@ -244,6 +245,7 @@ const ja: Dict = {
   "conn.usage.kind.suggest": "添削",
   "conn.usage.kind.classify": "重要度判定",
   "conn.usage.kind.sweep": "朝の一凪",
+  "conn.usage.kind.signature": "署名抽出",
   "conn.usage.title": "AI 使用量（この端末のログ）",
   "conn.usage.recent":
     "直近30日: {rcalls}回・入力 {rin} / 出力 {rout} トークン（累計 {tcalls}回・入力 {tin} / 出力 {tout}）",
@@ -369,6 +371,13 @@ const ja: Dict = {
   "contact.meta.tags": "タグ（カンマ区切り）",
   "contact.meta.save": "保存",
   "contact.meta.saved": "保存しました",
+  "contact.meta.aiImport": "AIで会社名を取り込む",
+  "contact.meta.aiImport.hint":
+    "直近の受信メールの署名から会社名をコピー抽出します（推測しません）。確認して保存してください。",
+  "contact.meta.aiFilled":
+    "署名から会社名を取り込みました。内容を確認して保存してください。",
+  "contact.meta.aiNone": "署名から会社名を検出できませんでした。",
+  "contact.meta.aiFailed": "取り込みに失敗しました。",
   "contact.empty": "キャッシュにこの人とのメールがまだありません",
   // 検索モード / AIナレッジ
   "search.mode.keyword": "キーワード",
@@ -599,6 +608,7 @@ const en: Dict = {
   "ailog.kind.suggest": "Refine",
   "ailog.kind.classify": "Importance",
   "ailog.kind.sweep": "Morning sweep",
+  "ailog.kind.signature": "Signature",
   "ailog.audit.residualTitle":
     "{n} structured PII item(s) passed through the mask (names/addresses not detected)",
   "ailog.audit.cleanTitle":
@@ -750,6 +760,7 @@ const en: Dict = {
   "conn.usage.kind.suggest": "Proofread",
   "conn.usage.kind.classify": "Importance",
   "conn.usage.kind.sweep": "Morning Sweep",
+  "conn.usage.kind.signature": "Signature",
   "conn.usage.title": "AI usage (this device's log)",
   "conn.usage.recent":
     "Last 30 days: {rcalls} calls · in {rin} / out {rout} tokens (total {tcalls} calls · in {tin} / out {tout})",
@@ -875,6 +886,13 @@ const en: Dict = {
   "contact.meta.honorific": "Honorific",
   "contact.meta.tags": "Tags (comma-separated)",
   "contact.meta.save": "Save",
+  "contact.meta.aiImport": "Fill company with AI",
+  "contact.meta.aiImport.hint":
+    "Copies the company name from the latest received email's signature (no guessing). Review and save.",
+  "contact.meta.aiFilled":
+    "Filled the company from the signature. Review and save.",
+  "contact.meta.aiNone": "No company name found in the signature.",
+  "contact.meta.aiFailed": "Extraction failed.",
   "contact.meta.saved": "Saved",
   "contact.empty": "No cached email with this person yet",
   // Search modes / AI knowledge
@@ -1108,6 +1126,7 @@ const fr: Dict = {
   "ailog.kind.suggest": "Retouche",
   "ailog.kind.classify": "Importance",
   "ailog.kind.sweep": "Calme du matin",
+  "ailog.kind.signature": "Signature",
   "ailog.audit.residualTitle":
     "{n} donnée(s) PII structurée(s) ont traversé le masque (noms/adresses non détectés)",
   "ailog.audit.cleanTitle":
@@ -1274,6 +1293,7 @@ const fr: Dict = {
   "conn.usage.kind.suggest": "Relecture",
   "conn.usage.kind.classify": "Importance",
   "conn.usage.kind.sweep": "Accalmie du matin",
+  "conn.usage.kind.signature": "Signature",
   "conn.usage.title": "Utilisation de l'IA (journal de cet appareil)",
   "conn.usage.recent":
     "30 derniers jours : {rcalls} appels · entrée {rin} / sortie {rout} jetons (total {tcalls} appels · entrée {tin} / sortie {tout})",
@@ -1404,6 +1424,13 @@ const fr: Dict = {
   "contact.meta.honorific": "Civilité",
   "contact.meta.tags": "Étiquettes (séparées par des virgules)",
   "contact.meta.save": "Enregistrer",
+  "contact.meta.aiImport": "Remplir la société avec l'IA",
+  "contact.meta.aiImport.hint":
+    "Copie le nom de la société depuis la signature du dernier e-mail reçu (sans deviner). Vérifiez puis enregistrez.",
+  "contact.meta.aiFilled":
+    "Société remplie depuis la signature. Vérifiez puis enregistrez.",
+  "contact.meta.aiNone": "Aucun nom de société trouvé dans la signature.",
+  "contact.meta.aiFailed": "Échec de l'extraction.",
   "contact.meta.saved": "Enregistré",
   "contact.empty": "Aucun e-mail en cache avec cette personne",
   // Modes de recherche / connaissance IA
@@ -1633,6 +1660,7 @@ const zh: Dict = {
   "ailog.kind.suggest": "润色",
   "ailog.kind.classify": "重要度判定",
   "ailog.kind.sweep": "晨间清扫",
+  "ailog.kind.signature": "签名提取",
   "ailog.audit.residualTitle":
     "有 {n} 项结构化个人信息穿透了脱敏（姓名／地址未被检出）",
   "ailog.audit.cleanTitle": "已脱敏 {n} 项结构化个人信息，0 项穿透",
@@ -1776,6 +1804,7 @@ const zh: Dict = {
   "conn.usage.kind.suggest": "润色",
   "conn.usage.kind.classify": "重要度判定",
   "conn.usage.kind.sweep": "晨间一凪",
+  "conn.usage.kind.signature": "签名提取",
   "conn.usage.title": "AI 使用量（本机日志）",
   "conn.usage.recent":
     "最近 30 天：{rcalls} 次・输入 {rin} / 输出 {rout} 令牌（累计 {tcalls} 次・输入 {tin} / 输出 {tout}）",
@@ -1892,6 +1921,12 @@ const zh: Dict = {
   "contact.meta.tags": "标签（逗号分隔）",
   "contact.meta.save": "保存",
   "contact.meta.saved": "已保存",
+  "contact.meta.aiImport": "用AI填入公司名",
+  "contact.meta.aiImport.hint":
+    "从最近收到邮件的签名中复制公司名称（不臆测）。请确认后保存。",
+  "contact.meta.aiFilled": "已从签名填入公司名。请确认后保存。",
+  "contact.meta.aiNone": "未能从签名中识别公司名。",
+  "contact.meta.aiFailed": "提取失败。",
   "contact.empty": "尚无与此人的缓存邮件",
   "search.mode.keyword": "关键字",
   "search.mode.ai": "AI",
