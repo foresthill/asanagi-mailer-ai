@@ -729,7 +729,22 @@ export function EmailList({
       {/* グループ化軸: なし / アカウント別 / 送信者ドメイン別（折りたたみ表示）。 */}
       {!searching && (
         <div className="flex items-center gap-1.5 px-4 pb-2 text-[11px] text-fg-subtle">
-          <span>{t("group.label")}</span>
+          {/* 上下(geek): 「選択」開始ボタンを一覧の直上・左端に置く（目に付く位置）。
+              グループはその右へ寄せる（label に ml-auto）。左右(classic)では
+              選択はヘッダにあり、ここはグループのみを左に並べる。 */}
+          {horizontal && rows.length > 0 && (
+            <button
+              onClick={onCheckAll}
+              title={t("list.selectAll.title")}
+              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-fg-subtle transition-colors hover:bg-surface-2 hover:text-accent"
+            >
+              <span className="grid size-3.5 place-items-center rounded-[3px] border border-current" />
+              {t("list.select")}
+            </button>
+          )}
+          <span className={cn(horizontal && "ml-auto")}>
+            {t("group.label")}
+          </span>
           {(["none", "account", "sender"] as GroupAxis[]).map((a) => (
             <button
               key={a}
@@ -744,17 +759,6 @@ export function EmailList({
               {t(`group.${a}`)}
             </button>
           ))}
-          {/* 上下(geek)レイアウト: 「選択」開始ボタンを一覧の直上（この行）に置く。 */}
-          {horizontal && rows.length > 0 && (
-            <button
-              onClick={onCheckAll}
-              title={t("list.selectAll.title")}
-              className="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-fg-subtle transition-colors hover:bg-surface-2 hover:text-accent"
-            >
-              <span className="grid size-3.5 place-items-center rounded-[3px] border border-current" />
-              {t("list.select")}
-            </button>
-          )}
         </div>
       )}
 
