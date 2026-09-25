@@ -51,6 +51,7 @@ export function EmailReader({
   onReply,
   onReplyMessage,
   onToggleStar,
+  onMarkUnread,
   onImportanceFeedback,
   onReportSpam,
   onNoteSaved,
@@ -71,6 +72,8 @@ export function EmailReader({
   /** Reply/forward to a SPECIFIC thread message (per-message action buttons). */
   onReplyMessage?: (id: string, kind: ComposeKind, mode: ComposeAI) => void;
   onToggleStar: () => void;
+  /** Mark this (already-read) mail back to unread. */
+  onMarkUnread?: () => void;
   onImportanceFeedback: (importance: Importance) => void;
   /** Report as spam/phishing → learn the sender + move to trash. */
   onReportSpam?: () => void;
@@ -252,6 +255,14 @@ export function EmailReader({
             icon={Archive}
             title={t("action.archive")}
             onClick={onArchive}
+          />
+        )}
+        {/* 未読に戻す — 開くと既読になるので、後で読み直す印として戻せる。 */}
+        {onMarkUnread && folder !== "sent" && email?.read && (
+          <IconBtn
+            icon={Mail}
+            title={t("reader.markUnread")}
+            onClick={onMarkUnread}
           />
         )}
         {folder !== "trashed" ? (
