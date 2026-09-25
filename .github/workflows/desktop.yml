@@ -47,6 +47,17 @@ jobs:
         # ビルド用途では reconcile する npm install を使う。
         run: npm install --no-audit --no-fund
 
+      # Bundle the Node runtime so the end user needs nothing installed.
+      # We reuse the runner's Node 24 (official linux-x64 build from setup-node),
+      # shipped as the app resource `node` (see tauri.conf.json bundle.resources).
+      - name: Bundle Node runtime
+        run: |
+          mkdir -p src-tauri/binaries
+          cp "$(command -v node)" src-tauri/binaries/node
+          chmod +x src-tauri/binaries/node
+          echo "bundled node: $(src-tauri/binaries/node --version)"
+          ls -lh src-tauri/binaries/node
+
       # tauri build が conf の beforeBuildCommand(build:standalone)を実行し、
       # .next-standalone を bundle.resources として同梱する。
       - name: Build desktop bundle + publish release
@@ -61,8 +72,9 @@ jobs:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('app-v0.0.0-dev-{0}', github.run_number) }}
           releaseName: "Asanagi Desktop ${{ github.ref_type == 'tag' && github.ref_name || 'dev build' }}"
           releaseBody: |
-            Linux デスクトップビルド（AppImage / .deb）。
-            要件: 実行マシンに Node.js 24（node:sqlite 安定版）。初回は Gmail 再認証と AI キー入力が必要。
+            Linux デスクトップビルド（AppImage / .deb / .rpm）。
+            Node ランタイムを同梱済みのため、実行マシンへの Node インストールは不要です。
+            初回は Gmail 再認証と AI キー入力が必要。
             自動アップデートは未設定（署名鍵の設定後に有効化・docs/DESKTOP.md 参照）。
           releaseDraft: false
           prerelease: true
