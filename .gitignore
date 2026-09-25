@@ -49,3 +49,6 @@ next-env.d.ts
 *.png
 # ただし Tauri のアプリアイコンは成果物ではなくビルド必須ソースなので追跡する
 !src-tauri/icons/*.png
+
+# Bundled Node runtime binary (fetched in CI, ~100MB — never commit)
+src-tauri/binaries/

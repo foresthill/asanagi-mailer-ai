@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Asanagi",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "identifier": "com.foresthill.asanagi",
   "build": {
     "beforeBuildCommand": "npm run build:standalone",
@@ -29,7 +29,8 @@
     "targets": ["deb", "rpm", "appimage"],
     "createUpdaterArtifacts": false,
     "resources": {
-      "../.next-standalone/standalone": "server"
+      "../.next-standalone/standalone": "server",
+      "binaries/node": "node"
     },
     "icon": [
       "icons/32x32.png",
