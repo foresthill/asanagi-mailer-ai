@@ -52,6 +52,13 @@ const PRUNE_MODULES = [
   "onnxruntime-web",
   "onnxruntime-common",
   "sharp",
+  // sharp's native binaries live under the @img scope (e.g.
+  // @img/sharp-linuxmusl-x64). The musl variant links libc.musl-*, which is
+  // absent on the glibc CI runner, so linuxdeploy's dependency walk fails the
+  // AppImage build. `sharp` (the wrapper) is already pruned, so these binaries
+  // are dead weight — drop the whole scope. (deb/rpm skip this walk, so they
+  // built fine; AppImage did not.)
+  "@img",
   "@emnapi",
 ];
 // lstat-based existence: catches symlinks too (a dangling symlink fails `access`,
