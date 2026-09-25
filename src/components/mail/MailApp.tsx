@@ -911,6 +911,33 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     );
   };
 
+  // 「問題無し」: 誤検知を打ち消し、安全な差出人として学習。警告フラグを外す。
+  const markSafe = async (email: Email) => {
+    // Clear the flag for every mail from this sender (learned safe), so the list
+    // is consistent immediately — not just the open one.
+    const from = email.from.email.toLowerCase();
+    setSelected((s) =>
+      s && s.from.email.toLowerCase() === from
+        ? { ...s, threat: undefined }
+        : s,
+    );
+    setEmails((list) =>
+      list.map((e) =>
+        e.from.email.toLowerCase() === from ? { ...e, threat: undefined } : e,
+      ),
+    );
+    try {
+      await fetch(`/api/emails/${encodeURIComponent(email.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ markSafe: { fromEmail: email.from.email } }),
+      });
+      showToast("問題無しとして学習しました（今後は警告しません）");
+    } catch {
+      /* learning is best-effort; the flag is already cleared locally */
+    }
+  };
+
   const toggleGrouping = () =>
     setGrouping((v) => {
       const next = !v;
@@ -1386,6 +1413,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       }
       onImportanceFeedback={onImportanceFeedback}
       onReportSpam={() => selected && reportSpam(selected)}
+      onMarkSafe={() => selected && markSafe(selected)}
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
       onOpenMessage={selectEmail}

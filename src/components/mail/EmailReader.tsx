@@ -61,6 +61,7 @@ export function EmailReader({
   senderLabel,
   onImportanceFeedback,
   onReportSpam,
+  onMarkSafe,
   onNoteSaved,
   onOpenMessage,
   highlight,
@@ -86,6 +87,8 @@ export function EmailReader({
   onImportanceFeedback: (importance: Importance) => void;
   /** Report as spam/phishing → learn the sender + move to trash. */
   onReportSpam?: () => void;
+  /** 「問題無し」: 誤検知を打ち消して安全な差出人として学習（警告を消す）。 */
+  onMarkSafe?: () => void;
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
   onNoteSaved?: () => void;
   /** Re-anchor the reader to a thread message (open it as the current email). */
@@ -376,9 +379,9 @@ export function EmailReader({
       {/* 危険メール警告（フィッシング/スパム）— リンクや認証情報の入力を促す詐欺への
           注意喚起。重要度とは別軸で、開いた瞬間に最上部で警告する。 */}
       {email.threat && (
-        <div className="flex items-start gap-2 border-b border-high/40 bg-high-soft px-5 py-2.5 text-xs text-high">
+        <div className="flex flex-wrap items-start gap-2 border-b border-high/40 bg-high-soft px-5 py-2.5 text-xs text-high">
           <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-          <p className="leading-relaxed">
+          <p className="min-w-0 flex-1 leading-relaxed">
             <span className="font-semibold">
               {email.threat === "phishing"
                 ? t("threat.phishing.title")
@@ -386,6 +389,25 @@ export function EmailReader({
             </span>
             {email.threat === "phishing" && <> {t("threat.phishing.body")}</>}
           </p>
+          {/* 誤検知/確定の振り分け: 問題無し(安全学習) / スパムに分類(報告＋ゴミ箱)。 */}
+          <span className="flex shrink-0 items-center gap-1.5">
+            {onMarkSafe && (
+              <button
+                onClick={onMarkSafe}
+                className="rounded-md border border-high/40 bg-surface px-2 py-1 font-medium text-fg-muted transition-colors hover:border-emerald-500 hover:text-emerald-600"
+              >
+                {t("threat.markSafe")}
+              </button>
+            )}
+            {onReportSpam && folder !== "trashed" && folder !== "sent" && (
+              <button
+                onClick={onReportSpam}
+                className="rounded-md border border-high/50 bg-surface px-2 py-1 font-medium text-high transition-colors hover:bg-high hover:text-white"
+              >
+                {t("threat.reportSpam")}
+              </button>
+            )}
+          </span>
         </div>
       )}
 

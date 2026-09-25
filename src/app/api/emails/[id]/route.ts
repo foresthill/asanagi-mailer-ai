@@ -8,7 +8,11 @@ import {
   updateCached,
   upsertEmails,
 } from "@/lib/db";
-import { recordImportanceFeedback, recordThreatReport } from "@/lib/store";
+import {
+  recordImportanceFeedback,
+  recordThreatReport,
+  recordSafeSender,
+} from "@/lib/store";
 import { projectKeyFromSubject } from "@/lib/importance";
 import type { EmailProvider } from "@/lib/email";
 import type { Importance, MailboxState } from "@/lib/types";
@@ -134,6 +138,7 @@ export async function PATCH(
     starred?: boolean;
     importanceFeedback?: { importance: Importance; fromEmail: string };
     reportSpam?: { fromEmail: string };
+    markSafe?: { fromEmail: string };
   };
   const { provider, account, id } = await resolve(rawId);
 
@@ -180,6 +185,12 @@ export async function PATCH(
       // フラグ）＋重要度も低として学習。移動(ゴミ箱)はクライアントの trash が行う。
       await recordThreatReport(body.reportSpam.fromEmail);
       await recordImportanceFeedback(body.reportSpam.fromEmail, "low");
+    }
+    if (body.markSafe) {
+      // 「問題無し」: 誤検知の打ち消し。安全な差出人として学習する（以降 detectThreat
+      // は危険と判定しない）。threat はキャッシュに保存せず一覧応答時に都度算出するため、
+      // 次回のリスト取得・再判定で自動的にフラグが外れる（クライアントも即クリア）。
+      await recordSafeSender(body.markSafe.fromEmail);
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
