@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  AlarmClock,
   Archive,
   Trash2,
   Mail,
@@ -62,6 +63,8 @@ export function EmailReader({
   onImportanceFeedback,
   onReportSpam,
   onMarkSafe,
+  isTodo,
+  onToggleTodo,
   onNoteSaved,
   onOpenMessage,
   highlight,
@@ -89,6 +92,10 @@ export function EmailReader({
   onReportSpam?: () => void;
   /** 「問題無し」: 誤検知を打ち消して安全な差出人として学習（警告を消す）。 */
   onMarkSafe?: () => void;
+  /** このメールが TODO（「あとで」）登録済みか。 */
+  isTodo?: boolean;
+  /** 「あとで」トグル（TODO 追加/解除）。 */
+  onToggleTodo?: () => void;
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
   onNoteSaved?: () => void;
   /** Re-anchor the reader to a thread message (open it as the current email). */
@@ -262,6 +269,14 @@ export function EmailReader({
           active={email.starred}
           tone="star"
         />
+        {onToggleTodo && (
+          <IconBtn
+            icon={AlarmClock}
+            title={isTodo ? t("todo.remove") : t("todo.add")}
+            onClick={onToggleTodo}
+            active={isTodo}
+          />
+        )}
         {folder !== "archived" && folder !== "sent" && (
           <IconBtn
             icon={Archive}

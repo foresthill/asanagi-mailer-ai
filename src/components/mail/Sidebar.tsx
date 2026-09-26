@@ -19,6 +19,7 @@ import {
   SquarePen,
   Users,
   ListChecks,
+  ListTodo,
   FileText,
   ScrollText,
   FolderKanban,
@@ -46,6 +47,7 @@ export function Sidebar({
   counts,
   scheduledCount,
   draftsCount,
+  todosCount,
   aiConfigured,
   accounts,
   account,
@@ -66,13 +68,17 @@ export function Sidebar({
   counts: Partial<Record<FolderView, number>>;
   scheduledCount: number;
   draftsCount: number;
+  /** 未完了 TODO 件数（サイドバーのバッジ）。 */
+  todosCount: number;
   aiConfigured: boolean;
   accounts: AccountInfo[];
   account: string; // "all" or an account key
   storage: StorageInfo | null;
-  view: "mail" | "contacts" | "triage" | "ailog" | "projects";
+  view: "mail" | "contacts" | "triage" | "ailog" | "projects" | "todo";
   onSelect: (f: FolderView) => void;
-  onSelectView: (v: "mail" | "contacts" | "triage" | "ailog" | "projects") => void;
+  onSelectView: (
+    v: "mail" | "contacts" | "triage" | "ailog" | "projects" | "todo",
+  ) => void;
   /** Pick an account AND folder together (folders nested per account). */
   onSelectAccountFolder: (key: string, f: FolderView) => void;
   onOpenSettings: () => void;
@@ -88,10 +94,16 @@ export function Sidebar({
   // Account groups: "すべて（統合）" + each account. Folders hang under each.
   const groups = [
     { key: "all", label: t("account.all"), icon: Layers },
-    ...accounts.map((a) => ({ key: a.key, label: a.address ?? a.label, icon: AtSign })),
+    ...accounts.map((a) => ({
+      key: a.key,
+      label: a.address ?? a.label,
+      icon: AtSign,
+    })),
   ];
   // Which account groups are expanded. Start with the active one (＋統合) open.
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([account, "all"]));
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set([account, "all"]),
+  );
   const toggleGroup = (key: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -136,7 +148,9 @@ export function Sidebar({
                     title={g.label}
                     className={cn(
                       "group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors",
-                      activeGroup ? "text-fg" : "text-fg-muted hover:bg-surface hover:text-fg",
+                      activeGroup
+                        ? "text-fg"
+                        : "text-fg-muted hover:bg-surface hover:text-fg",
                     )}
                   >
                     <ChevronRight
@@ -145,15 +159,26 @@ export function Sidebar({
                         open && "rotate-90",
                       )}
                     />
-                    <GroupIcon className={cn("size-4 shrink-0", activeGroup && "text-accent")} />
-                    <span className="flex-1 truncate text-left text-[13px]">{g.label}</span>
+                    <GroupIcon
+                      className={cn(
+                        "size-4 shrink-0",
+                        activeGroup && "text-accent",
+                      )}
+                    />
+                    <span className="flex-1 truncate text-left text-[13px]">
+                      {g.label}
+                    </span>
                   </button>
                   {open && (
                     <div className="mb-1 ml-3 flex flex-col gap-0.5 border-l border-border pl-1.5">
                       {FOLDERS.map(({ key, icon: Icon }) => {
-                        const active = view === "mail" && account === g.key && folder === key;
+                        const active =
+                          view === "mail" &&
+                          account === g.key &&
+                          folder === key;
                         // counts are only valid for the currently-loaded account.
-                        const count = account === g.key ? counts[key] : undefined;
+                        const count =
+                          account === g.key ? counts[key] : undefined;
                         return (
                           <button
                             key={key}
@@ -165,10 +190,16 @@ export function Sidebar({
                                 : "text-fg-muted hover:bg-surface hover:text-fg",
                             )}
                           >
-                            <Icon className={cn("size-4", active && "text-accent")} />
-                            <span className="flex-1 text-left">{t(`folder.${key}`)}</span>
+                            <Icon
+                              className={cn("size-4", active && "text-accent")}
+                            />
+                            <span className="flex-1 text-left">
+                              {t(`folder.${key}`)}
+                            </span>
                             {count ? (
-                              <span className="text-xs tabular-nums text-fg-subtle">{count}</span>
+                              <span className="text-xs tabular-nums text-fg-subtle">
+                                {count}
+                              </span>
                             ) : null}
                           </button>
                         );
@@ -196,7 +227,9 @@ export function Sidebar({
                   <Icon className={cn("size-4", active && "text-accent")} />
                   <span className="flex-1 text-left">{t(`folder.${key}`)}</span>
                   {count ? (
-                    <span className="text-xs tabular-nums text-fg-subtle">{count}</span>
+                    <span className="text-xs tabular-nums text-fg-subtle">
+                      {count}
+                    </span>
                   ) : null}
                 </button>
               );
@@ -211,7 +244,9 @@ export function Sidebar({
               : "text-fg-muted hover:bg-surface hover:text-fg",
           )}
         >
-          <Users className={cn("size-4", view === "contacts" && "text-accent")} />
+          <Users
+            className={cn("size-4", view === "contacts" && "text-accent")}
+          />
           <span className="flex-1 text-left">{t("nav.contacts")}</span>
         </button>
         <button
@@ -224,8 +259,30 @@ export function Sidebar({
               : "text-fg-muted hover:bg-surface hover:text-fg",
           )}
         >
-          <FolderKanban className={cn("size-4", view === "projects" && "text-accent")} />
+          <FolderKanban
+            className={cn("size-4", view === "projects" && "text-accent")}
+          />
           <span className="flex-1 text-left">{t("nav.projects")}</span>
+        </button>
+        <button
+          onClick={() => onSelectView("todo")}
+          title={t("nav.todo.title")}
+          className={cn(
+            "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+            view === "todo"
+              ? "bg-accent-soft font-medium text-fg"
+              : "text-fg-muted hover:bg-surface hover:text-fg",
+          )}
+        >
+          <ListTodo
+            className={cn("size-4", view === "todo" && "text-accent")}
+          />
+          <span className="flex-1 text-left">{t("nav.todo")}</span>
+          {todosCount ? (
+            <span className="rounded-full bg-accent-soft px-1.5 text-xs tabular-nums text-accent">
+              {todosCount}
+            </span>
+          ) : null}
         </button>
         <button
           onClick={() => onSelectView("triage")}
@@ -237,7 +294,9 @@ export function Sidebar({
               : "text-fg-muted hover:bg-surface hover:text-fg",
           )}
         >
-          <ListChecks className={cn("size-4", view === "triage" && "text-accent")} />
+          <ListChecks
+            className={cn("size-4", view === "triage" && "text-accent")}
+          />
           <span className="flex-1 text-left">{t("nav.triage")}</span>
         </button>
         <button
@@ -250,11 +309,12 @@ export function Sidebar({
               : "text-fg-muted hover:bg-surface hover:text-fg",
           )}
         >
-          <ScrollText className={cn("size-4", view === "ailog" && "text-accent")} />
+          <ScrollText
+            className={cn("size-4", view === "ailog" && "text-accent")}
+          />
           <span className="flex-1 text-left">{t("nav.ailog")}</span>
         </button>
       </nav>
-
 
       <div className="mt-2 border-t border-border pt-2">
         <button
@@ -313,13 +373,17 @@ export function Sidebar({
               )}
             />
             <span className="flex-1 text-left">
-              {aiConfigured ? t("settings.aiConnected") : t("settings.aiNotSet")}
+              {aiConfigured
+                ? t("settings.aiConnected")
+                : t("settings.aiNotSet")}
             </span>
             <Settings className="size-3.5" />
           </button>
           {/* 表示切替: 左右(一覧|本文) / 上下(件名を上・本文を下) のセグメント。 */}
           <div className="mt-1 flex items-center gap-1.5 px-0.5 pt-1">
-            <span className="shrink-0 text-[10px] text-fg-subtle">{t("view.label")}</span>
+            <span className="shrink-0 text-[10px] text-fg-subtle">
+              {t("view.label")}
+            </span>
             <div className="flex flex-1 rounded-lg border border-border p-0.5">
               <button
                 onClick={() => onSetLayout("classic")}

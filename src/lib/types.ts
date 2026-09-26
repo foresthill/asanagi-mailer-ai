@@ -356,3 +356,25 @@ export interface ResolvedContactMeta {
   honorific?: string;
   tags: string[];
 }
+
+/**
+ * TODO（「あとで」）— メールを後で対応するタスクとして印を付ける。スター（お気に入り＝
+ * フラグ）とは別軸で、任意の期限＋アプリ内リマインドを持つ。local-first: .data にのみ
+ * 保存し、一覧レンダリングのため件名・差出人・日時のスナップショットを保持する
+ * （元メールを都度取りに行かなくてよい）。将来 MCP / カレンダー等へ連携する source。
+ */
+export interface TodoItem {
+  /** account-qualified email id（一覧/本文の id と同じ）。 */
+  id: string;
+  account?: string;
+  /** 一覧表示用スナップショット。 */
+  subject?: string;
+  fromName?: string;
+  fromEmail?: string;
+  date?: string;
+  createdAt: string;
+  /** 任意の期限（ISO）。 */
+  due?: string;
+  done?: boolean;
+  doneAt?: string;
+}

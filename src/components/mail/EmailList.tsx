@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
+  AlarmClock,
   Archive,
   Check,
   ChevronDown,
@@ -179,6 +180,8 @@ export function EmailList({
   groupAxis,
   noteIds,
   contactLabel,
+  overdueTodoCount,
+  onOpenTodos,
   draftThreadIds,
   onChangeGroupAxis,
   serverSearched,
@@ -240,6 +243,10 @@ export function EmailList({
   noteIds: Set<string>;
   /** 差出人/宛先の連絡先ラベル（重要取引先/迷惑）を解決する（バッジ表示用）。 */
   contactLabel?: (email?: string) => ContactLabel | undefined;
+  /** 期限切れの TODO 件数（受信箱のリマインドバナー用）。 */
+  overdueTodoCount?: number;
+  /** TODO ビューを開く（バナーから）。 */
+  onOpenTodos?: () => void;
   /** 下書きが紐づく会話(threadId)の集合（✏️インジケータ用）。 */
   draftThreadIds: Set<string>;
   onChangeGroupAxis: (axis: GroupAxis) => void;
@@ -778,6 +785,22 @@ export function EmailList({
             ))}
           </div>
         ))}
+
+      {/* 期限切れ TODO のリマインド（アプリ内・reminder A）。受信箱で気づける。 */}
+      {!searching && folder === "inbox" && (overdueTodoCount ?? 0) > 0 && (
+        <button
+          onClick={onOpenTodos}
+          className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-high/40 bg-high-soft px-3 py-2 text-left text-xs text-high transition-colors hover:border-high"
+        >
+          <AlarmClock className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1">
+            {t("todo.overdueBanner").replace(
+              "{n}",
+              String(overdueTodoCount ?? 0),
+            )}
+          </span>
+        </button>
+      )}
 
       {/* Aged-draft reminder — old unsent drafts, surfaced at the top of the inbox. */}
       {showDraftReminder && (
