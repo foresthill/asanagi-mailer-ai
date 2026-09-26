@@ -12,6 +12,7 @@ import type {
   SavedDraft,
   ContactMeta,
   ResolvedContactMeta,
+  TodoItem,
 } from "@/lib/types";
 import type { ThreatSenders } from "./threat";
 
@@ -627,4 +628,51 @@ export async function resolveContactMeta(
     honorific: person?.honorific ?? domain?.honorific,
     tags: [...(domain?.tags ?? []), ...(person?.tags ?? [])],
   };
+}
+
+// ── TODO（「あとで」）───────────────────────────────────────────────
+// メールを後で対応するタスクとして保持。local-first: .data のみ。
+const TODOS = "todos.json";
+
+export async function listTodos(): Promise<TodoItem[]> {
+  return readJson<TodoItem[]>(TODOS, []);
+}
+
+/** Add a todo (no-op if the same email is already a todo — keeps existing due/done). */
+export async function addTodo(
+  item: Omit<TodoItem, "createdAt">,
+  now = new Date(),
+): Promise<TodoItem[]> {
+  const rows = await readJson<TodoItem[]>(TODOS, []);
+  if (!rows.some((r) => r.id === item.id)) {
+    rows.push({ ...item, createdAt: now.toISOString() });
+    await writeJson(TODOS, rows);
+  }
+  return rows;
+}
+
+/** Merge fields (due / done) into an existing todo. */
+export async function updateTodo(
+  id: string,
+  patch: Partial<Pick<TodoItem, "due" | "done">>,
+  now = new Date(),
+): Promise<TodoItem[]> {
+  const rows = await readJson<TodoItem[]>(TODOS, []);
+  const row = rows.find((r) => r.id === id);
+  if (row) {
+    if ("due" in patch) row.due = patch.due || undefined;
+    if ("done" in patch) {
+      row.done = patch.done || undefined;
+      row.doneAt = patch.done ? now.toISOString() : undefined;
+    }
+    await writeJson(TODOS, rows);
+  }
+  return rows;
+}
+
+export async function removeTodo(id: string): Promise<TodoItem[]> {
+  const rows = await readJson<TodoItem[]>(TODOS, []);
+  const kept = rows.filter((r) => r.id !== id);
+  if (kept.length !== rows.length) await writeJson(TODOS, kept);
+  return kept;
 }

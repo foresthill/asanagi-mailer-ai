@@ -154,6 +154,18 @@ const ja: Dict = {
   "nav.sweep.title":
     "朝の一凪（ひとなぎ）— 受信箱を一括判定して片付け推奨を表示（差出人・件名・冒頭のみで判定）",
   "nav.drafts": "下書き",
+  "nav.todo": "あとで",
+  "nav.todo.title": "「あとで」対応するメール（TODO）",
+  "todo.intro":
+    "メールを「あとで」対応するタスクとして印を付けた一覧。期限を付けると受信箱でリマインドします（端末内のみ・相手には出ません）。",
+  "todo.empty":
+    "TODO はありません。メールを開いて「あとで」を押すと、ここに貯まります。",
+  "todo.openCount": "未完了 {n} 件",
+  "todo.due": "期限",
+  "todo.done": "完了",
+  "todo.remove": "TODOから外す",
+  "todo.add": "「あとで」に追加",
+  "todo.overdueBanner": "⏰ 期限切れの TODO が {n} 件あります — 確認する",
   "drafts.empty":
     "下書きはありません。作成画面の「下書き保存」で保存できます。",
   "drafts.open.title": "この下書きを開いて続きを書く",
@@ -672,6 +684,17 @@ const en: Dict = {
   "nav.sweep.title":
     "Morning Calm — batch-triage the inbox and suggest cleanup (judged by sender, subject & opening only)",
   "nav.drafts": "Drafts",
+  "nav.todo": "Later",
+  "nav.todo.title": "Mail to handle later (TODO)",
+  "todo.intro":
+    "Emails you flagged to handle later. Set a due date and the inbox reminds you (on-device only; nothing is sent to anyone).",
+  "todo.empty": "No TODOs yet. Open a mail and press ‘Later’ to add it here.",
+  "todo.openCount": "{n} open",
+  "todo.due": "Due",
+  "todo.done": "Done",
+  "todo.remove": "Remove from TODO",
+  "todo.add": "Add to ‘Later’",
+  "todo.overdueBanner": "⏰ {n} overdue TODO(s) — review",
   "drafts.empty": "No drafts. Save one with 'Save draft' in the composer.",
   "drafts.open.title": "Open this draft and keep writing",
   "drafts.noSubject": "(no subject)",
@@ -1196,6 +1219,18 @@ const fr: Dict = {
   "nav.sweep.title":
     "Calme du matin — tri groupé de la boîte de réception avec suggestions de rangement (jugé sur l'expéditeur, l'objet et le début uniquement)",
   "nav.drafts": "Brouillons",
+  "nav.todo": "Plus tard",
+  "nav.todo.title": "E-mails à traiter plus tard (TODO)",
+  "todo.intro":
+    "E-mails marqués à traiter plus tard. Ajoutez une échéance et la boîte de réception vous le rappelle (sur l'appareil uniquement).",
+  "todo.empty":
+    "Aucune tâche. Ouvrez un e-mail et cliquez « Plus tard » pour l'ajouter ici.",
+  "todo.openCount": "{n} en cours",
+  "todo.due": "Échéance",
+  "todo.done": "Fait",
+  "todo.remove": "Retirer du TODO",
+  "todo.add": "Ajouter à « Plus tard »",
+  "todo.overdueBanner": "⏰ {n} tâche(s) en retard — vérifier",
   "drafts.empty":
     "Aucun brouillon. Enregistrez-en un via « Enregistrer le brouillon » dans l'éditeur.",
   "drafts.open.title": "Ouvrir ce brouillon et continuer à écrire",
@@ -1727,6 +1762,17 @@ const zh: Dict = {
   "nav.sweep.title":
     "晨间一凪——批量分拣收件箱并建议清理（仅凭发件人、主题与开头判定）",
   "nav.drafts": "草稿",
+  "nav.todo": "稍后",
+  "nav.todo.title": "稍后处理的邮件（待办）",
+  "todo.intro":
+    "标记为稍后处理的邮件清单。设置期限后，收件箱会提醒你（仅在本机，不发送给任何人）。",
+  "todo.empty": "暂无待办。打开邮件并点击「稍后」即可加入这里。",
+  "todo.openCount": "未完成 {n} 项",
+  "todo.due": "期限",
+  "todo.done": "完成",
+  "todo.remove": "从待办移除",
+  "todo.add": "加入「稍后」",
+  "todo.overdueBanner": "⏰ 有 {n} 项已过期的待办 — 查看",
   "drafts.empty": "暂无草稿。可在写信界面用「保存草稿」保存。",
   "drafts.open.title": "打开此草稿并继续写",
   "drafts.noSubject": "（无主题）",

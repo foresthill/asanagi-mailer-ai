@@ -10,6 +10,7 @@ import type {
   SavedDraft,
   ContactLabel,
   ContactMeta,
+  TodoItem,
 } from "@/lib/types";
 import { Sidebar } from "./Sidebar";
 import { EmailList } from "./EmailList";
@@ -23,6 +24,7 @@ import { ContactsView } from "./ContactsView";
 import { TriageView } from "./TriageView";
 import { AiLogView } from "./AiLogView";
 import { ProjectsView } from "./ProjectsView";
+import { TodoView } from "./TodoView";
 import { SweepDialog } from "./SweepDialog";
 import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
@@ -88,7 +90,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<FolderView>("inbox");
   // "mail" = folders; "contacts" = auto-derived address book (mini-CRM).
   const [view, setView] = useState<
-    "mail" | "contacts" | "triage" | "ailog" | "projects"
+    "mail" | "contacts" | "triage" | "ailog" | "projects" | "todo"
   >("mail");
   // "all" = unified inbox across accounts; otherwise a single account key.
   const [account, setAccount] = useState("all");
@@ -204,6 +206,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [noteIds, setNoteIds] = useState<Set<string>>(new Set());
   // Contact labels (重要取引先/迷惑) — resolved from the contacts store for badges.
   const [contactMeta, setContactMeta] = useState<ContactMeta[]>([]);
+  // TODO（「あとで」）— メールをタスク化。ローカル保存、期限＋アプリ内リマインド。
+  const [todos, setTodos] = useState<TodoItem[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
   const selectToken = useRef(0);
@@ -271,6 +275,117 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     },
     [contactMeta],
   );
+
+  // ── TODO（「あとで」）───────────────────────────────────────────────
+  const loadTodos = useCallback(async () => {
+    try {
+      const res = await fetch("/api/todos");
+      const data = await res.json();
+      setTodos((data.todos ?? []) as TodoItem[]);
+    } catch {
+      /* todos are non-critical */
+    }
+  }, []);
+
+  // Add/remove the open mail as a TODO（reader「あとで」toggle）。
+  const toggleTodo = async (email: Email) => {
+    const exists = todos.some((x) => x.id === email.id);
+    if (exists) {
+      setTodos((list) => list.filter((x) => x.id !== email.id));
+      showToast("「あとで」から外しました");
+      try {
+        await fetch(`/api/todos?id=${encodeURIComponent(email.id)}`, {
+          method: "DELETE",
+        });
+      } catch {
+        /* optimistic */
+      }
+    } else {
+      const item: TodoItem = {
+        id: email.id,
+        account: email.account,
+        subject: email.subject,
+        fromName: email.from.name,
+        fromEmail: email.from.email,
+        date: email.date,
+        createdAt: new Date().toISOString(),
+      };
+      setTodos((list) => [...list, item]);
+      showToast("「あとで」に追加しました");
+      try {
+        await fetch("/api/todos", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ item }),
+        });
+      } catch {
+        /* optimistic */
+      }
+    }
+  };
+
+  const setTodoDue = async (id: string, due: string | null) => {
+    setTodos((list) =>
+      list.map((x) => (x.id === id ? { ...x, due: due ?? undefined } : x)),
+    );
+    try {
+      await fetch("/api/todos", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, due }),
+      });
+    } catch {
+      /* optimistic */
+    }
+  };
+
+  const setTodoDone = async (id: string, done: boolean) => {
+    setTodos((list) =>
+      list.map((x) =>
+        x.id === id
+          ? { ...x, done, doneAt: done ? new Date().toISOString() : undefined }
+          : x,
+      ),
+    );
+    try {
+      await fetch("/api/todos", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, done }),
+      });
+    } catch {
+      /* optimistic */
+    }
+  };
+
+  const removeTodoItem = async (id: string) => {
+    setTodos((list) => list.filter((x) => x.id !== id));
+    try {
+      await fetch(`/api/todos?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+    } catch {
+      /* optimistic */
+    }
+  };
+
+  // Live-ish clock for「期限切れ」判定（renderでDate.now禁止のReact19対応）。
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => {
+    const tick = () => setNowMs(Date.now());
+    tick();
+    const timer = setInterval(tick, 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const openTodoCount = todos.filter((x) => !x.done).length;
+  const overdueTodoCount = nowMs
+    ? todos.filter((x) => !x.done && x.due && new Date(x.due).getTime() < nowMs)
+        .length
+    : 0;
+  const isSelectedTodo = selected
+    ? todos.some((x) => x.id === selected.id)
+    : false;
 
   // Newest request wins: a slow live response must never overwrite a fresher
   // folder/account the user has since switched to.
@@ -357,6 +472,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch
     if (view === "mail") loadContactMeta();
   }, [loadContactMeta, view]);
+
+  useEffect(() => {
+    // TODO は常に読み込む（サイドバー件数・受信箱の期限切れバナー用）。ビュー切替の
+    // たびに最新化して、TODOビューでの変更が他画面にも反映されるようにする。
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch
+    loadTodos();
+  }, [loadTodos, view]);
 
   // 朝の一掃: 受信箱が読み込まれた直後に1日の最初だけポップアップ。
   // 判断済みを除いた「未さばき」が5通以上あるときだけ開く（空ポップアップや
@@ -570,6 +692,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   };
 
   // Widen the current search to the providers' full history (#40).
+  // Manual memoization is intentional (deps are the value inputs; setState setters
+  // are stable), so opt out of the React Compiler's preserve-memoization check.
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const searchServer = useCallback(async () => {
     const q = searchQuery.trim();
     if (!q || serverSearching) return;
@@ -1352,6 +1477,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       groupAxis={groupAxis}
       noteIds={noteIds}
       contactLabel={contactLabel}
+      overdueTodoCount={overdueTodoCount}
+      onOpenTodos={() => setView("todo")}
       draftThreadIds={draftThreadIds}
       onChangeGroupAxis={changeGroupAxis}
       accountLabels={
@@ -1414,6 +1541,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onImportanceFeedback={onImportanceFeedback}
       onReportSpam={() => selected && reportSpam(selected)}
       onMarkSafe={() => selected && markSafe(selected)}
+      isTodo={isSelectedTodo}
+      onToggleTodo={() => selected && toggleTodo(selected)}
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
       onOpenMessage={selectEmail}
@@ -1430,6 +1559,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         counts={counts}
         scheduledCount={scheduledCount}
         draftsCount={draftsCount}
+        todosCount={openTodoCount}
         aiConfigured={aiOk}
         accounts={accounts}
         account={account}
@@ -1472,6 +1602,18 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
             setView("mail");
             void selectEmail(id);
           }}
+        />
+      )}
+      {view === "todo" && (!compose || composeMinimized) && (
+        <TodoView
+          todos={todos}
+          onOpenEmail={(id) => {
+            setView("mail");
+            void selectEmail(id);
+          }}
+          onSetDue={setTodoDue}
+          onToggleDone={setTodoDone}
+          onRemove={removeTodoItem}
         />
       )}
       {/* classic: 一覧(左)｜本文(右)・幅ドラッグ可変 */}
