@@ -19,6 +19,8 @@ import {
   Search,
   ShieldAlert,
   Sparkles,
+  Square,
+  SquareCheck,
   Star,
   X,
   ZoomIn,
@@ -205,6 +207,8 @@ export function EmailList({
   onArchive,
   onTrash,
   onToggleStar,
+  todoIds,
+  onToggleTodo,
   onRefresh,
   agedDraftCount,
   onOpenDrafts,
@@ -282,6 +286,10 @@ export function EmailList({
   onArchive: (ids: string[]) => void;
   onTrash: (ids: string[]) => void;
   onToggleStar: (id: string) => void;
+  /** TODO 登録済みメールIDの集合（一覧のチェックボックス表示用）。 */
+  todoIds?: Set<string>;
+  /** 一覧行から TODO 追加/解除（連携が渡ったときだけボタンを出す）。 */
+  onToggleTodo?: (email: Email) => void;
   onRefresh: () => void;
   /** Count of unsent drafts left untouched for several days (aged-draft reminder). */
   agedDraftCount: number;
@@ -453,6 +461,10 @@ export function EmailList({
           onArchive={() => onArchive(row.ids)}
           onTrash={() => onTrash(row.ids)}
           onToggleStar={() => onToggleStar(row.email.id)}
+          isTodo={todoIds?.has(row.email.id) ?? false}
+          onToggleTodo={
+            onToggleTodo ? () => onToggleTodo(row.email) : undefined
+          }
           contactLabel={contactLabel}
         />
         {isExpanded && (
@@ -1342,6 +1354,8 @@ function EmailListItem({
   onArchive,
   onTrash,
   onToggleStar,
+  isTodo,
+  onToggleTodo,
   contactLabel,
 }: {
   row: ThreadRow;
@@ -1376,6 +1390,10 @@ function EmailListItem({
   onArchive: () => void;
   onTrash: () => void;
   onToggleStar: () => void;
+  /** このメールが TODO 登録済みか。 */
+  isTodo?: boolean;
+  /** TODO 追加/解除（連携が有効なときだけ渡る）。 */
+  onToggleTodo?: () => void;
 }) {
   const { t } = useI18n();
   const { email, count, participants, unread, starred, threadTotal } = row;
@@ -1569,6 +1587,25 @@ function EmailListItem({
               )}
             />
           </button>
+          {onToggleTodo && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleTodo();
+              }}
+              title={isTodo ? t("todo.remove") : t("todo.add")}
+              className={cn(
+                "grid size-6 place-items-center rounded-md hover:bg-accent-soft hover:text-accent",
+                isTodo ? "text-accent" : "text-fg-muted",
+              )}
+            >
+              {isTodo ? (
+                <SquareCheck className="size-3.5" />
+              ) : (
+                <Square className="size-3.5" />
+              )}
+            </button>
+          )}
           {folder !== "archived" && (
             <button
               onClick={(e) => {
@@ -1812,6 +1849,25 @@ function EmailListItem({
             )}
           />
         </button>
+        {onToggleTodo && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleTodo();
+            }}
+            title={isTodo ? t("todo.remove") : t("todo.add")}
+            className={cn(
+              "grid size-7 place-items-center rounded-md hover:bg-accent-soft hover:text-accent",
+              isTodo ? "text-accent" : "text-fg-muted",
+            )}
+          >
+            {isTodo ? (
+              <SquareCheck className="size-4" />
+            ) : (
+              <Square className="size-4" />
+            )}
+          </button>
+        )}
         {folder !== "archived" && (
           <button
             onClick={(e) => {

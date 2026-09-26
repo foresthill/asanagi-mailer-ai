@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  AlarmClock,
   Archive,
   Trash2,
   Mail,
@@ -20,6 +19,9 @@ import {
   PenLine,
   ShieldAlert,
   FolderKanban,
+  Square,
+  SquareCheck,
+  Flag,
 } from "lucide-react";
 import type {
   Email,
@@ -275,7 +277,7 @@ export function EmailReader({
         />
         {onToggleTodo && (
           <IconBtn
-            icon={AlarmClock}
+            icon={isTodo ? SquareCheck : Square}
             title={isTodo ? t("todo.remove") : t("todo.add")}
             onClick={onToggleTodo}
             active={isTodo}
@@ -323,6 +325,13 @@ export function EmailReader({
             title={t("reader.reportSpam")}
             onClick={onReportSpam}
             tone="danger"
+          />
+        )}
+        {/* 重要度をこのツールバーからも設定（学習シグナル）。現在値を色で表示。 */}
+        {folder !== "sent" && (
+          <ImportanceMenu
+            current={email.importance}
+            onPick={onImportanceFeedback}
           />
         )}
 
@@ -687,6 +696,89 @@ function ImportanceBar({
           onClick={() => onFeedback("low")}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Toolbar importance control: a single Flag button colored by the current
+ * importance, opening a small menu (重要/通常/低). Setting importance is a
+ * learning signal (same as the reason-banner chips), surfaced in the action bar
+ * so it's reachable while reading. Icon-only to keep the toolbar calm.
+ */
+function ImportanceMenu({
+  current,
+  onPick,
+}: {
+  current?: Importance;
+  onPick: (importance: Importance) => void;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const tone =
+    current === "high"
+      ? "text-high"
+      : current === "low"
+        ? "text-fg-subtle"
+        : "text-fg-muted";
+  const options: { value: Importance; label: string }[] = [
+    { value: "high", label: t("importance.high") },
+    { value: "normal", label: t("importance.normal") },
+    { value: "low", label: t("importance.low") },
+  ];
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title={t("reader.setImportance")}
+        className={cn(
+          "grid size-8 shrink-0 place-items-center rounded-lg transition-colors hover:bg-surface-2",
+          open ? "bg-surface-2 text-fg" : tone,
+        )}
+      >
+        <Flag className={cn("size-4", current === "high" && "fill-high/20")} />
+      </button>
+      {open && (
+        <>
+          <button
+            aria-hidden
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div className="absolute left-0 top-9 z-50 flex min-w-28 flex-col overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-[var(--shadow)]">
+            <span className="px-2.5 py-1 text-[10px] font-medium text-fg-subtle">
+              {t("reader.learn")}
+            </span>
+            {options.map((o) => (
+              <button
+                key={o.value}
+                onClick={() => {
+                  onPick(o.value);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-surface-2",
+                  current === o.value
+                    ? "font-semibold text-fg"
+                    : "text-fg-muted",
+                )}
+              >
+                <Flag
+                  className={cn(
+                    "size-3.5",
+                    o.value === "high"
+                      ? "text-high"
+                      : o.value === "low"
+                        ? "text-fg-subtle"
+                        : "text-fg-muted",
+                  )}
+                />
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
