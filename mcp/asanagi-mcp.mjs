@@ -107,7 +107,7 @@ function parseAddr(s) {
   return { email: String(s).trim() };
 }
 
-const server = new McpServer({ name: "asanagi", version: "0.1.2" });
+const server = new McpServer({ name: "asanagi", version: "0.1.3" });
 
 server.registerTool(
   "search_mail",
@@ -313,6 +313,114 @@ server.registerTool(
         account: draft.account,
         isReply: !!reply_to_id,
       },
+    });
+  },
+);
+
+// ── TODO（「あとで」対応するタスク）─────────────────────────────────
+// Asanagi の TODO は .data/todos.json（アプリの /api/todos と同じ store）。
+const todosPath = () => path.join(dataDir(), "todos.json");
+async function readTodos() {
+  const p = todosPath();
+  if (!existsSync(p)) return [];
+  try {
+    const arr = JSON.parse(await readFile(p, "utf8"));
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+server.registerTool(
+  "list_todos",
+  {
+    description:
+      "「あとで対応する」TODO（メールから印を付けたタスク）の一覧。期限順・期限切れ(overdue)フラグ付き。" +
+      "「やることある？」「期限切れのメールタスクは？」に。",
+    inputSchema: {
+      only: z
+        .enum(["open", "all"])
+        .optional()
+        .describe("open=未完了のみ（既定） / all=完了も含む"),
+      limit: z.number().int().min(1).max(200).optional(),
+    },
+  },
+  async ({ only, limit }) => {
+    const now = Date.now();
+    let rows = await readTodos();
+    if ((only ?? "open") === "open") rows = rows.filter((t) => !t.done);
+    const withState = rows.map((t) => ({
+      id: t.id,
+      subject: t.subject ?? "",
+      from: t.fromName || t.fromEmail || "",
+      due: t.due ?? null,
+      done: !!t.done,
+      overdue: !t.done && !!t.due && new Date(t.due).getTime() < now,
+      createdAt: t.createdAt,
+    }));
+    // overdue → due(近い順) → 期限なし → 完了 の順。
+    const rank = (t) => (t.done ? 3 : t.overdue ? 0 : t.due ? 1 : 2);
+    withState.sort((a, b) => {
+      const r = rank(a) - rank(b);
+      if (r) return r;
+      if (a.due && b.due) return +new Date(a.due) - +new Date(b.due);
+      return 0;
+    });
+    return ok({
+      count: withState.length,
+      overdue: withState.filter((t) => t.overdue).length,
+      todos: limit ? withState.slice(0, limit) : withState,
+    });
+  },
+);
+
+server.registerTool(
+  "create_todo",
+  {
+    description:
+      "メールを TODO（「あとで対応」）に登録する。email_id のメールを印付けし、任意で期限を設定できる。" +
+      "登録済みなら既存を保つ。端末内(.data/todos.json)のみ・相手には出ない。",
+    inputSchema: {
+      email_id: z.string().describe("対象メールの id (account/xxx)"),
+      due: z
+        .string()
+        .optional()
+        .describe("期限（ISO日時。例 2026-09-30T15:00:00Z）。省略可"),
+    },
+  },
+  async ({ email_id, due }) => {
+    const { account, raw } = splitId(email_id);
+    const row = account
+      ? db().prepare("SELECT * FROM messages WHERE account = ? AND id = ?").get(account, raw)
+      : db().prepare("SELECT * FROM messages WHERE id = ? LIMIT 1").get(raw);
+    if (!row) return ok({ error: "対象メールが見つかりませんでした（キャッシュ内に無い可能性）" });
+    const id = `${row.account}/${row.id}`;
+    const rows = await readTodos();
+    const existing = rows.find((t) => t.id === id);
+    if (existing) {
+      // 既存はそのまま。due の追記だけ許可（未設定なら埋める）。
+      if (due && !existing.due) {
+        existing.due = due;
+        await writeFile(todosPath(), JSON.stringify(rows, null, 2), "utf8");
+      }
+      return ok({ created: false, alreadyTodo: true, id, due: existing.due ?? null });
+    }
+    const item = {
+      id,
+      account: row.account,
+      subject: row.subject ?? undefined,
+      fromName: row.from_name || undefined,
+      fromEmail: row.from_email || undefined,
+      date: row.date ?? undefined,
+      createdAt: new Date().toISOString(),
+      ...(due ? { due } : {}),
+    };
+    rows.push(item);
+    await writeFile(todosPath(), JSON.stringify(rows, null, 2), "utf8");
+    return ok({
+      created: true,
+      note: "TODO に追加しました（端末内のみ）。Asanagi の「TODO」から確認できます。",
+      todo: { id, subject: item.subject, due: item.due ?? null },
     });
   },
 );
