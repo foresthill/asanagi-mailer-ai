@@ -292,7 +292,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     const exists = todos.some((x) => x.id === email.id);
     if (exists) {
       setTodos((list) => list.filter((x) => x.id !== email.id));
-      showToast("「あとで」から外しました");
+      showToast("TODO から外しました");
       try {
         await fetch(`/api/todos?id=${encodeURIComponent(email.id)}`, {
           method: "DELETE",
@@ -311,7 +311,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         createdAt: new Date().toISOString(),
       };
       setTodos((list) => [...list, item]);
-      showToast("「あとで」に追加しました");
+      showToast("TODO に追加しました");
       try {
         await fetch("/api/todos", {
           method: "POST",
