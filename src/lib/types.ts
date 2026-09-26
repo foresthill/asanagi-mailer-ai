@@ -377,4 +377,24 @@ export interface TodoItem {
   due?: string;
   done?: boolean;
   doneAt?: string;
+  /** OpenProject に送った場合の work package id（重複送信の抑止＆リンク表示用）。 */
+  opWorkPackageId?: string;
+  /** その work package の URL（ブラウザで開く用）。 */
+  opUrl?: string;
+}
+
+// ---------------------------------------------------------------------------
+// OpenProject 連携（インテグレーション） — TODO / メールを OpenProject の
+// work package として起票する。接続情報（URL・APIキー・既定プロジェクト）は
+// ローカルのみ（.data/openproject-settings.json）。APIキーは端末外に出さない。
+// ---------------------------------------------------------------------------
+export interface OpenProjectSettings {
+  /** インスタンスの base URL（例 https://openproject.example.com、末尾スラッシュ無し）。 */
+  baseUrl?: string;
+  /** APIトークン（OpenProject の アカウント設定 → アクセストークン で発行）。ローカル保存のみ。 */
+  apiKey?: string;
+  /** 既定の送り先プロジェクト id（送信は常にここへ）。 */
+  projectId?: string;
+  /** 既定プロジェクトの表示名（設定画面での確認用キャッシュ）。 */
+  projectName?: string;
 }

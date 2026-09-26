@@ -86,7 +86,7 @@ function loadLayout(): Layout {
 export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // Current UI language — sent to AI routes so user-facing output (importance
   // reasons, digests, project summaries) is written in the user's language.
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const [folder, setFolder] = useState<FolderView>("inbox");
   // "mail" = folders; "contacts" = auto-derived address book (mini-CRM).
   const [view, setView] = useState<
@@ -208,6 +208,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [contactMeta, setContactMeta] = useState<ContactMeta[]>([]);
   // TODO（「あとで」）— メールをタスク化。ローカル保存、期限＋アプリ内リマインド。
   const [todos, setTodos] = useState<TodoItem[]>([]);
+  // OpenProject 連携が設定済みか（送信ボタンの表示切替）。
+  const [opEnabled, setOpEnabled] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
   const selectToken = useRef(0);
@@ -367,6 +369,92 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     } catch {
       /* optimistic */
     }
+  };
+
+  // ── OpenProject 連携 ──────────────────────────────────────────────
+  // 設定済みかを起動時に確認（送信ボタンの表示切替）。
+  const loadOpStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/integrations/openproject");
+      const d = (await res.json()) as { configured?: boolean };
+      setOpEnabled(!!d.configured);
+    } catch {
+      /* 連携は任意機能 */
+    }
+  }, []);
+  useEffect(() => {
+    // async loader — setState only after the fetch resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadOpStatus();
+  }, [loadOpStatus]);
+
+  // work package を起票する共通処理。成功でリンクを開き、todoId があれば紐付け。
+  const sendToOpenProject = async (
+    subject: string,
+    description: string,
+    todoId?: string,
+  ): Promise<boolean> => {
+    showToast(t("op.sending"));
+    try {
+      const res = await fetch("/api/integrations/openproject/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ subject, description, todoId }),
+      });
+      const d = (await res.json()) as {
+        ok: boolean;
+        url?: string;
+        error?: string;
+      };
+      if (d.ok && d.url) {
+        showToast(t("op.sent"));
+        if (todoId) loadTodos();
+        // Shopify制約と同様 iframe 対策で navigate 相当は不要（外部URL）。デスクトップ/
+        // ブラウザとも別タブで OpenProject を開く（外部URLなので target=_blank 可）。
+        window.open(d.url, "_blank", "noopener,noreferrer");
+        return true;
+      }
+      showToast(d.error ?? t("op.connect.fail"));
+      return false;
+    } catch {
+      showToast(t("op.connect.fail"));
+      return false;
+    }
+  };
+
+  // メール本文から起票（reader）。差出人・受信日時・本文抜粋を description に。
+  const sendEmailToOpenProject = async (email: Email) => {
+    const excerpt = (email.body ?? email.snippet ?? "").slice(0, 2000);
+    const desc = [
+      `**${t("op.desc.from")}**: ${email.from.name ?? ""} <${email.from.email}>`,
+      `**${t("op.desc.date")}**: ${email.date}`,
+      "",
+      excerpt,
+      "",
+      `_${t("op.desc.footer")}_`,
+    ].join("\n");
+    await sendToOpenProject(email.subject || t("drafts.noSubject"), desc);
+  };
+
+  // TODO から起票。既に紐付け済みなら既存の work package を開くだけ。
+  const sendTodoToOpenProject = async (todo: TodoItem) => {
+    if (todo.opUrl) {
+      window.open(todo.opUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const desc = [
+      `**${t("op.desc.from")}**: ${todo.fromName ?? ""} <${todo.fromEmail ?? ""}>`,
+      todo.date ? `**${t("op.desc.date")}**: ${todo.date}` : "",
+      "",
+      `_${t("op.desc.footer")}_`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    await sendToOpenProject(
+      todo.subject || t("drafts.noSubject"),
+      desc,
+      todo.id,
+    );
   };
 
   // Live-ish clock for「期限切れ」判定（renderでDate.now禁止のReact19対応）。
@@ -1543,6 +1631,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onMarkSafe={() => selected && markSafe(selected)}
       isTodo={isSelectedTodo}
       onToggleTodo={() => selected && toggleTodo(selected)}
+      onSendToOpenProject={
+        opEnabled
+          ? () => selected && sendEmailToOpenProject(selected)
+          : undefined
+      }
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
       onOpenMessage={selectEmail}
@@ -1614,6 +1707,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onSetDue={setTodoDue}
           onToggleDone={setTodoDone}
           onRemove={removeTodoItem}
+          onSendToOpenProject={opEnabled ? sendTodoToOpenProject : undefined}
         />
       )}
       {/* classic: 一覧(左)｜本文(右)・幅ドラッグ可変 */}

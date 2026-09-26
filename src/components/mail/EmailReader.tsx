@@ -19,6 +19,7 @@ import {
   List,
   PenLine,
   ShieldAlert,
+  FolderKanban,
 } from "lucide-react";
 import type {
   Email,
@@ -65,6 +66,7 @@ export function EmailReader({
   onMarkSafe,
   isTodo,
   onToggleTodo,
+  onSendToOpenProject,
   onNoteSaved,
   onOpenMessage,
   highlight,
@@ -96,6 +98,8 @@ export function EmailReader({
   isTodo?: boolean;
   /** 「あとで」トグル（TODO 追加/解除）。 */
   onToggleTodo?: () => void;
+  /** OpenProject連携が有効なときだけ渡る（このメールを work package に起票）。 */
+  onSendToOpenProject?: () => void;
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
   onNoteSaved?: () => void;
   /** Re-anchor the reader to a thread message (open it as the current email). */
@@ -275,6 +279,13 @@ export function EmailReader({
             title={isTodo ? t("todo.remove") : t("todo.add")}
             onClick={onToggleTodo}
             active={isTodo}
+          />
+        )}
+        {onSendToOpenProject && (
+          <IconBtn
+            icon={FolderKanban}
+            title={t("op.sendMail")}
+            onClick={onSendToOpenProject}
           />
         )}
         {folder !== "archived" && folder !== "sent" && (
