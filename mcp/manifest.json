@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "asanagi",
   "display_name": "Asanagi メール MCP",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Asanagi のローカルメールキャッシュとプロジェクト・ハブを公開するMCPサーバ（読み取り中心＋下書き作成のみ・送信なし・端末内で完結）",
   "author": { "name": "foresthill" },
   "server": {
@@ -30,6 +30,8 @@
     { "name": "check_received", "description": "特定の差出人・件名が届いているか確認" },
     { "name": "get_email", "description": "1通の本文全文" },
     { "name": "list_projects", "description": "プロジェクト・ハブ（進捗・次アクション）" },
-    { "name": "create_draft", "description": "返信・新規メールの下書きを作成（送信はしない・端末内保存のみ）" }
+    { "name": "create_draft", "description": "返信・新規メールの下書きを作成（送信はしない・端末内保存のみ）" },
+    { "name": "list_todos", "description": "TODO（あとで対応）一覧・期限順/期限切れ判定" },
+    { "name": "create_todo", "description": "メールを TODO に登録（任意で期限）" }
   ]
 }
