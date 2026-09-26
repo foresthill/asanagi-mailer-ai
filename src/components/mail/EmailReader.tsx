@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  AlarmClock,
+  ListTodo,
   Archive,
   Trash2,
   Mail,
@@ -271,7 +271,7 @@ export function EmailReader({
         />
         {onToggleTodo && (
           <IconBtn
-            icon={AlarmClock}
+            icon={ListTodo}
             title={isTodo ? t("todo.remove") : t("todo.add")}
             onClick={onToggleTodo}
             active={isTodo}
