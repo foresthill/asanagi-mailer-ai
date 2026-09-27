@@ -14,6 +14,7 @@ import type {
   ResolvedContactMeta,
   TodoItem,
   OpenProjectSettings,
+  DevlogSettings,
 } from "@/lib/types";
 import type { ThreatSenders } from "./threat";
 
@@ -721,5 +722,51 @@ export async function saveOpenProjectSettings(
   merge("projectId", patch.projectId);
   merge("projectName", patch.projectName);
   await writeJson(OPENPROJECT_SETTINGS, next);
+  return next;
+}
+
+/** Record the OpenProject/devlog issue created for a todo (link + key). */
+export async function setTodoDevlogLink(
+  id: string,
+  devlogIssueKey: string,
+  devlogUrl: string,
+): Promise<TodoItem[]> {
+  const rows = await readJson<TodoItem[]>(TODOS, []);
+  const row = rows.find((r) => r.id === id);
+  if (row) {
+    row.devlogIssueKey = devlogIssueKey;
+    row.devlogUrl = devlogUrl;
+    await writeJson(TODOS, rows);
+  }
+  return rows;
+}
+
+// ── devlog 連携設定 ─────────────────────────────────────────────────
+// 接続情報（URL・MCPトークン・既定プロジェクトキー）。トークンは端末外に出さない。
+const DEVLOG_SETTINGS = "devlog-settings.json";
+
+export async function getDevlogSettings(): Promise<DevlogSettings> {
+  return readJson<DevlogSettings>(DEVLOG_SETTINGS, {});
+}
+
+/**
+ * Merge a patch into stored devlog settings. A blank string clears that field
+ * (e.g. disconnect = { token: "" }); undefined leaves it untouched.
+ */
+export async function saveDevlogSettings(
+  patch: DevlogSettings,
+): Promise<DevlogSettings> {
+  const cur = await getDevlogSettings();
+  const next: DevlogSettings = { ...cur };
+  const merge = (k: keyof DevlogSettings, v: string | undefined) => {
+    if (v === undefined) return;
+    if (v.trim()) next[k] = v.trim();
+    else delete next[k];
+  };
+  merge("baseUrl", patch.baseUrl);
+  merge("token", patch.token);
+  merge("projectKey", patch.projectKey);
+  merge("projectName", patch.projectName);
+  await writeJson(DEVLOG_SETTINGS, next);
   return next;
 }

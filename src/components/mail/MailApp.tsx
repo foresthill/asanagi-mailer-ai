@@ -12,6 +12,7 @@ import type {
   ContactMeta,
   TodoItem,
   OpWorkPackage,
+  DevlogIssue,
 } from "@/lib/types";
 import { Sidebar } from "./Sidebar";
 import { EmailList } from "./EmailList";
@@ -214,6 +215,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   // OpenProject から pull した自分の未完了タスク（読み取り専用・TODO画面に表示）。
   const [opTasks, setOpTasks] = useState<OpWorkPackage[]>([]);
   const [opTasksLoading, setOpTasksLoading] = useState(false);
+  // devlog 連携（MCP経由）。OpenProject と同型。
+  const [devlogEnabled, setDevlogEnabled] = useState(false);
+  const [devlogTasks, setDevlogTasks] = useState<DevlogIssue[]>([]);
+  const [devlogTasksLoading, setDevlogTasksLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
   const selectToken = useRef(0);
@@ -481,6 +486,99 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (view === "todo" && opEnabled) loadOpTasks();
   }, [view, opEnabled, loadOpTasks]);
+
+  // ── devlog 連携（MCP経由）──────────────────────────────────────────
+  const loadDevlogStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/integrations/devlog");
+      const d = (await res.json()) as { configured?: boolean };
+      setDevlogEnabled(!!d.configured);
+    } catch {
+      /* 連携は任意機能 */
+    }
+  }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadDevlogStatus();
+  }, [loadDevlogStatus]);
+
+  const sendToDevlog = async (
+    title: string,
+    description: string,
+    todoId?: string,
+  ): Promise<boolean> => {
+    showToast(t("dv.sending"));
+    try {
+      const res = await fetch("/api/integrations/devlog/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title, description, todoId }),
+      });
+      const d = (await res.json()) as {
+        ok: boolean;
+        url?: string;
+        error?: string;
+      };
+      if (d.ok && d.url) {
+        showToast(t("dv.sent"));
+        if (todoId) loadTodos();
+        window.open(d.url, "_blank", "noopener,noreferrer");
+        return true;
+      }
+      showToast(d.error ?? t("dv.connect.fail"));
+      return false;
+    } catch {
+      showToast(t("dv.connect.fail"));
+      return false;
+    }
+  };
+
+  const sendEmailToDevlog = async (email: Email) => {
+    const excerpt = (email.body ?? email.snippet ?? "").slice(0, 2000);
+    const desc = [
+      `**${t("op.desc.from")}**: ${email.from.name ?? ""} <${email.from.email}>`,
+      `**${t("op.desc.date")}**: ${email.date}`,
+      "",
+      excerpt,
+      "",
+      `_${t("op.desc.footer")}_`,
+    ].join("\n");
+    await sendToDevlog(email.subject || t("drafts.noSubject"), desc);
+  };
+
+  const sendTodoToDevlog = async (todo: TodoItem) => {
+    if (todo.devlogUrl) {
+      window.open(todo.devlogUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const desc = [
+      `**${t("op.desc.from")}**: ${todo.fromName ?? ""} <${todo.fromEmail ?? ""}>`,
+      todo.date ? `**${t("op.desc.date")}**: ${todo.date}` : "",
+      "",
+      `_${t("op.desc.footer")}_`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    await sendToDevlog(todo.subject || t("drafts.noSubject"), desc, todo.id);
+  };
+
+  const loadDevlogTasks = useCallback(async () => {
+    if (!devlogEnabled) return;
+    setDevlogTasksLoading(true);
+    try {
+      const res = await fetch("/api/integrations/devlog/pull");
+      const d = (await res.json()) as { items?: DevlogIssue[] };
+      setDevlogTasks((d.items ?? []) as DevlogIssue[]);
+    } catch {
+      /* 連携は任意機能 */
+    } finally {
+      setDevlogTasksLoading(false);
+    }
+  }, [devlogEnabled]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (view === "todo" && devlogEnabled) loadDevlogTasks();
+  }, [view, devlogEnabled, loadDevlogTasks]);
 
   // Live-ish clock for「期限切れ」判定（renderでDate.now禁止のReact19対応）。
   const [nowMs, setNowMs] = useState(0);
@@ -1665,6 +1763,11 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           ? () => selected && sendEmailToOpenProject(selected)
           : undefined
       }
+      onSendToDevlog={
+        devlogEnabled
+          ? () => selected && sendEmailToDevlog(selected)
+          : undefined
+      }
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
       onOpenMessage={selectEmail}
@@ -1740,6 +1843,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           openProjectTasks={opEnabled ? opTasks : undefined}
           openProjectLoading={opTasksLoading}
           onRefreshOpenProject={opEnabled ? loadOpTasks : undefined}
+          onSendToDevlog={devlogEnabled ? sendTodoToDevlog : undefined}
+          devlogTasks={devlogEnabled ? devlogTasks : undefined}
+          devlogLoading={devlogTasksLoading}
+          onRefreshDevlog={devlogEnabled ? loadDevlogTasks : undefined}
         />
       )}
       {/* classic: 一覧(左)｜本文(右)・幅ドラッグ可変 */}

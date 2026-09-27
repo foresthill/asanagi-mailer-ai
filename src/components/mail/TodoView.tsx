@@ -6,9 +6,10 @@ import {
   Trash2,
   AlarmClock,
   FolderKanban,
+  ScrollText,
   RefreshCw,
 } from "lucide-react";
-import type { TodoItem, OpWorkPackage } from "@/lib/types";
+import type { TodoItem, OpWorkPackage, DevlogIssue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
@@ -62,6 +63,10 @@ export function TodoView({
   openProjectTasks,
   openProjectLoading,
   onRefreshOpenProject,
+  onSendToDevlog,
+  devlogTasks,
+  devlogLoading,
+  onRefreshDevlog,
 }: {
   todos: TodoItem[];
   onOpenEmail: (id: string) => void;
@@ -74,6 +79,12 @@ export function TodoView({
   openProjectTasks?: OpWorkPackage[];
   openProjectLoading?: boolean;
   onRefreshOpenProject?: () => void;
+  /** devlog連携が有効なときだけ渡る（issue 起票 / 既存を開く）。 */
+  onSendToDevlog?: (todo: TodoItem) => void;
+  /** devlog から pull した未完了 issue（読み取り専用・連携有効時のみ）。 */
+  devlogTasks?: DevlogIssue[];
+  devlogLoading?: boolean;
+  onRefreshDevlog?: () => void;
 }) {
   const { t } = useI18n();
   const ordered = sortTodos(todos);
@@ -178,6 +189,20 @@ export function TodoView({
                         <FolderKanban className="size-3.5" />
                       </button>
                     )}
+                    {onSendToDevlog && (
+                      <button
+                        onClick={() => onSendToDevlog(todo)}
+                        title={todo.devlogUrl ? t("dv.open") : t("dv.sendTodo")}
+                        className={cn(
+                          "grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-surface-2",
+                          todo.devlogUrl
+                            ? "text-accent"
+                            : "text-fg-subtle hover:text-accent",
+                        )}
+                      >
+                        <ScrollText className="size-3.5" />
+                      </button>
+                    )}
                     <button
                       onClick={() => onRemove(todo.id)}
                       title={t("todo.remove")}
@@ -241,6 +266,60 @@ export function TodoView({
                         {wp.status && (
                           <span className="shrink-0 rounded-md border border-border px-1.5 py-1 text-[11px] text-fg-muted">
                             {wp.status}
+                          </span>
+                        )}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {/* devlog pull（読み取り専用）: プロジェクトの未完了 issue を一覧。 */}
+          {onRefreshDevlog && (
+            <section className="mt-6">
+              <div className="mb-2 flex items-center gap-2">
+                <ScrollText className="size-4 text-accent" />
+                <h2 className="text-xs font-semibold">{t("dv.pull.title")}</h2>
+                <button
+                  onClick={onRefreshDevlog}
+                  title={t("dv.pull.refresh")}
+                  className="grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
+                >
+                  <RefreshCw
+                    className={cn("size-3.5", devlogLoading && "animate-spin")}
+                  />
+                </button>
+              </div>
+              {(devlogTasks?.length ?? 0) === 0 ? (
+                <p className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-subtle">
+                  {devlogLoading ? t("dv.pull.loading") : t("dv.pull.empty")}
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-1.5">
+                  {devlogTasks!.map((iss) => (
+                    <li key={iss.key}>
+                      <a
+                        href={iss.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3.5 py-2.5 hover:border-accent"
+                      >
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="flex items-center gap-1.5 truncate text-sm font-medium">
+                            <span className="truncate">{iss.title}</span>
+                            <ArrowUpRight className="size-3 shrink-0 text-fg-subtle" />
+                          </span>
+                          <span className="truncate text-xs text-fg-subtle">
+                            {iss.key}
+                            {iss.priority ? ` · ${iss.priority}` : ""}
+                            {iss.dueDate ? ` · ${iss.dueDate}` : ""}
+                          </span>
+                        </span>
+                        {iss.status && (
+                          <span className="shrink-0 rounded-md border border-border px-1.5 py-1 text-[11px] text-fg-muted">
+                            {iss.status}
                           </span>
                         )}
                       </a>

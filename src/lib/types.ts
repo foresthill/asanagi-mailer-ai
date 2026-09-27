@@ -381,6 +381,10 @@ export interface TodoItem {
   opWorkPackageId?: string;
   /** その work package の URL（ブラウザで開く用）。 */
   opUrl?: string;
+  /** devlog に送った場合の issue key（例 PJERP-123）。 */
+  devlogIssueKey?: string;
+  /** その issue の URL。 */
+  devlogUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -410,5 +414,38 @@ export interface OpWorkPackage {
   /** 期限（YYYY-MM-DD）。 */
   dueDate?: string;
   /** ブラウザで開く URL（…/work_packages/{id}）。 */
+  url: string;
+}
+
+// ---------------------------------------------------------------------------
+// devlog 連携（インテグレーション） — TODO / メールを devlog の issue として起票。
+// devlog には外部REST APIが無く、トークン認証の入口は MCP エンドポイント
+// （/api/mcp・Bearer dvlg_...）のみ。Asanagi は devlog の MCP クライアントとして
+// list_projects / create_issue / list_issues を呼ぶ。接続情報はローカルのみ
+// （.data/devlog-settings.json）。トークンは端末外に出さない。
+// ---------------------------------------------------------------------------
+export interface DevlogSettings {
+  /** devlog の base URL（例 https://devlog-mu.vercel.app、末尾スラッシュ無し）。 */
+  baseUrl?: string;
+  /** MCP Bearer トークン（devlog のプロジェクト設定で発行した dvlg_...）。ローカル保存のみ。 */
+  token?: string;
+  /** 既定の送り先プロジェクトキー（例 PJERP）。 */
+  projectKey?: string;
+  /** 既定プロジェクトの表示名（設定画面での確認用キャッシュ）。 */
+  projectName?: string;
+}
+
+/** devlog の issue（pull 表示用・読み取り専用の最小フィールド）。 */
+export interface DevlogIssue {
+  /** issue key（例 PJERP-123）。 */
+  key: string;
+  title: string;
+  /** ステータス名。 */
+  status?: string;
+  /** 優先度（HIGH/NORMAL/LOW）。 */
+  priority?: string;
+  /** 期限（YYYY-MM-DD）。 */
+  dueDate?: string;
+  /** ブラウザで開く URL（…/projects/{key}/issues/{issueKey}）。 */
   url: string;
 }
