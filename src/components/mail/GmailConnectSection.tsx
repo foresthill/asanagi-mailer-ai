@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, Unplug } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export interface GmailView {
   clientIdSet: boolean;
@@ -22,6 +23,7 @@ export function GmailConnectSection({
   gmail: GmailView;
   onRefresh: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,7 +43,9 @@ export function GmailConnectSection({
         body: JSON.stringify({
           gmail: {
             ...(clientId.trim() ? { clientId: clientId.trim() } : {}),
-            ...(clientSecret.trim() ? { clientSecret: clientSecret.trim() } : {}),
+            ...(clientSecret.trim()
+              ? { clientSecret: clientSecret.trim() }
+              : {}),
           },
         }),
       });
@@ -66,50 +70,63 @@ export function GmailConnectSection({
     }
   }
 
-  const canAuth = (g.clientIdSet || clientId.trim()) && (g.clientSecretSet || clientSecret.trim());
+  const canAuth =
+    (g.clientIdSet || clientId.trim()) &&
+    (g.clientSecretSet || clientSecret.trim());
 
   return (
     <div className="flex flex-col gap-3">
-      <h4 className="text-[11px] font-semibold text-fg-muted">Gmail（OAuth）</h4>
+      <h4 className="text-[11px] font-semibold text-fg-muted">
+        {t("gmail.title")}
+      </h4>
 
       {g.connected ? (
         <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600">
           <span className="size-1.5 rounded-full bg-emerald-500" />
-          <span className="flex-1">接続済み{g.address ? `: ${g.address}` : ""}</span>
+          <span className="flex-1">
+            {t("gmail.connected").replace(
+              "{addr}",
+              g.address ? `: ${g.address}` : "",
+            )}
+          </span>
           <button
             onClick={disconnect}
             disabled={busy}
             className="flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-fg-muted hover:text-high disabled:opacity-50"
           >
             <Unplug className="size-3" />
-            切断
+            {t("gmail.disconnect")}
           </button>
         </div>
       ) : (
         <>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-fg-muted">
-              OAuth クライアント ID
+              {t("gmail.clientId")}
               {g.clientIdSet && (
                 <span className="ml-2 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
-                  設定済み
+                  {t("gmail.set")}
                 </span>
               )}
             </span>
             <input
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              placeholder={g.clientIdSet ? "変更する場合のみ入力" : "....apps.googleusercontent.com"}
+              placeholder={
+                g.clientIdSet
+                  ? t("gmail.placeholder.changeOnly")
+                  : "....apps.googleusercontent.com"
+              }
               autoComplete="off"
               className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
             />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-fg-muted">
-              OAuth クライアント シークレット
+              {t("gmail.clientSecret")}
               {g.clientSecretSet && (
                 <span className="ml-2 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
-                  設定済み
+                  {t("gmail.set")}
                 </span>
               )}
             </span>
@@ -117,19 +134,22 @@ export function GmailConnectSection({
               type="password"
               value={clientSecret}
               onChange={(e) => setClientSecret(e.target.value)}
-              placeholder={g.clientSecretSet ? "変更する場合のみ入力" : "GOCSPX-..."}
+              placeholder={
+                g.clientSecretSet
+                  ? t("gmail.placeholder.changeOnly")
+                  : "GOCSPX-..."
+              }
               autoComplete="off"
               className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
             />
           </label>
 
           <p className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] leading-relaxed text-fg-subtle">
-            Google Cloud で OAuth クライアント（Webアプリ）を作成し、リダイレクトURIに
+            {t("gmail.note.before")}
             <code className="mx-1 rounded bg-bg px-1 py-0.5 font-mono">
               {origin}/api/auth/google/callback
             </code>
-            を登録してください（手順は README）。権限は gmail.modify のみ＝完全削除は不可。
-            トークンはこの端末のローカル（.data）にのみ保存されます。
+            {t("gmail.note.after")}
           </p>
 
           <button
@@ -138,7 +158,7 @@ export function GmailConnectSection({
             className="flex items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
           >
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            Google で認証して接続
+            {t("gmail.authBtn")}
           </button>
         </>
       )}

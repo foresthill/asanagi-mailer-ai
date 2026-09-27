@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Mail } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 import { GmailConnectSection, type GmailView } from "./GmailConnectSection";
 import { ImapConnectSection, type ImapView } from "./ImapConnectSection";
 
@@ -14,18 +15,11 @@ export interface EmailView {
   imap: ImapView;
 }
 
-const PROVIDER_LABEL: Record<string, string> = {
-  gmail: "Gmail",
-  imap: "IMAP/SMTP",
-  mock: "モック（デモ受信箱）",
-  error: "設定エラー",
-};
-
-const CHOICES: { value: EmailView["choice"]; label: string }[] = [
-  { value: "auto", label: "自動（Gmail → IMAP → モック）" },
-  { value: "gmail", label: "Gmail" },
-  { value: "imap", label: "IMAP/SMTP（会社メール等）" },
-  { value: "mock", label: "モック（デモ）" },
+const CHOICES: { value: EmailView["choice"]; labelKey: string }[] = [
+  { value: "auto", labelKey: "email.choice.auto" },
+  { value: "gmail", labelKey: "email.choice.gmail" },
+  { value: "imap", labelKey: "email.choice.imap" },
+  { value: "mock", labelKey: "email.choice.mock" },
 ];
 
 /**
@@ -33,6 +27,7 @@ const CHOICES: { value: EmailView["choice"]; label: string }[] = [
  * Fetches the masked settings view once and shares it with the children.
  */
 export function EmailConnectSection() {
+  const { t } = useI18n();
   const [view, setView] = useState<EmailView | null>(null);
   const [switching, setSwitching] = useState(false);
   const [savingCutoff, setSavingCutoff] = useState(false);
@@ -84,18 +79,24 @@ export function EmailConnectSection() {
     );
   }
 
+  const providerRaw = t("email.provider." + view.active);
+  const providerLabel =
+    providerRaw === "email.provider." + view.active ? view.active : providerRaw;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <Mail className="size-4 text-accent" />
-        <h3 className="text-xs font-semibold">メールアカウント</h3>
+        <h3 className="text-xs font-semibold">{t("email.accountTitle")}</h3>
         <span className="ml-auto rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-fg-subtle">
-          現在: {PROVIDER_LABEL[view.active] ?? view.active}
+          {t("email.current").replace("{provider}", providerLabel)}
         </span>
       </div>
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-fg-muted">使用するバックエンド</span>
+        <span className="text-xs font-medium text-fg-muted">
+          {t("email.backend")}
+        </span>
         <select
           value={view.choice}
           disabled={switching}
@@ -104,43 +105,54 @@ export function EmailConnectSection() {
         >
           {CHOICES.map((c) => (
             <option key={c.value} value={c.value}>
-              {c.label}
+              {t(c.labelKey)}
             </option>
           ))}
         </select>
       </label>
 
       <div className="flex flex-col gap-2">
-        <span className="text-xs font-medium text-fg-muted">受信箱の表示開始日（アカウント別・任意）</span>
-        {(
-          [
-            { key: "gmail" as const, label: "Gmail", show: view.gmail.connected },
-            { key: "imap" as const, label: "IMAP（会社メール）", show: Boolean(view.imap.host || view.imap.envConfigured) },
-          ].filter((a) => a.show)
-        ).map((a) => (
-          <div key={a.key} className="flex items-center gap-2">
-            <span className="w-36 shrink-0 text-xs text-fg-muted">{a.label}</span>
-            <input
-              type="date"
-              value={view.cutoffs[a.key]}
-              disabled={savingCutoff}
-              onChange={(e) => saveCutoff(a.key, e.target.value)}
-              className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
-            />
-            {view.cutoffs[a.key] && (
-              <button
-                onClick={() => saveCutoff(a.key, "")}
+        <span className="text-xs font-medium text-fg-muted">
+          {t("email.cutoff.title")}
+        </span>
+        {[
+          {
+            key: "gmail" as const,
+            label: t("email.cutoff.gmail"),
+            show: view.gmail.connected,
+          },
+          {
+            key: "imap" as const,
+            label: t("email.cutoff.imap"),
+            show: Boolean(view.imap.host || view.imap.envConfigured),
+          },
+        ]
+          .filter((a) => a.show)
+          .map((a) => (
+            <div key={a.key} className="flex items-center gap-2">
+              <span className="w-36 shrink-0 text-xs text-fg-muted">
+                {a.label}
+              </span>
+              <input
+                type="date"
+                value={view.cutoffs[a.key]}
                 disabled={savingCutoff}
-                className="rounded-lg border border-border px-2.5 py-2 text-xs text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
-              >
-                解除
-              </button>
-            )}
-          </div>
-        ))}
+                onChange={(e) => saveCutoff(a.key, e.target.value)}
+                className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
+              />
+              {view.cutoffs[a.key] && (
+                <button
+                  onClick={() => saveCutoff(a.key, "")}
+                  disabled={savingCutoff}
+                  className="rounded-lg border border-border px-2.5 py-2 text-xs text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
+                >
+                  {t("email.cutoff.clear")}
+                </button>
+              )}
+            </div>
+          ))}
         <span className="text-[11px] leading-relaxed text-fg-subtle">
-          この日付より前のメールは受信箱に表示しません（サーバからは消えません）。
-          数万通の過去メールを遡らずに「受信箱ゼロ」に到達できます。
+          {t("email.cutoff.note")}
         </span>
       </div>
 

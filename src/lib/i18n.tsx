@@ -647,6 +647,75 @@ const ja: Dict = {
   "composer.instructWhole": "全体への指示",
   "composer.enterHintSend": "（Enterで送信・Shift+Enterで改行）",
   "composer.enterHintShift": "（Shift+Enterで送信）",
+
+  // Email account settings (EmailConnectSection)
+  "email.accountTitle": "メールアカウント",
+  "email.current": "現在: {provider}",
+  "email.backend": "使用するバックエンド",
+  "email.provider.gmail": "Gmail",
+  "email.provider.imap": "IMAP/SMTP",
+  "email.provider.mock": "モック（デモ受信箱）",
+  "email.provider.error": "設定エラー",
+  "email.choice.auto": "自動（Gmail → IMAP → モック）",
+  "email.choice.gmail": "Gmail",
+  "email.choice.imap": "IMAP/SMTP（会社メール等）",
+  "email.choice.mock": "モック（デモ）",
+  "email.cutoff.title": "受信箱の表示開始日（アカウント別・任意）",
+  "email.cutoff.gmail": "Gmail",
+  "email.cutoff.imap": "IMAP（会社メール）",
+  "email.cutoff.clear": "解除",
+  "email.cutoff.note":
+    "この日付より前のメールは受信箱に表示しません（サーバからは消えません）。数万通の過去メールを遡らずに「受信箱ゼロ」に到達できます。",
+
+  // Gmail connect (GmailConnectSection)
+  "gmail.title": "Gmail（OAuth）",
+  "gmail.connected": "接続済み{addr}",
+  "gmail.disconnect": "切断",
+  "gmail.clientId": "OAuth クライアント ID",
+  "gmail.clientSecret": "OAuth クライアント シークレット",
+  "gmail.set": "設定済み",
+  "gmail.note.before":
+    "Google Cloud で OAuth クライアント（Webアプリ）を作成し、リダイレクトURIに",
+  "gmail.note.after":
+    "を登録してください（手順は README）。権限は gmail.modify のみ＝完全削除は不可。トークンはこの端末のローカル（.data）にのみ保存されます。",
+  "gmail.authBtn": "Google で認証して接続",
+  "gmail.placeholder.changeOnly": "変更する場合のみ入力",
+
+  // IMAP/SMTP connect (ImapConnectSection)
+  "imap.title": "IMAP/SMTP（会社メール等）",
+  "imap.configured": "設定済み: {user}@{host}",
+  "imap.envConfigured": "env設定あり",
+  "imap.clear": "クリア",
+  "imap.fromName": "差出人の表示名（送信時）",
+  "imap.fromName.placeholder":
+    "例: 山田太郎 / Taro Yamada（空ならアドレスのみ）",
+  "imap.fromName.note":
+    "受信者には「表示名 <アドレス>」として届きます。Gmailアカウントの表示名はGoogle側の設定が使われます。",
+  "imap.host": "IMAP ホスト",
+  "imap.port": "ポート",
+  "imap.user": "ユーザー（メールアドレス）",
+  "imap.password": "パスワード",
+  "imap.set": "設定済み",
+  "imap.placeholder.changeOnly": "変更する場合のみ入力",
+  "imap.placeholder.appPassword": "アプリ用パスワード推奨",
+  "imap.advanced":
+    "高度な設定（SMTP・フォルダ名 — 空欄はIMAPの値/既定値を使用）",
+  "imap.smtpHost": "SMTP ホスト",
+  "imap.smtpPort": "SMTP ポート",
+  "imap.smtpUser": "SMTP ユーザー",
+  "imap.smtpPassword": "SMTP パスワード",
+  "imap.setParen": "（設定済み）",
+  "imap.smtpFrom": "送信元 (From)",
+  "imap.archiveFolder": "アーカイブフォルダ",
+  "imap.trashFolder": "ゴミ箱フォルダ",
+  "imap.sentFolder": "送信済みフォルダ",
+  "imap.placeholder.sameAsImap": "(IMAPと同じ)",
+  "imap.placeholder.sameAsUser": "(ユーザーと同じ)",
+  "imap.test.imapOk": "OK（INBOX {n}件）",
+  "imap.test.smtpOk": "OK",
+  "imap.test.failed": "テスト実行に失敗",
+  "imap.testBtn": "接続テスト",
+  "imap.save": "保存",
 };
 
 const en: Dict = {
@@ -1273,6 +1342,74 @@ const en: Dict = {
   "composer.instructWhole": "Instruction for the whole",
   "composer.enterHintSend": " (Enter to send, Shift+Enter for newline)",
   "composer.enterHintShift": " (Shift+Enter to send)",
+
+  // Email account settings (EmailConnectSection)
+  "email.accountTitle": "Email account",
+  "email.current": "Current: {provider}",
+  "email.backend": "Backend to use",
+  "email.provider.gmail": "Gmail",
+  "email.provider.imap": "IMAP/SMTP",
+  "email.provider.mock": "Mock (demo inbox)",
+  "email.provider.error": "Configuration error",
+  "email.choice.auto": "Auto (Gmail → IMAP → mock)",
+  "email.choice.gmail": "Gmail",
+  "email.choice.imap": "IMAP/SMTP (company mail, etc.)",
+  "email.choice.mock": "Mock (demo)",
+  "email.cutoff.title": "Inbox start date (per account, optional)",
+  "email.cutoff.gmail": "Gmail",
+  "email.cutoff.imap": "IMAP (company mail)",
+  "email.cutoff.clear": "Clear",
+  "email.cutoff.note":
+    "Emails before this date won't appear in the inbox (they aren't deleted from the server). You can reach \"inbox zero\" without wading through tens of thousands of old emails.",
+
+  // Gmail connect (GmailConnectSection)
+  "gmail.title": "Gmail (OAuth)",
+  "gmail.connected": "Connected{addr}",
+  "gmail.disconnect": "Disconnect",
+  "gmail.clientId": "OAuth client ID",
+  "gmail.clientSecret": "OAuth client secret",
+  "gmail.set": "Set",
+  "gmail.note.before":
+    "Create an OAuth client (web application) in Google Cloud and register the redirect URI",
+  "gmail.note.after":
+    "(see the README for steps). The scope is gmail.modify only — permanent deletion is not possible. The token is stored only on this device locally (.data).",
+  "gmail.authBtn": "Authenticate with Google and connect",
+  "gmail.placeholder.changeOnly": "Enter only to change",
+
+  // IMAP/SMTP connect (ImapConnectSection)
+  "imap.title": "IMAP/SMTP (company mail, etc.)",
+  "imap.configured": "Configured: {user}@{host}",
+  "imap.envConfigured": "Configured via env",
+  "imap.clear": "Clear",
+  "imap.fromName": "Sender display name (when sending)",
+  "imap.fromName.placeholder": "e.g. Taro Yamada (address only if blank)",
+  "imap.fromName.note":
+    'Recipients see it as "Display name <address>". For Gmail accounts, the display name configured on Google\'s side is used.',
+  "imap.host": "IMAP host",
+  "imap.port": "Port",
+  "imap.user": "User (email address)",
+  "imap.password": "Password",
+  "imap.set": "Set",
+  "imap.placeholder.changeOnly": "Enter only to change",
+  "imap.placeholder.appPassword": "App password recommended",
+  "imap.advanced":
+    "Advanced settings (SMTP & folder names — blank uses the IMAP value / default)",
+  "imap.smtpHost": "SMTP host",
+  "imap.smtpPort": "SMTP port",
+  "imap.smtpUser": "SMTP user",
+  "imap.smtpPassword": "SMTP password",
+  "imap.setParen": " (set)",
+  "imap.smtpFrom": "From",
+  "imap.archiveFolder": "Archive folder",
+  "imap.trashFolder": "Trash folder",
+  "imap.sentFolder": "Sent folder",
+  "imap.placeholder.sameAsImap": "(same as IMAP)",
+  "imap.placeholder.sameAsUser": "(same as user)",
+  "imap.test.imapOk": "OK (INBOX {n} messages)",
+  "imap.test.smtpOk": "OK",
+  "imap.test.failed": "Test execution failed",
+  "imap.testBtn": "Test connection",
+  "imap.save": "Save",
 };
 
 // fr / zh: キー予約。未訳は en へフォールバック（順次追加）。
@@ -1927,6 +2064,75 @@ const fr: Dict = {
   "composer.enterHintSend":
     " (Entrée pour envoyer, Maj+Entrée pour un saut de ligne)",
   "composer.enterHintShift": " (Maj+Entrée pour envoyer)",
+
+  // Email account settings (EmailConnectSection)
+  "email.accountTitle": "Compte de messagerie",
+  "email.current": "Actuel : {provider}",
+  "email.backend": "Backend à utiliser",
+  "email.provider.gmail": "Gmail",
+  "email.provider.imap": "IMAP/SMTP",
+  "email.provider.mock": "Simulation (boîte de démo)",
+  "email.provider.error": "Erreur de configuration",
+  "email.choice.auto": "Automatique (Gmail → IMAP → simulation)",
+  "email.choice.gmail": "Gmail",
+  "email.choice.imap": "IMAP/SMTP (messagerie d'entreprise, etc.)",
+  "email.choice.mock": "Simulation (démo)",
+  "email.cutoff.title":
+    "Date de début de la boîte de réception (par compte, facultatif)",
+  "email.cutoff.gmail": "Gmail",
+  "email.cutoff.imap": "IMAP (messagerie d'entreprise)",
+  "email.cutoff.clear": "Effacer",
+  "email.cutoff.note":
+    "Les e-mails antérieurs à cette date n'apparaîtront pas dans la boîte de réception (ils ne sont pas supprimés du serveur). Vous pouvez atteindre le « zéro e-mail » sans remonter des dizaines de milliers d'anciens messages.",
+
+  // Gmail connect (GmailConnectSection)
+  "gmail.title": "Gmail (OAuth)",
+  "gmail.connected": "Connecté{addr}",
+  "gmail.disconnect": "Déconnecter",
+  "gmail.clientId": "ID client OAuth",
+  "gmail.clientSecret": "Secret client OAuth",
+  "gmail.set": "Défini",
+  "gmail.note.before":
+    "Créez un client OAuth (application Web) dans Google Cloud et enregistrez l'URI de redirection",
+  "gmail.note.after":
+    "(voir le README pour la procédure). La portée est gmail.modify uniquement — la suppression définitive est impossible. Le jeton n'est stocké qu'en local sur cet appareil (.data).",
+  "gmail.authBtn": "S'authentifier avec Google et se connecter",
+  "gmail.placeholder.changeOnly": "Saisir uniquement pour modifier",
+
+  // IMAP/SMTP connect (ImapConnectSection)
+  "imap.title": "IMAP/SMTP (messagerie d'entreprise, etc.)",
+  "imap.configured": "Configuré : {user}@{host}",
+  "imap.envConfigured": "Configuré via env",
+  "imap.clear": "Effacer",
+  "imap.fromName": "Nom d'affichage de l'expéditeur (à l'envoi)",
+  "imap.fromName.placeholder": "ex. : Taro Yamada (adresse seule si vide)",
+  "imap.fromName.note":
+    "Les destinataires le voient sous la forme « Nom affiché <adresse> ». Pour les comptes Gmail, le nom d'affichage configuré côté Google est utilisé.",
+  "imap.host": "Hôte IMAP",
+  "imap.port": "Port",
+  "imap.user": "Utilisateur (adresse e-mail)",
+  "imap.password": "Mot de passe",
+  "imap.set": "Défini",
+  "imap.placeholder.changeOnly": "Saisir uniquement pour modifier",
+  "imap.placeholder.appPassword": "Mot de passe d'application recommandé",
+  "imap.advanced":
+    "Paramètres avancés (SMTP et noms de dossiers — vide utilise la valeur IMAP / par défaut)",
+  "imap.smtpHost": "Hôte SMTP",
+  "imap.smtpPort": "Port SMTP",
+  "imap.smtpUser": "Utilisateur SMTP",
+  "imap.smtpPassword": "Mot de passe SMTP",
+  "imap.setParen": " (défini)",
+  "imap.smtpFrom": "Expéditeur (From)",
+  "imap.archiveFolder": "Dossier Archives",
+  "imap.trashFolder": "Dossier Corbeille",
+  "imap.sentFolder": "Dossier Envoyés",
+  "imap.placeholder.sameAsImap": "(identique à IMAP)",
+  "imap.placeholder.sameAsUser": "(identique à l'utilisateur)",
+  "imap.test.imapOk": "OK (INBOX {n} messages)",
+  "imap.test.smtpOk": "OK",
+  "imap.test.failed": "Échec de l'exécution du test",
+  "imap.testBtn": "Tester la connexion",
+  "imap.save": "Enregistrer",
 };
 
 const zh: Dict = {
@@ -2514,6 +2720,73 @@ const zh: Dict = {
   "composer.instructWhole": "对整篇的指示",
   "composer.enterHintSend": "（回车发送，Shift+回车换行）",
   "composer.enterHintShift": "（Shift+回车发送）",
+
+  // Email account settings (EmailConnectSection)
+  "email.accountTitle": "邮件账户",
+  "email.current": "当前：{provider}",
+  "email.backend": "使用的后端",
+  "email.provider.gmail": "Gmail",
+  "email.provider.imap": "IMAP/SMTP",
+  "email.provider.mock": "模拟（演示收件箱）",
+  "email.provider.error": "配置错误",
+  "email.choice.auto": "自动（Gmail → IMAP → 模拟）",
+  "email.choice.gmail": "Gmail",
+  "email.choice.imap": "IMAP/SMTP（公司邮箱等）",
+  "email.choice.mock": "模拟（演示）",
+  "email.cutoff.title": "收件箱显示起始日期（按账户，可选）",
+  "email.cutoff.gmail": "Gmail",
+  "email.cutoff.imap": "IMAP（公司邮箱）",
+  "email.cutoff.clear": "清除",
+  "email.cutoff.note":
+    "早于此日期的邮件不会显示在收件箱中（不会从服务器删除）。无需翻查数万封旧邮件即可实现「收件箱清零」。",
+
+  // Gmail connect (GmailConnectSection)
+  "gmail.title": "Gmail（OAuth）",
+  "gmail.connected": "已连接{addr}",
+  "gmail.disconnect": "断开",
+  "gmail.clientId": "OAuth 客户端 ID",
+  "gmail.clientSecret": "OAuth 客户端密钥",
+  "gmail.set": "已设置",
+  "gmail.note.before":
+    "在 Google Cloud 中创建 OAuth 客户端（Web 应用），并将重定向 URI",
+  "gmail.note.after":
+    "进行登记（步骤见 README）。权限仅为 gmail.modify——无法彻底删除。令牌仅保存在本设备本地（.data）。",
+  "gmail.authBtn": "使用 Google 认证并连接",
+  "gmail.placeholder.changeOnly": "仅在更改时输入",
+
+  // IMAP/SMTP connect (ImapConnectSection)
+  "imap.title": "IMAP/SMTP（公司邮箱等）",
+  "imap.configured": "已配置：{user}@{host}",
+  "imap.envConfigured": "已通过 env 配置",
+  "imap.clear": "清除",
+  "imap.fromName": "发件人显示名（发送时）",
+  "imap.fromName.placeholder": "例：山田太郎 / Taro Yamada（留空则仅显示地址）",
+  "imap.fromName.note":
+    "收件人会看到「显示名 <地址>」的形式。Gmail 账户的显示名使用 Google 端的设置。",
+  "imap.host": "IMAP 主机",
+  "imap.port": "端口",
+  "imap.user": "用户（邮箱地址）",
+  "imap.password": "密码",
+  "imap.set": "已设置",
+  "imap.placeholder.changeOnly": "仅在更改时输入",
+  "imap.placeholder.appPassword": "建议使用应用专用密码",
+  "imap.advanced": "高级设置（SMTP・文件夹名 — 留空则使用 IMAP 的值/默认值）",
+  "imap.smtpHost": "SMTP 主机",
+  "imap.smtpPort": "SMTP 端口",
+  "imap.smtpUser": "SMTP 用户",
+  "imap.smtpPassword": "SMTP 密码",
+  "imap.setParen": "（已设置）",
+  "imap.smtpFrom": "发件人 (From)",
+  "imap.archiveFolder": "归档文件夹",
+  "imap.trashFolder": "垃圾箱文件夹",
+  "imap.sentFolder": "已发送文件夹",
+  "imap.placeholder.sameAsImap": "(与 IMAP 相同)",
+  "imap.placeholder.sameAsUser": "(与用户相同)",
+  "imap.test.imapOk": "OK（INBOX {n} 封）",
+  "imap.test.smtpOk": "OK",
+  "imap.test.failed": "测试执行失败",
+  "imap.testBtn": "连接测试",
+  "imap.save": "保存",
 };
 
 const DICTS: Record<Locale, Dict> = { ja, en, fr, zh };
