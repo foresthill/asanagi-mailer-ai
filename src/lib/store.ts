@@ -13,6 +13,7 @@ import type {
   ContactMeta,
   ResolvedContactMeta,
   TodoItem,
+  OpenProjectSettings,
 } from "@/lib/types";
 import type { ThreatSenders } from "./threat";
 
@@ -675,4 +676,50 @@ export async function removeTodo(id: string): Promise<TodoItem[]> {
   const kept = rows.filter((r) => r.id !== id);
   if (kept.length !== rows.length) await writeJson(TODOS, kept);
   return kept;
+}
+
+/** Record the OpenProject work package created for a todo (link + id). */
+export async function setTodoOpLink(
+  id: string,
+  opWorkPackageId: string,
+  opUrl: string,
+): Promise<TodoItem[]> {
+  const rows = await readJson<TodoItem[]>(TODOS, []);
+  const row = rows.find((r) => r.id === id);
+  if (row) {
+    row.opWorkPackageId = opWorkPackageId;
+    row.opUrl = opUrl;
+    await writeJson(TODOS, rows);
+  }
+  return rows;
+}
+
+// ── OpenProject 連携設定 ─────────────────────────────────────────────
+// 接続情報（URL・APIキー・既定プロジェクト）。APIキーは端末外に出さない。
+const OPENPROJECT_SETTINGS = "openproject-settings.json";
+
+export async function getOpenProjectSettings(): Promise<OpenProjectSettings> {
+  return readJson<OpenProjectSettings>(OPENPROJECT_SETTINGS, {});
+}
+
+/**
+ * Merge a patch into stored OpenProject settings. A blank string clears that
+ * field (e.g. disconnect = { apiKey: "" }); undefined leaves it untouched.
+ */
+export async function saveOpenProjectSettings(
+  patch: OpenProjectSettings,
+): Promise<OpenProjectSettings> {
+  const cur = await getOpenProjectSettings();
+  const next: OpenProjectSettings = { ...cur };
+  const merge = (k: keyof OpenProjectSettings, v: string | undefined) => {
+    if (v === undefined) return;
+    if (v.trim()) next[k] = v.trim();
+    else delete next[k];
+  };
+  merge("baseUrl", patch.baseUrl);
+  merge("apiKey", patch.apiKey);
+  merge("projectId", patch.projectId);
+  merge("projectName", patch.projectName);
+  await writeJson(OPENPROJECT_SETTINGS, next);
+  return next;
 }

@@ -1,6 +1,12 @@
 "use client";
 
-import { ListTodo, ArrowUpRight, Trash2, AlarmClock } from "lucide-react";
+import {
+  ListTodo,
+  ArrowUpRight,
+  Trash2,
+  AlarmClock,
+  FolderKanban,
+} from "lucide-react";
 import type { TodoItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -51,12 +57,15 @@ export function TodoView({
   onSetDue,
   onToggleDone,
   onRemove,
+  onSendToOpenProject,
 }: {
   todos: TodoItem[];
   onOpenEmail: (id: string) => void;
   onSetDue: (id: string, due: string | null) => void;
   onToggleDone: (id: string, done: boolean) => void;
   onRemove: (id: string) => void;
+  /** OpenProject連携が有効なときだけ渡る（work package 起票 / 既存を開く）。 */
+  onSendToOpenProject?: (todo: TodoItem) => void;
 }) {
   const { t } = useI18n();
   const ordered = sortTodos(todos);
@@ -147,6 +156,20 @@ export function TodoView({
                         className="bg-transparent text-[11px] outline-none"
                       />
                     </span>
+                    {onSendToOpenProject && (
+                      <button
+                        onClick={() => onSendToOpenProject(todo)}
+                        title={todo.opUrl ? t("op.open") : t("op.sendTodo")}
+                        className={cn(
+                          "grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-surface-2",
+                          todo.opUrl
+                            ? "text-accent"
+                            : "text-fg-subtle hover:text-accent",
+                        )}
+                      >
+                        <FolderKanban className="size-3.5" />
+                      </button>
+                    )}
                     <button
                       onClick={() => onRemove(todo.id)}
                       title={t("todo.remove")}

@@ -14,6 +14,7 @@ import { useI18n } from "@/lib/i18n";
 import { EmailConnectSection } from "./EmailConnectSection";
 import { ReplySignatureSection } from "./ReplySignatureSection";
 import { WritingNoteSection } from "./WritingNoteSection";
+import { OpenProjectSection } from "./OpenProjectSection";
 
 type ProviderChoice = AIProvider | "auto";
 
@@ -501,6 +502,8 @@ export function ConnectionsSettings({
             <div className="border-t border-border pt-4">
               <EmailConnectSection />
             </div>
+
+            <OpenProjectSection />
           </div>
         )}
 
