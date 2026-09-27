@@ -385,6 +385,8 @@ export interface TodoItem {
   devlogIssueKey?: string;
   /** その issue の URL。 */
   devlogUrl?: string;
+  /** Nextcloud カレンダーに登録した場合の VEVENT UID（二重登録の抑止＆済み表示）。 */
+  ncEventUid?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -433,6 +435,33 @@ export interface DevlogSettings {
   projectKey?: string;
   /** 既定プロジェクトの表示名（設定画面での確認用キャッシュ）。 */
   projectName?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Nextcloud 連携（インテグレーション） — TODO の期限などを Nextcloud カレンダーに
+// 予定として登録する（CalDAV）。接続情報（URL・ユーザー・アプリパスワード・対象
+// カレンダー）はローカルのみ（.data/nextcloud-settings.json）。アプリパスワードは
+// 端末外に出さない。
+// ---------------------------------------------------------------------------
+export interface NextcloudSettings {
+  /** Nextcloud の base URL（例 https://cloud.example.com、末尾スラッシュ無し）。 */
+  baseUrl?: string;
+  /** ログインユーザー名。 */
+  username?: string;
+  /** アプリパスワード（設定→セキュリティ→アプリパスワードで発行）。ローカル保存のみ。 */
+  appPassword?: string;
+  /** 対象カレンダーの完全URL（CalDAV コレクション）。 */
+  calendarUrl?: string;
+  /** 対象カレンダーの表示名（設定画面の確認用キャッシュ）。 */
+  calendarName?: string;
+}
+
+/** Nextcloud のカレンダー（CalDAV コレクション・選択用の最小フィールド）。 */
+export interface NextcloudCalendar {
+  /** コレクションの完全URL。 */
+  url: string;
+  /** 表示名。 */
+  name: string;
 }
 
 /** devlog の issue（pull 表示用・読み取り専用の最小フィールド）。 */

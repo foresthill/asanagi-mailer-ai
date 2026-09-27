@@ -15,6 +15,7 @@ import type {
   TodoItem,
   OpenProjectSettings,
   DevlogSettings,
+  NextcloudSettings,
 } from "@/lib/types";
 import type { ThreatSenders } from "./threat";
 
@@ -768,5 +769,50 @@ export async function saveDevlogSettings(
   merge("projectKey", patch.projectKey);
   merge("projectName", patch.projectName);
   await writeJson(DEVLOG_SETTINGS, next);
+  return next;
+}
+
+/** Record the Nextcloud calendar event created for a todo (VEVENT UID). */
+export async function setTodoNcEvent(
+  id: string,
+  ncEventUid: string,
+): Promise<TodoItem[]> {
+  const rows = await readJson<TodoItem[]>(TODOS, []);
+  const row = rows.find((r) => r.id === id);
+  if (row) {
+    row.ncEventUid = ncEventUid;
+    await writeJson(TODOS, rows);
+  }
+  return rows;
+}
+
+// ── Nextcloud 連携設定 ───────────────────────────────────────────────
+// 接続情報（URL・ユーザー・アプリパスワード・対象カレンダー）。app-password は端末外に出さない。
+const NEXTCLOUD_SETTINGS = "nextcloud-settings.json";
+
+export async function getNextcloudSettings(): Promise<NextcloudSettings> {
+  return readJson<NextcloudSettings>(NEXTCLOUD_SETTINGS, {});
+}
+
+/**
+ * Merge a patch into stored Nextcloud settings. A blank string clears that field
+ * (e.g. disconnect = { appPassword: "" }); undefined leaves it untouched.
+ */
+export async function saveNextcloudSettings(
+  patch: NextcloudSettings,
+): Promise<NextcloudSettings> {
+  const cur = await getNextcloudSettings();
+  const next: NextcloudSettings = { ...cur };
+  const merge = (k: keyof NextcloudSettings, v: string | undefined) => {
+    if (v === undefined) return;
+    if (v.trim()) next[k] = v.trim();
+    else delete next[k];
+  };
+  merge("baseUrl", patch.baseUrl);
+  merge("username", patch.username);
+  merge("appPassword", patch.appPassword);
+  merge("calendarUrl", patch.calendarUrl);
+  merge("calendarName", patch.calendarName);
+  await writeJson(NEXTCLOUD_SETTINGS, next);
   return next;
 }
