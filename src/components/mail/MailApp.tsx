@@ -11,6 +11,7 @@ import type {
   ContactLabel,
   ContactMeta,
   TodoItem,
+  OpWorkPackage,
 } from "@/lib/types";
 import { Sidebar } from "./Sidebar";
 import { EmailList } from "./EmailList";
@@ -210,6 +211,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   // OpenProject 連携が設定済みか（送信ボタンの表示切替）。
   const [opEnabled, setOpEnabled] = useState(false);
+  // OpenProject から pull した自分の未完了タスク（読み取り専用・TODO画面に表示）。
+  const [opTasks, setOpTasks] = useState<OpWorkPackage[]>([]);
+  const [opTasksLoading, setOpTasksLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
   const selectToken = useRef(0);
@@ -456,6 +460,27 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       todo.id,
     );
   };
+
+  // 読み取り専用 pull: 自分の未完了 work package を取得（オンデマンド）。
+  const loadOpTasks = useCallback(async () => {
+    if (!opEnabled) return;
+    setOpTasksLoading(true);
+    try {
+      const res = await fetch("/api/integrations/openproject/pull");
+      const d = (await res.json()) as { items?: OpWorkPackage[] };
+      setOpTasks((d.items ?? []) as OpWorkPackage[]);
+    } catch {
+      /* 連携は任意機能 */
+    } finally {
+      setOpTasksLoading(false);
+    }
+  }, [opEnabled]);
+  // TODO画面を開いたとき（連携有効なら）自分のタスクを取り込む。
+  useEffect(() => {
+    // async loader — setState only after the fetch resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (view === "todo" && opEnabled) loadOpTasks();
+  }, [view, opEnabled, loadOpTasks]);
 
   // Live-ish clock for「期限切れ」判定（renderでDate.now禁止のReact19対応）。
   const [nowMs, setNowMs] = useState(0);
@@ -1708,6 +1733,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onToggleDone={setTodoDone}
           onRemove={removeTodoItem}
           onSendToOpenProject={opEnabled ? sendTodoToOpenProject : undefined}
+          openProjectTasks={opEnabled ? opTasks : undefined}
+          openProjectLoading={opTasksLoading}
+          onRefreshOpenProject={opEnabled ? loadOpTasks : undefined}
         />
       )}
       {/* classic: 一覧(左)｜本文(右)・幅ドラッグ可変 */}
