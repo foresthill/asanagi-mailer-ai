@@ -387,6 +387,10 @@ export interface TodoItem {
   devlogUrl?: string;
   /** Nextcloud カレンダーに登録した場合の VEVENT UID（二重登録の抑止＆済み表示）。 */
   ncEventUid?: string;
+  /** Google カレンダーに登録した場合の event id（済み表示用）。 */
+  gcalEventId?: string;
+  /** その Google カレンダー予定の htmlLink（開く用）。 */
+  gcalUrl?: string;
 }
 
 // ---------------------------------------------------------------------------

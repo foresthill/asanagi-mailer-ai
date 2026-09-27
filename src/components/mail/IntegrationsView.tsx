@@ -6,6 +6,7 @@ import {
   FolderKanban,
   ScrollText,
   CalendarDays,
+  CalendarClock,
   Check,
   Settings2,
   RefreshCw,
@@ -51,6 +52,13 @@ const INTEGRATIONS: IntegDef[] = [
     name: "Nextcloud",
     icon: CalendarDays,
     endpoint: "/api/integrations/nextcloud",
+    descKey: "integrations.desc.calendar",
+  },
+  {
+    id: "google",
+    name: "Google カレンダー",
+    icon: CalendarClock,
+    endpoint: "/api/calendar/status",
     descKey: "integrations.desc.calendar",
   },
 ];

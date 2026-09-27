@@ -786,6 +786,22 @@ export async function setTodoNcEvent(
   return rows;
 }
 
+/** Record the Google Calendar event created for a todo (event id + link). */
+export async function setTodoGcalEvent(
+  id: string,
+  gcalEventId: string,
+  gcalUrl?: string,
+): Promise<TodoItem[]> {
+  const rows = await readJson<TodoItem[]>(TODOS, []);
+  const row = rows.find((r) => r.id === id);
+  if (row) {
+    row.gcalEventId = gcalEventId;
+    if (gcalUrl) row.gcalUrl = gcalUrl;
+    await writeJson(TODOS, rows);
+  }
+  return rows;
+}
+
 // ── Nextcloud 連携設定 ───────────────────────────────────────────────
 // 接続情報（URL・ユーザー・アプリパスワード・対象カレンダー）。app-password は端末外に出さない。
 const NEXTCLOUD_SETTINGS = "nextcloud-settings.json";
