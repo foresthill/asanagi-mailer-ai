@@ -465,6 +465,7 @@ const ja: Dict = {
   "reader.classifying": "重要度を判定中…",
   "reader.importanceUnknown": "重要度は未判定",
   "reader.learn": "学習:",
+  "reader.setImportance": "重要度を設定",
   // ReplyButtons（返信/転送）
   "reply.reply": "返信",
   "reply.replyAll": "全員に返信",
@@ -1025,6 +1026,7 @@ const en: Dict = {
   "reader.classifying": "Judging importance…",
   "reader.importanceUnknown": "Importance not judged yet",
   "reader.learn": "Learn:",
+  "reader.setImportance": "Set importance",
   // ReplyButtons
   "reply.reply": "Reply",
   "reply.replyAll": "Reply all",
@@ -1610,6 +1612,7 @@ const fr: Dict = {
   "reader.classifying": "Évaluation de l'importance…",
   "reader.importanceUnknown": "Importance non évaluée",
   "reader.learn": "Apprendre :",
+  "reader.setImportance": "Définir l'importance",
   // ReplyButtons
   "reply.reply": "Répondre",
   "reply.replyAll": "Répondre à tous",
@@ -2144,6 +2147,7 @@ const zh: Dict = {
   "reader.classifying": "正在判定重要度…",
   "reader.importanceUnknown": "尚未判定重要度",
   "reader.learn": "学习：",
+  "reader.setImportance": "设置重要度",
   "reply.reply": "回复",
   "reply.replyAll": "全部回复",
   "reply.forward": "转发",

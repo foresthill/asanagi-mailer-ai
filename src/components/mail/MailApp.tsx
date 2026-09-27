@@ -499,6 +499,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const isSelectedTodo = selected
     ? todos.some((x) => x.id === selected.id)
     : false;
+  // TODO 登録済みIDの集合（一覧のチェックボックス表示・トグル判定用）。
+  const todoIdSet = new Set(todos.map((x) => x.id));
 
   // Newest request wins: a slow live response must never overwrite a fresher
   // folder/account the user has since switched to.
@@ -1621,6 +1623,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onArchive={archive}
       onTrash={trash}
       onToggleStar={toggleStar}
+      todoIds={todoIdSet}
+      onToggleTodo={toggleTodo}
       onRefresh={() => loadList(folder, account)}
       agedDraftCount={agedDraftCount}
       onOpenDrafts={() => setShowDrafts(true)}
