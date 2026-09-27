@@ -23,6 +23,7 @@ import {
   FileText,
   ScrollText,
   FolderKanban,
+  Blocks,
 } from "lucide-react";
 import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -74,10 +75,24 @@ export function Sidebar({
   accounts: AccountInfo[];
   account: string; // "all" or an account key
   storage: StorageInfo | null;
-  view: "mail" | "contacts" | "triage" | "ailog" | "projects" | "todo";
+  view:
+    | "mail"
+    | "contacts"
+    | "triage"
+    | "ailog"
+    | "projects"
+    | "todo"
+    | "integrations";
   onSelect: (f: FolderView) => void;
   onSelectView: (
-    v: "mail" | "contacts" | "triage" | "ailog" | "projects" | "todo",
+    v:
+      | "mail"
+      | "contacts"
+      | "triage"
+      | "ailog"
+      | "projects"
+      | "todo"
+      | "integrations",
   ) => void;
   /** Pick an account AND folder together (folders nested per account). */
   onSelectAccountFolder: (key: string, f: FolderView) => void;
@@ -313,6 +328,21 @@ export function Sidebar({
             className={cn("size-4", view === "ailog" && "text-accent")}
           />
           <span className="flex-1 text-left">{t("nav.ailog")}</span>
+        </button>
+        <button
+          onClick={() => onSelectView("integrations")}
+          title={t("nav.integrations.title")}
+          className={cn(
+            "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+            view === "integrations"
+              ? "bg-accent-soft font-medium text-fg"
+              : "text-fg-muted hover:bg-surface hover:text-fg",
+          )}
+        >
+          <Blocks
+            className={cn("size-4", view === "integrations" && "text-accent")}
+          />
+          <span className="flex-1 text-left">{t("nav.integrations")}</span>
         </button>
       </nav>
 
