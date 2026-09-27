@@ -13,7 +13,9 @@ function isAttribution(l: string): boolean {
     /^\d{4}年\d{1,2}月\d{1,2}日.*[:：]\s*$/.test(l) || // 日本語の日時引用（年月日）
     /^\d{4}[/／]\d{1,2}[/／]\d{1,2}.*[:：]\s*$/.test(l) || // "2026/09/04 14:36、… のメール:"（スラッシュ日付）
     /のメール\s*[:：]\s*$/.test(l) || // "…さんからのメール:" 系の締め
-    /^-{2,}\s*(Original Message|元のメッセージ|転送メッセージ)\s*-{2,}/i.test(l) ||
+    /^-{2,}\s*(Original Message|Forwarded message|元のメッセージ|転送(された)?メッセージ)\s*-{2,}/i.test(
+      l,
+    ) ||
     /^_{5,}$/.test(l) || // Outlook の区切り線
     /^(差出人|From)\s*[:：]/.test(l) // Outlook ヘッダブロック
   );
@@ -25,7 +27,10 @@ function isAttribution(l: string): boolean {
  * we hide it behind a "···" toggle (定番のメーラー挙動). Heuristic, plain-text
  * only — returns no quote when nothing recognizable is found.
  */
-export function splitQuotedReply(text: string): { head: string; quoted: string } {
+export function splitQuotedReply(text: string): {
+  head: string;
+  quoted: string;
+} {
   const lines = text.split("\n");
   let cut = -1;
   for (let i = 0; i < lines.length; i++) {
@@ -69,7 +74,10 @@ export function segmentReply(raw: string): ReplySegment[] {
   let buf: string[] = [];
   let mode: "text" | "quote" = "text";
   const flush = () => {
-    const joined = mode === "quote" ? buf.join("\n").replace(/^\s*>\s?/gm, "") : buf.join("\n");
+    const joined =
+      mode === "quote"
+        ? buf.join("\n").replace(/^\s*>\s?/gm, "")
+        : buf.join("\n");
     const body = joined.replace(/^\n+/, "").replace(/\s+$/, "");
     if (body) segs.push({ kind: mode, body });
     buf = [];
@@ -114,7 +122,13 @@ function tidyPlainBody(text: string): string {
 /** Body text with each quoted block collapsed behind a "···" toggle, in place —
  *  new text written between/below quotes (inline replies) stays visible.
  *  `highlight` (search query) marks matches — set only when opened from search. */
-export function QuotedText({ text: raw, highlight }: { text: string; highlight?: string }) {
+export function QuotedText({
+  text: raw,
+  highlight,
+}: {
+  text: string;
+  highlight?: string;
+}) {
   const text = tidyPlainBody(raw);
   const terms = parseTerms(highlight);
   const segs = segmentReply(text);
@@ -129,7 +143,17 @@ export function QuotedText({ text: raw, highlight }: { text: string; highlight?:
       return next;
     });
 
-  if (!segs.some((s) => s.kind === "quote")) return <LinkedText text={text} highlight={terms} />;
+  if (!segs.some((s) => s.kind === "quote"))
+    return <LinkedText text={text} highlight={terms} />;
+
+  // 「本文なし転送」対応: 新規本文が空で、中身が引用（＝転送された本文）だけの
+  // メールは、引用を畳むと何も読めなくなる。この場合だけ全文をそのまま表示する。
+  // 返信文が上にある通常ケース（新規本文あり）は従来どおり引用を畳む — 設計思想
+  // 「返信の上の引用はしまう」と両立する（しまう相手＝新規本文がある時だけ）。
+  const hasNewText = segs.some(
+    (s) => s.kind === "text" && s.body.trim() !== "",
+  );
+  if (!hasNewText) return <LinkedText text={text} highlight={terms} />;
 
   return (
     <>
@@ -148,7 +172,11 @@ export function QuotedText({ text: raw, highlight }: { text: string; highlight?:
             {!searching && (
               <button
                 onClick={() => toggle(i)}
-                title={expanded ? "引用（過去のやりとり）を隠す" : "引用（過去のやりとり）を表示"}
+                title={
+                  expanded
+                    ? "引用（過去のやりとり）を隠す"
+                    : "引用（過去のやりとり）を表示"
+                }
                 className="inline-flex items-center gap-1 rounded border border-border bg-surface-2 px-2 py-0.5 align-middle text-xs leading-none text-fg-subtle transition-colors hover:text-fg"
               >
                 {expanded ? "引用を隠す" : `··· 引用 ${lines}行`}
