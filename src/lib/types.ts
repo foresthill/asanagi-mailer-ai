@@ -398,3 +398,17 @@ export interface OpenProjectSettings {
   /** 既定プロジェクトの表示名（設定画面での確認用キャッシュ）。 */
   projectName?: string;
 }
+
+/** OpenProject の work package（pull 表示用・読み取り専用の最小フィールド）。 */
+export interface OpWorkPackage {
+  id: number;
+  subject: string;
+  /** ステータス名（例: New / In progress / Closed）。 */
+  status?: string;
+  /** タイプ名（例: Task / Feature）。 */
+  type?: string;
+  /** 期限（YYYY-MM-DD）。 */
+  dueDate?: string;
+  /** ブラウザで開く URL（…/work_packages/{id}）。 */
+  url: string;
+}

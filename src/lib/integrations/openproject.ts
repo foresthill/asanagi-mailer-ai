@@ -1,4 +1,4 @@
-import type { OpenProjectSettings } from "@/lib/types";
+import type { OpenProjectSettings, OpWorkPackage } from "@/lib/types";
 
 /**
  * OpenProject REST API v3 client (Community Edition compatible).
@@ -188,4 +188,67 @@ export async function createWorkPackage(
     subject: String(created?.subject ?? payload.subject),
     url: `${baseUrl}/work_packages/${id}`,
   };
+}
+
+/** The current API user's id (for an "assigned to me" filter). Undefined on failure. */
+async function currentUserId(
+  baseUrl: string,
+  apiKey: string,
+): Promise<number | undefined> {
+  try {
+    const me = (await opFetch(baseUrl, apiKey, "/api/v3/users/me")) as {
+      id?: number;
+    };
+    return me?.id ? Number(me.id) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Read-only pull: the current user's OPEN work packages in the default project,
+ * newest-updated first. Used to surface OpenProject tasks alongside local TODOs.
+ * If the "assigned to me" lookup fails, falls back to the project's open items.
+ */
+export async function listMyOpenWorkPackages(
+  settings: OpenProjectSettings,
+): Promise<OpWorkPackage[]> {
+  const baseUrl = normalizeBaseUrl(settings.baseUrl);
+  const apiKey = settings.apiKey?.trim();
+  const projectId = settings.projectId?.trim();
+  if (!baseUrl || !apiKey) throw new OpError("OpenProject が未設定です。");
+  if (!projectId) throw new OpError("送り先プロジェクトが未設定です。");
+
+  const uid = await currentUserId(baseUrl, apiKey);
+  // OpenProject filter DSL: status operator "o" = open. Assignee "=" my id.
+  const filters: Array<Record<string, { operator: string; values: string[] }>> =
+    [{ status: { operator: "o", values: [] } }];
+  if (uid) filters.push({ assignee: { operator: "=", values: [String(uid)] } });
+  const qs = new URLSearchParams({
+    pageSize: "50",
+    filters: JSON.stringify(filters),
+    sortBy: JSON.stringify([["updatedAt", "desc"]]),
+  });
+
+  const data = (await opFetch(
+    baseUrl,
+    apiKey,
+    `/api/v3/projects/${encodeURIComponent(projectId)}/work_packages?${qs.toString()}`,
+  )) as { _embedded?: { elements?: Array<Record<string, unknown>> } };
+  const els = data?._embedded?.elements ?? [];
+  return els.map((e) => {
+    const links = (e._links ?? {}) as Record<
+      string,
+      { title?: string } | undefined
+    >;
+    const id = Number(e.id);
+    return {
+      id,
+      subject: String(e.subject ?? ""),
+      status: links.status?.title,
+      type: links.type?.title,
+      dueDate: typeof e.dueDate === "string" ? e.dueDate : undefined,
+      url: `${baseUrl}/work_packages/${id}`,
+    };
+  });
 }
