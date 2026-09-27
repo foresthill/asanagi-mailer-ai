@@ -19,6 +19,7 @@ import {
   PenLine,
   ShieldAlert,
   FolderKanban,
+  ScrollText,
   Square,
   SquareCheck,
   Flag,
@@ -69,6 +70,7 @@ export function EmailReader({
   isTodo,
   onToggleTodo,
   onSendToOpenProject,
+  onSendToDevlog,
   onNoteSaved,
   onOpenMessage,
   highlight,
@@ -102,6 +104,8 @@ export function EmailReader({
   onToggleTodo?: () => void;
   /** OpenProject連携が有効なときだけ渡る（このメールを work package に起票）。 */
   onSendToOpenProject?: () => void;
+  /** devlog連携が有効なときだけ渡る（このメールを devlog issue に起票）。 */
+  onSendToDevlog?: () => void;
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
   onNoteSaved?: () => void;
   /** Re-anchor the reader to a thread message (open it as the current email). */
@@ -288,6 +292,13 @@ export function EmailReader({
             icon={FolderKanban}
             title={t("op.sendMail")}
             onClick={onSendToOpenProject}
+          />
+        )}
+        {onSendToDevlog && (
+          <IconBtn
+            icon={ScrollText}
+            title={t("dv.sendMail")}
+            onClick={onSendToDevlog}
           />
         )}
         {folder !== "archived" && folder !== "sent" && (

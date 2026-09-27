@@ -15,6 +15,7 @@ import { EmailConnectSection } from "./EmailConnectSection";
 import { ReplySignatureSection } from "./ReplySignatureSection";
 import { WritingNoteSection } from "./WritingNoteSection";
 import { OpenProjectSection } from "./OpenProjectSection";
+import { DevlogSection } from "./DevlogSection";
 
 type ProviderChoice = AIProvider | "auto";
 
@@ -504,6 +505,8 @@ export function ConnectionsSettings({
             </div>
 
             <OpenProjectSection />
+
+            <DevlogSection />
           </div>
         )}
 
