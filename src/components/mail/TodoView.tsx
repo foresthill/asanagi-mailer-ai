@@ -6,8 +6,9 @@ import {
   Trash2,
   AlarmClock,
   FolderKanban,
+  RefreshCw,
 } from "lucide-react";
-import type { TodoItem } from "@/lib/types";
+import type { TodoItem, OpWorkPackage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
@@ -58,6 +59,9 @@ export function TodoView({
   onToggleDone,
   onRemove,
   onSendToOpenProject,
+  openProjectTasks,
+  openProjectLoading,
+  onRefreshOpenProject,
 }: {
   todos: TodoItem[];
   onOpenEmail: (id: string) => void;
@@ -66,6 +70,10 @@ export function TodoView({
   onRemove: (id: string) => void;
   /** OpenProject連携が有効なときだけ渡る（work package 起票 / 既存を開く）。 */
   onSendToOpenProject?: (todo: TodoItem) => void;
+  /** OpenProject から pull した自分の未完了タスク（読み取り専用・連携有効時のみ）。 */
+  openProjectTasks?: OpWorkPackage[];
+  openProjectLoading?: boolean;
+  onRefreshOpenProject?: () => void;
 }) {
   const { t } = useI18n();
   const ordered = sortTodos(todos);
@@ -181,6 +189,66 @@ export function TodoView({
                 );
               })}
             </ul>
+          )}
+
+          {/* OpenProject pull（読み取り専用）: 自分の未完了タスクを一覧。クリックで
+              ブラウザで開く。書き込み/同期はしない。連携有効時のみ表示。 */}
+          {onRefreshOpenProject && (
+            <section className="mt-6">
+              <div className="mb-2 flex items-center gap-2">
+                <FolderKanban className="size-4 text-accent" />
+                <h2 className="text-xs font-semibold">{t("op.pull.title")}</h2>
+                <button
+                  onClick={onRefreshOpenProject}
+                  title={t("op.pull.refresh")}
+                  className="grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
+                >
+                  <RefreshCw
+                    className={cn(
+                      "size-3.5",
+                      openProjectLoading && "animate-spin",
+                    )}
+                  />
+                </button>
+              </div>
+              {(openProjectTasks?.length ?? 0) === 0 ? (
+                <p className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-subtle">
+                  {openProjectLoading
+                    ? t("op.pull.loading")
+                    : t("op.pull.empty")}
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-1.5">
+                  {openProjectTasks!.map((wp) => (
+                    <li key={wp.id}>
+                      <a
+                        href={wp.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3.5 py-2.5 hover:border-accent"
+                      >
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="flex items-center gap-1.5 truncate text-sm font-medium">
+                            <span className="truncate">{wp.subject}</span>
+                            <ArrowUpRight className="size-3 shrink-0 text-fg-subtle" />
+                          </span>
+                          <span className="truncate text-xs text-fg-subtle">
+                            #{wp.id}
+                            {wp.type ? ` · ${wp.type}` : ""}
+                            {wp.dueDate ? ` · ${wp.dueDate}` : ""}
+                          </span>
+                        </span>
+                        {wp.status && (
+                          <span className="shrink-0 rounded-md border border-border px-1.5 py-1 text-[11px] text-fg-muted">
+                            {wp.status}
+                          </span>
+                        )}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           )}
         </div>
       </div>
