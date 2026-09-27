@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PenLine } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 type Acct = { key: string; label: string; address?: string };
 
@@ -11,6 +12,7 @@ type Acct = { key: string; label: string; address?: string };
  * even when the thread history is signed by someone else (shared/CC'd mailbox).
  */
 export function ReplySignatureSection() {
+  const { t } = useI18n();
   const [accounts, setAccounts] = useState<Acct[]>([]);
   const [sigs, setSigs] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<string | null>(null);
@@ -52,23 +54,23 @@ export function ReplySignatureSection() {
     <section className="border-t border-border pt-4">
       <h3 className="flex items-center gap-1.5 text-sm font-medium">
         <PenLine className="size-4 text-accent" />
-        AI返信での名乗り（署名）
+        {t("sig.title")}
       </h3>
-      <p className="mt-1 text-xs text-fg-muted">
-        アカウントごとに「返信を誰として書くか」を設定します。スレッドの履歴が別の人の名義でも、この名乗りで下書きされます。
-      </p>
+      <p className="mt-1 text-xs text-fg-muted">{t("sig.intro")}</p>
       <div className="mt-3 flex flex-col gap-3">
         {accounts.map((a) => (
           <label key={a.key} className="flex flex-col gap-1">
             <span className="text-xs text-fg-muted">
               {a.label}
               {a.address ? `（${a.address}）` : ""}
-              {saved === a.key && <span className="ml-1 text-accent">✓ 保存しました</span>}
+              {saved === a.key && (
+                <span className="ml-1 text-accent">{t("sig.saved")}</span>
+              )}
             </span>
             <textarea
               defaultValue={sigs[a.key] ?? ""}
               onBlur={(e) => save(a.key, e.target.value)}
-              placeholder="例: イグレックプラス 森岡（実証フィールド担当）"
+              placeholder={t("sig.placeholder")}
               rows={2}
               className="resize-y rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
             />
