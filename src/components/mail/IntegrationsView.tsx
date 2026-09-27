@@ -24,7 +24,11 @@ interface IntegStatus {
 
 interface IntegDef {
   id: string;
+  /** Display name. Brand names (OpenProject/devlog/Nextcloud) are verbatim;
+   *  set `nameKey` instead when the name needs translating (e.g. Google カレンダー). */
   name: string;
+  /** Optional i18n key for the name (overrides `name` when set). */
+  nameKey?: string;
   icon: LucideIcon;
   endpoint: string;
   /** i18n key for the one-line "what it does". */
@@ -56,7 +60,8 @@ const INTEGRATIONS: IntegDef[] = [
   },
   {
     id: "google",
-    name: "Google カレンダー",
+    name: "Google Calendar",
+    nameKey: "gc.title",
     icon: CalendarClock,
     endpoint: "/api/calendar/status",
     descKey: "integrations.desc.calendar",
@@ -131,7 +136,7 @@ export function IntegrationsView({
                 <Icon className="size-5 shrink-0 text-accent" />
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="flex items-center gap-2 text-sm font-medium">
-                    {i.name}
+                    {i.nameKey ? t(i.nameKey) : i.name}
                     {connected ? (
                       <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
                         <Check className="size-2.5" />
