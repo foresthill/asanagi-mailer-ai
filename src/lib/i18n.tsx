@@ -98,7 +98,7 @@ const ja: Dict = {
   "integrations.refresh": "状況を再取得",
   "integrations.desc.task": "TODO・メールを起票／未完了タスクを表示",
   "integrations.desc.calendar": "TODO の期限をカレンダー予定として登録",
-  "integrations.planned": "今後: Google カレンダー などを予定。",
+  "integrations.planned": "今後も連携を順次追加していきます。",
   "ailog.recent": "直近 {n}件",
   "ailog.intro":
     "この端末が実際にAIへ送った内容（PIIマスク有効時は匿名化後＝端末から出た形そのまま）と返答を、新しい順に記録しています。すべて端末内のみに保存（直近2,000件）。",
@@ -255,6 +255,11 @@ const ja: Dict = {
   "nc.added": "カレンダーに登録しました。",
   "nc.addTodo": "カレンダーに追加",
   "nc.needDue": "期限を設定すると追加できます。",
+  // Google カレンダー連携
+  "gc.title": "Google カレンダー",
+  "gc.adding": "Google カレンダーに登録中…",
+  "gc.added": "Google カレンダーに登録しました。",
+  "gc.fail": "Google カレンダーへの登録に失敗しました。",
   "drafts.empty":
     "下書きはありません。作成画面の「下書き保存」で保存できます。",
   "drafts.open.title": "この下書きを開いて続きを書く",
@@ -715,7 +720,7 @@ const en: Dict = {
   "integrations.refresh": "Reload status",
   "integrations.desc.task": "Create issues from TODO/mail; show open tasks",
   "integrations.desc.calendar": "Add TODO due dates as calendar events",
-  "integrations.planned": "Planned: Google Calendar, and more.",
+  "integrations.planned": "More integrations coming.",
   "ailog.recent": "Last {n}",
   "ailog.intro":
     "What this device actually sent to the AI (with PII masking on, the anonymized form that left the device) and the reply, newest first. All stored on this device only (last 2,000).",
@@ -875,6 +880,11 @@ const en: Dict = {
   "nc.added": "Added to calendar.",
   "nc.addTodo": "Add to calendar",
   "nc.needDue": "Set a due date to add it.",
+  // Google Calendar
+  "gc.title": "Google Calendar",
+  "gc.adding": "Adding to Google Calendar…",
+  "gc.added": "Added to Google Calendar.",
+  "gc.fail": "Failed to add to Google Calendar.",
   "drafts.empty": "No drafts. Save one with 'Save draft' in the composer.",
   "drafts.open.title": "Open this draft and keep writing",
   "drafts.noSubject": "(no subject)",
@@ -1340,7 +1350,7 @@ const fr: Dict = {
   "integrations.desc.task":
     "Créer des tâches depuis TODO/e-mail ; afficher les tâches ouvertes",
   "integrations.desc.calendar": "Ajouter les échéances de TODO à l'agenda",
-  "integrations.planned": "À venir : Google Agenda, etc.",
+  "integrations.planned": "D'autres intégrations à venir.",
   "ailog.recent": "{n} récents",
   "ailog.intro":
     "Ce que cet appareil a réellement envoyé à l'IA (avec le masquage PII, la forme anonymisée qui a quitté l'appareil) et la réponse, du plus récent au plus ancien. Tout est stocké sur cet appareil uniquement (2 000 derniers).",
@@ -1502,6 +1512,11 @@ const fr: Dict = {
   "nc.added": "Ajouté à l'agenda.",
   "nc.addTodo": "Ajouter à l'agenda",
   "nc.needDue": "Définissez une échéance pour l'ajouter.",
+  // Google Agenda
+  "gc.title": "Google Agenda",
+  "gc.adding": "Ajout à Google Agenda…",
+  "gc.added": "Ajouté à Google Agenda.",
+  "gc.fail": "Échec de l'ajout à Google Agenda.",
   "drafts.empty":
     "Aucun brouillon. Enregistrez-en un via « Enregistrer le brouillon » dans l'éditeur.",
   "drafts.open.title": "Ouvrir ce brouillon et continuer à écrire",
@@ -1980,7 +1995,7 @@ const zh: Dict = {
   "integrations.refresh": "重新获取状态",
   "integrations.desc.task": "从 TODO/邮件登记任务；显示未完成任务",
   "integrations.desc.calendar": "将 TODO 期限登记为日历日程",
-  "integrations.planned": "计划中：Google 日历 等。",
+  "integrations.planned": "后续将继续添加更多集成。",
   "ailog.recent": "最近 {n} 条",
   "ailog.intro":
     "本机实际发送给 AI 的内容（开启个人信息脱敏时，为离开本机的匿名形式）及其回复，最新在前。全部仅保存在本机（最近 2,000 条）。",
@@ -2133,6 +2148,11 @@ const zh: Dict = {
   "nc.added": "已登记到日历。",
   "nc.addTodo": "添加到日历",
   "nc.needDue": "设置期限后即可添加。",
+  // Google 日历
+  "gc.title": "Google 日历",
+  "gc.adding": "正在登记到 Google 日历…",
+  "gc.added": "已登记到 Google 日历。",
+  "gc.fail": "登记到 Google 日历失败。",
   "drafts.empty": "暂无草稿。可在写信界面用「保存草稿」保存。",
   "drafts.open.title": "打开此草稿并继续写",
   "drafts.noSubject": "（无主题）",

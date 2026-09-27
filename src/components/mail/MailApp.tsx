@@ -228,6 +228,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [devlogTasksLoading, setDevlogTasksLoading] = useState(false);
   // Nextcloud 連携（CalDAV）。TODO の期限をカレンダー予定として登録。
   const [nextcloudEnabled, setNextcloudEnabled] = useState(false);
+  // Google カレンダー連携（既存 Gmail OAuth 再利用）。TODO 期限→予定。
+  const [gcalEnabled, setGcalEnabled] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
   const selectToken = useRef(0);
@@ -604,26 +606,40 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     loadNextcloudStatus();
   }, [loadNextcloudStatus]);
 
-  // TODO の期限を Nextcloud カレンダーに予定として登録（済みなら UID を再利用＝上書き）。
-  const addTodoToCalendar = async (todo: TodoItem) => {
-    if (!todo.due) {
-      showToast(t("nc.needDue"));
-      return;
+  const loadGcalStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/calendar/status");
+      const d = (await res.json()) as { configured?: boolean };
+      setGcalEnabled(!!d.configured);
+    } catch {
+      /* 連携は任意機能 */
     }
+  }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadGcalStatus();
+  }, [loadGcalStatus]);
+
+  // カレンダー登録の共通本体。endpoint と済みトーストだけ差し替える。
+  const calendarDescOf = (todo: TodoItem) =>
+    [
+      `${t("op.desc.from")}: ${todo.fromName ?? todo.fromEmail ?? ""}`,
+      `_${t("op.desc.footer")}_`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+  // TODO の期限を Nextcloud カレンダーに登録（済みなら UID 再利用＝上書き）。
+  const addTodoToNextcloud = async (todo: TodoItem) => {
+    if (!todo.due) return void showToast(t("nc.needDue"));
     showToast(t("nc.adding"));
     try {
-      const desc = [
-        `${t("op.desc.from")}: ${todo.fromName ?? todo.fromEmail ?? ""}`,
-        `_${t("op.desc.footer")}_`,
-      ]
-        .filter(Boolean)
-        .join("\n");
       const res = await fetch("/api/integrations/nextcloud/add", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           title: todo.subject || t("drafts.noSubject"),
-          description: desc,
+          description: calendarDescOf(todo),
           start: todo.due,
           todoId: todo.id,
           uid: todo.ncEventUid,
@@ -633,13 +649,57 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       if (d.ok) {
         showToast(t("nc.added"));
         loadTodos();
-      } else {
-        showToast(d.error ?? t("nc.connect.fail"));
-      }
+      } else showToast(d.error ?? t("nc.connect.fail"));
     } catch {
       showToast(t("nc.connect.fail"));
     }
   };
+
+  // TODO の期限を Google カレンダーに登録（既存 Gmail OAuth 再利用・iCalUIDで上書き）。
+  const addTodoToGoogleCalendar = async (todo: TodoItem) => {
+    if (!todo.due) return void showToast(t("nc.needDue"));
+    showToast(t("gc.adding"));
+    try {
+      const res = await fetch("/api/calendar/add-todo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: todo.subject || t("drafts.noSubject"),
+          description: calendarDescOf(todo),
+          start: todo.due,
+          todoId: todo.id,
+        }),
+      });
+      const d = (await res.json()) as { ok: boolean; error?: string };
+      if (d.ok) {
+        showToast(t("gc.added"));
+        loadTodos();
+      } else showToast(d.error ?? t("gc.fail"));
+    } catch {
+      showToast(t("gc.fail"));
+    }
+  };
+
+  // カレンダー連携の宛先（設定済みのものだけ）。TodoView は 1件なら直接、複数なら小メニュー。
+  const calendarTargets = [
+    nextcloudEnabled && {
+      id: "nextcloud" as const,
+      label: t("nc.title"),
+      onAdd: addTodoToNextcloud,
+      isAdded: (todo: TodoItem) => !!todo.ncEventUid,
+    },
+    gcalEnabled && {
+      id: "google" as const,
+      label: t("gc.title"),
+      onAdd: addTodoToGoogleCalendar,
+      isAdded: (todo: TodoItem) => !!todo.gcalEventId,
+    },
+  ].filter(Boolean) as {
+    id: "nextcloud" | "google";
+    label: string;
+    onAdd: (todo: TodoItem) => void;
+    isAdded: (todo: TodoItem) => boolean;
+  }[];
 
   // Live-ish clock for「期限切れ」判定（renderでDate.now禁止のReact19対応）。
   const [nowMs, setNowMs] = useState(0);
@@ -1911,7 +1971,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           devlogTasks={devlogEnabled ? devlogTasks : undefined}
           devlogLoading={devlogTasksLoading}
           onRefreshDevlog={devlogEnabled ? loadDevlogTasks : undefined}
-          onAddToCalendar={nextcloudEnabled ? addTodoToCalendar : undefined}
+          calendarTargets={calendarTargets}
         />
       )}
       {/* classic: 一覧(左)｜本文(右)・幅ドラッグ可変 */}

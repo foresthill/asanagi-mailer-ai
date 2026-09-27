@@ -14,12 +14,16 @@ export const maxDuration = 30;
  */
 export async function POST(req: Request) {
   const { id } = (await req.json()) as { id: string };
-  if (!id) return NextResponse.json({ error: "id が必要です" }, { status: 400 });
+  if (!id)
+    return NextResponse.json({ error: "id が必要です" }, { status: 400 });
 
   const creds = await resolveGmailCreds();
   if (!creds) {
     return NextResponse.json(
-      { error: "Googleカレンダーを使うにはGmail（Google）接続が必要です", needsReauth: true },
+      {
+        error: "Googleカレンダーを使うにはGmail（Google）接続が必要です",
+        needsReauth: true,
+      },
       { status: 400 },
     );
   }
@@ -34,7 +38,10 @@ export async function POST(req: Request) {
     const invite = email?.invite;
     if (!invite?.start) {
       return NextResponse.json(
-        { error: "このメールから登録可能な会議情報（日時）を取得できませんでした" },
+        {
+          error:
+            "このメールから登録可能な会議情報（日時）を取得できませんでした",
+        },
         { status: 422 },
       );
     }
@@ -47,7 +54,9 @@ export async function POST(req: Request) {
       invite.allDay ? { date: iso.slice(0, 10) } : { dateTime: iso };
     const description = [
       invite.joinUrl ? `会議URL: ${invite.joinUrl}` : "",
-      invite.organizer ? `主催: ${invite.organizer.name ?? ""} <${invite.organizer.email}>` : "",
+      invite.organizer
+        ? `主催: ${invite.organizer.name ?? ""} <${invite.organizer.email}>`
+        : "",
       "（Asanagi: 招待メールから登録）",
     ]
       .filter(Boolean)
@@ -66,7 +75,10 @@ export async function POST(req: Request) {
           calendarId: "primary",
           requestBody: { ...event, iCalUID: invite.uid },
         })
-      : await calendar.events.insert({ calendarId: "primary", requestBody: event });
+      : await calendar.events.insert({
+          calendarId: "primary",
+          requestBody: event,
+        });
 
     return NextResponse.json({
       ok: true,

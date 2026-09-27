@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ListTodo,
   ArrowUpRight,
@@ -69,7 +70,7 @@ export function TodoView({
   devlogTasks,
   devlogLoading,
   onRefreshDevlog,
-  onAddToCalendar,
+  calendarTargets,
 }: {
   todos: TodoItem[];
   onOpenEmail: (id: string) => void;
@@ -88,12 +89,21 @@ export function TodoView({
   devlogTasks?: DevlogIssue[];
   devlogLoading?: boolean;
   onRefreshDevlog?: () => void;
-  /** Nextcloud連携が有効なときだけ渡る（期限を予定として登録）。期限必須。 */
-  onAddToCalendar?: (todo: TodoItem) => void;
+  /** カレンダー連携の宛先（Nextcloud / Google 等・設定済みのみ）。期限ありのTODOで
+   *  1件なら直接登録、複数なら小メニュー。空なら追加ボタンを出さない。 */
+  calendarTargets?: {
+    id: string;
+    label: string;
+    onAdd: (todo: TodoItem) => void;
+    isAdded: (todo: TodoItem) => boolean;
+  }[];
 }) {
   const { t } = useI18n();
   const ordered = sortTodos(todos);
   const openCount = todos.filter((x) => !x.done).length;
+  // Which row's calendar picker is open (only when 2+ calendar targets exist).
+  const [calMenuFor, setCalMenuFor] = useState<string | null>(null);
+  const cals = calendarTargets ?? [];
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-bg">
@@ -180,25 +190,59 @@ export function TodoView({
                         className="bg-transparent text-[11px] outline-none"
                       />
                     </span>
-                    {onAddToCalendar && todo.due && (
-                      <button
-                        onClick={() => onAddToCalendar(todo)}
-                        title={
-                          todo.ncEventUid ? t("nc.added") : t("nc.addTodo")
-                        }
-                        className={cn(
-                          "grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-surface-2",
-                          todo.ncEventUid
-                            ? "text-accent"
-                            : "text-fg-subtle hover:text-accent",
+                    {cals.length > 0 && todo.due && (
+                      <div className="relative shrink-0">
+                        <button
+                          onClick={() => {
+                            if (cals.length === 1) cals[0].onAdd(todo);
+                            else
+                              setCalMenuFor((v) =>
+                                v === todo.id ? null : todo.id,
+                              );
+                          }}
+                          title={t("nc.addTodo")}
+                          className={cn(
+                            "grid size-7 place-items-center rounded-md transition-colors hover:bg-surface-2",
+                            cals.some((c) => c.isAdded(todo))
+                              ? "text-accent"
+                              : "text-fg-subtle hover:text-accent",
+                          )}
+                        >
+                          {cals.some((c) => c.isAdded(todo)) ? (
+                            <CalendarCheck className="size-3.5" />
+                          ) : (
+                            <CalendarPlus className="size-3.5" />
+                          )}
+                        </button>
+                        {calMenuFor === todo.id && cals.length > 1 && (
+                          <>
+                            <button
+                              aria-hidden
+                              onClick={() => setCalMenuFor(null)}
+                              className="fixed inset-0 z-40 cursor-default"
+                            />
+                            <div className="absolute right-0 top-8 z-50 flex min-w-40 flex-col overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-[var(--shadow)]">
+                              {cals.map((c) => (
+                                <button
+                                  key={c.id}
+                                  onClick={() => {
+                                    setCalMenuFor(null);
+                                    c.onAdd(todo);
+                                  }}
+                                  className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-2"
+                                >
+                                  {c.isAdded(todo) ? (
+                                    <CalendarCheck className="size-3.5 text-accent" />
+                                  ) : (
+                                    <CalendarPlus className="size-3.5" />
+                                  )}
+                                  {c.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
                         )}
-                      >
-                        {todo.ncEventUid ? (
-                          <CalendarCheck className="size-3.5" />
-                        ) : (
-                          <CalendarPlus className="size-3.5" />
-                        )}
-                      </button>
+                      </div>
                     )}
                     {onSendToOpenProject && (
                       <button
