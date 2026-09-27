@@ -716,6 +716,18 @@ const ja: Dict = {
   "imap.test.failed": "テスト実行に失敗",
   "imap.testBtn": "接続テスト",
   "imap.save": "保存",
+  "sig.title": "AI返信での名乗り（署名）",
+  "sig.intro":
+    "アカウントごとに「返信を誰として書くか」を設定します。スレッドの履歴が別の人の名義でも、この名乗りで下書きされます。",
+  "sig.saved": "✓ 保存しました",
+  "sig.placeholder": "例: イグレックプラス 森岡（実証フィールド担当）",
+  "wnote.title": "文章作成メモ（返信・添削のルール）",
+  "wnote.saved": "✓ 保存しました",
+  "wnote.intro":
+    "AIの返信下書き・添削すべてに反映される文体ルールです。変な修正が出たら1行足すだけで次から直ります。",
+  "wnote.example":
+    "例:「絵文字は使わない」「過剰敬語にしない」「勝手に日程を確約しない」「箇条書きを多用しない」",
+  "wnote.placeholder": "1行に1ルール。例: 絵文字は使わない",
 };
 
 const en: Dict = {
@@ -1410,6 +1422,18 @@ const en: Dict = {
   "imap.test.failed": "Test execution failed",
   "imap.testBtn": "Test connection",
   "imap.save": "Save",
+  "sig.title": "Reply identity (signature)",
+  "sig.intro":
+    "Set who each account replies as. Even when the thread history is signed by someone else, drafts are written in this identity.",
+  "sig.saved": "✓ Saved",
+  "sig.placeholder": "e.g. Jane Smith, Acme Inc. (Field Trials)",
+  "wnote.title": "Writing rules (for replies & refine)",
+  "wnote.saved": "✓ Saved",
+  "wnote.intro":
+    "Style rules applied to every AI reply draft and refine. If a draft comes out wrong, add one line and it is fixed from next time.",
+  "wnote.example":
+    "e.g. no emoji / not overly polite / don't promise dates yourself / avoid heavy bullet lists",
+  "wnote.placeholder": "One rule per line. e.g. no emoji",
 };
 
 // fr / zh: キー予約。未訳は en へフォールバック（順次追加）。
@@ -2133,6 +2157,18 @@ const fr: Dict = {
   "imap.test.failed": "Échec de l'exécution du test",
   "imap.testBtn": "Tester la connexion",
   "imap.save": "Enregistrer",
+  "sig.title": "Identité de réponse (signature)",
+  "sig.intro":
+    "Définissez au nom de qui chaque compte répond. Même si l'historique du fil est signé par quelqu'un d'autre, les brouillons utilisent cette identité.",
+  "sig.saved": "✓ Enregistré",
+  "sig.placeholder": "ex. Jean Dupont, Acme SA (essais terrain)",
+  "wnote.title": "Règles de rédaction (réponses et corrections)",
+  "wnote.saved": "✓ Enregistré",
+  "wnote.intro":
+    "Règles de style appliquées à chaque brouillon et correction IA. Si un brouillon sort mal, ajoutez une ligne et c'est corrigé dès la prochaine fois.",
+  "wnote.example":
+    "ex. pas d'emoji / pas de politesse excessive / ne pas confirmer de dates soi-même / éviter les listes à puces",
+  "wnote.placeholder": "Une règle par ligne. ex. pas d'emoji",
 };
 
 const zh: Dict = {
@@ -2787,6 +2823,18 @@ const zh: Dict = {
   "imap.test.failed": "测试执行失败",
   "imap.testBtn": "连接测试",
   "imap.save": "保存",
+  "sig.title": "回复署名（名义）",
+  "sig.intro":
+    "为每个账户设置「以谁的名义回复」。即使会话历史署名为他人，草稿也会以此名义撰写。",
+  "sig.saved": "✓ 已保存",
+  "sig.placeholder": "例：山田太郎，Acme 公司（实证负责人）",
+  "wnote.title": "写作备忘（回复・润色规则）",
+  "wnote.saved": "✓ 已保存",
+  "wnote.intro":
+    "适用于所有 AI 回复草稿与润色的文体规则。若草稿不理想，加一行即可从下次起修正。",
+  "wnote.example":
+    "例：不用表情符号 / 不过度敬语 / 不擅自确定日程 / 不滥用要点列表",
+  "wnote.placeholder": "每行一条规则。例：不用表情符号",
 };
 
 const DICTS: Record<Locale, Dict> = { ja, en, fr, zh };
