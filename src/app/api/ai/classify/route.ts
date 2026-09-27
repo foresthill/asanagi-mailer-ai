@@ -61,11 +61,14 @@ export async function POST(req: Request) {
   const signals = await listSignals();
   // Dangerous-mail flag (phishing/spam) — independent of importance, always
   // applied so a "learned low" or heuristic result still carries the warning.
-  const threat = detectThreat(
-    email,
-    await listThreatSenders(),
-    await listSafeSenders(),
-  );
+  const safeSenders = await listSafeSenders();
+  const threat = detectThreat(email, await listThreatSenders(), safeSenders);
+  // 「問題無し」で安全登録された差出人は、AIが phishing と判定しても警告しない
+  // （＝問題無しが恒久化する）。誤検知の恒久的な打ち消し。
+  const addr = email.from.email.toLowerCase();
+  const domain = addr.split("@")[1] ?? "";
+  const isSafe =
+    safeSenders.senders.has(addr) || safeSenders.domains.has(domain);
 
   // Heuristic short-circuit: if the user has already taught us about this
   // sender/domain, trust that immediately (fast + free + personalized).
@@ -142,13 +145,27 @@ export async function POST(req: Request) {
           : undefined,
       },
     );
-    // AI threat wins if it found one; otherwise fall back to the heuristic flag.
+    // Threat の最終判定（誤検知を構造的に抑える）:
+    // 1. safe 登録済み（問題無し）は常に警告しない＝問題無しが恒久化する。
+    // 2. AI 単独の "phishing" は業務メール（見積・発注・請求・定型免責文）で誤検知
+    //    しやすいので採用しない。phishing はヒューリスティック（なりすまし＋差出人
+    //    ドメイン不一致＝高精度）が検出したときのみ。
+    // 3. AI の "spam"（害の小さい宣伝・勧誘）は AI 単独でも採用する。
     const aiThreat = object.threat === "none" ? undefined : object.threat;
+    let finalThreat: "spam" | "phishing" | undefined;
+    if (isSafe) {
+      finalThreat = undefined;
+    } else if (aiThreat === "phishing") {
+      // AI 単独の phishing は不採用。ヒューリスティックの結果に委ねる。
+      finalThreat = threat;
+    } else {
+      finalThreat = aiThreat ?? threat;
+    }
     return NextResponse.json({
       importance: object.importance,
       reason: masker.unmask(object.reason),
       source: "ai",
-      threat: aiThreat ?? threat,
+      threat: finalThreat,
     });
   } catch (err) {
     return NextResponse.json(
