@@ -142,11 +142,30 @@ export function ThreadView({
   // Long threads (10–20 messages) make the opened message (amber) require a lot
   // of scrolling. On open, scroll that message into view automatically.
   const currentRef = useRef<HTMLDivElement>(null);
-  // Auto-scroll to the opened message ONCE per open — not on every messages
-  // update. Otherwise a late thread refresh (server-side thread() lands after
-  // the cache paint) re-fires this and yanks you back while you're scrolling up
-  // through the history (ばーっと過去を遡れない問題).
-  const scrolledFor = useRef<string | null>(null);
+  // Auto-scroll to the opened message on open. The thread arrives in two waves
+  // (cache paint → server-side thread() lands, adding older messages ABOVE the
+  // anchor), so a single "scroll once" would land on the anchor and then get
+  // pushed away by the late load — you end up somewhere random (検索から開くと
+  // 変な位置に着地する問題). Instead we re-anchor whenever the message count
+  // changes, and stop as soon as the user scrolls, so digging up through the
+  // history isn't yanked back (ばーっと過去を遡れる).
+  const userScrolled = useRef(false);
+  useEffect(() => {
+    userScrolled.current = false; // a new mail = a fresh auto-anchor
+  }, [selectedId]);
+  useEffect(() => {
+    const mark = () => {
+      userScrolled.current = true;
+    };
+    // Genuine gestures only — programmatic scrollIntoView fires none of these,
+    // so the auto-anchor never cancels itself.
+    window.addEventListener("wheel", mark, { passive: true });
+    window.addEventListener("touchmove", mark, { passive: true });
+    return () => {
+      window.removeEventListener("wheel", mark);
+      window.removeEventListener("touchmove", mark);
+    };
+  }, []);
   // クリックした（検索結果などから開いた）メッセージは常に展開する。ThreadView は
   // メール切替で再マウントされず open の初期化が走らないため、selectedId が変わる
   // たびに必ず開く（＝最新の自分の返信ではなく、クリックしたメールが開いて出る）。
@@ -161,18 +180,14 @@ export function ThreadView({
     });
   }, [selectedId]);
   useEffect(() => {
-    if (view !== "cards" || !selectedId || scrolledFor.current === selectedId)
-      return;
+    if (view !== "cards" || !selectedId || userScrolled.current) return;
     const t = setTimeout(() => {
-      // Wait until the anchor is actually in the DOM (messages may still be
-      // loading) — only then count it as scrolled so we don't retry forever.
-      if (currentRef.current) {
-        // Instant jump ("ピッと") — smooth scrolling across a long thread feels
-        // slow; snap straight to the opened message instead.
+      // Re-anchor after each wave, unless the user has since scrolled. Instant
+      // jump ("ピッと") — smooth scrolling across a long thread feels slow.
+      if (currentRef.current && !userScrolled.current) {
         currentRef.current.scrollIntoView({ block: "start", behavior: "auto" });
-        scrolledFor.current = selectedId;
       }
-    }, 30); // brief tick so the just-rendered anchor is measurable
+    }, 60); // brief tick so the just-rendered anchor is measurable
     return () => clearTimeout(t);
   }, [selectedId, messages.length, view]);
 
