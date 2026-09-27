@@ -20,6 +20,7 @@ import { EmailReader } from "./EmailReader";
 import { ResizeHandle } from "./ResizeHandle";
 import { ReplyComposer } from "./ReplyComposer";
 import { ConnectionsSettings } from "./ConnectionsSettings";
+import { IntegrationsView } from "./IntegrationsView";
 import { ScheduledPanel } from "./ScheduledPanel";
 import { DraftsPanel } from "./DraftsPanel";
 import { ContactsView } from "./ContactsView";
@@ -92,7 +93,13 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [folder, setFolder] = useState<FolderView>("inbox");
   // "mail" = folders; "contacts" = auto-derived address book (mini-CRM).
   const [view, setView] = useState<
-    "mail" | "contacts" | "triage" | "ailog" | "projects" | "todo"
+    | "mail"
+    | "contacts"
+    | "triage"
+    | "ailog"
+    | "projects"
+    | "todo"
+    | "integrations"
   >("mail");
   // "all" = unified inbox across accounts; otherwise a single account key.
   const [account, setAccount] = useState("all");
@@ -1821,6 +1828,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       )}
       {view === "triage" && (!compose || composeMinimized) && <TriageView />}
       {view === "ailog" && (!compose || composeMinimized) && <AiLogView />}
+      {view === "integrations" && (!compose || composeMinimized) && (
+        <IntegrationsView onOpenSettings={() => setShowSettings(true)} />
+      )}
       {view === "projects" && (!compose || composeMinimized) && (
         <ProjectsView
           onOpenEmail={(id) => {
