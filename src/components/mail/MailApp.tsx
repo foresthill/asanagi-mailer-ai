@@ -226,6 +226,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   const [devlogEnabled, setDevlogEnabled] = useState(false);
   const [devlogTasks, setDevlogTasks] = useState<DevlogIssue[]>([]);
   const [devlogTasksLoading, setDevlogTasksLoading] = useState(false);
+  // Nextcloud 連携（CalDAV）。TODO の期限をカレンダー予定として登録。
+  const [nextcloudEnabled, setNextcloudEnabled] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
   const selectToken = useRef(0);
@@ -586,6 +588,58 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (view === "todo" && devlogEnabled) loadDevlogTasks();
   }, [view, devlogEnabled, loadDevlogTasks]);
+
+  // ── Nextcloud 連携（CalDAV）─────────────────────────────────────────
+  const loadNextcloudStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/integrations/nextcloud");
+      const d = (await res.json()) as { configured?: boolean };
+      setNextcloudEnabled(!!d.configured);
+    } catch {
+      /* 連携は任意機能 */
+    }
+  }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadNextcloudStatus();
+  }, [loadNextcloudStatus]);
+
+  // TODO の期限を Nextcloud カレンダーに予定として登録（済みなら UID を再利用＝上書き）。
+  const addTodoToCalendar = async (todo: TodoItem) => {
+    if (!todo.due) {
+      showToast(t("nc.needDue"));
+      return;
+    }
+    showToast(t("nc.adding"));
+    try {
+      const desc = [
+        `${t("op.desc.from")}: ${todo.fromName ?? todo.fromEmail ?? ""}`,
+        `_${t("op.desc.footer")}_`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const res = await fetch("/api/integrations/nextcloud/add", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: todo.subject || t("drafts.noSubject"),
+          description: desc,
+          start: todo.due,
+          todoId: todo.id,
+          uid: todo.ncEventUid,
+        }),
+      });
+      const d = (await res.json()) as { ok: boolean; error?: string };
+      if (d.ok) {
+        showToast(t("nc.added"));
+        loadTodos();
+      } else {
+        showToast(d.error ?? t("nc.connect.fail"));
+      }
+    } catch {
+      showToast(t("nc.connect.fail"));
+    }
+  };
 
   // Live-ish clock for「期限切れ」判定（renderでDate.now禁止のReact19対応）。
   const [nowMs, setNowMs] = useState(0);
@@ -1857,6 +1911,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           devlogTasks={devlogEnabled ? devlogTasks : undefined}
           devlogLoading={devlogTasksLoading}
           onRefreshDevlog={devlogEnabled ? loadDevlogTasks : undefined}
+          onAddToCalendar={nextcloudEnabled ? addTodoToCalendar : undefined}
         />
       )}
       {/* classic: 一覧(左)｜本文(右)・幅ドラッグ可変 */}

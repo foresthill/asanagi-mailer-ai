@@ -16,6 +16,7 @@ import { ReplySignatureSection } from "./ReplySignatureSection";
 import { WritingNoteSection } from "./WritingNoteSection";
 import { OpenProjectSection } from "./OpenProjectSection";
 import { DevlogSection } from "./DevlogSection";
+import { NextcloudSection } from "./NextcloudSection";
 
 type ProviderChoice = AIProvider | "auto";
 
@@ -507,6 +508,8 @@ export function ConnectionsSettings({
             <OpenProjectSection />
 
             <DevlogSection />
+
+            <NextcloudSection />
           </div>
         )}
 

@@ -7,6 +7,8 @@ import {
   AlarmClock,
   FolderKanban,
   ScrollText,
+  CalendarPlus,
+  CalendarCheck,
   RefreshCw,
 } from "lucide-react";
 import type { TodoItem, OpWorkPackage, DevlogIssue } from "@/lib/types";
@@ -67,6 +69,7 @@ export function TodoView({
   devlogTasks,
   devlogLoading,
   onRefreshDevlog,
+  onAddToCalendar,
 }: {
   todos: TodoItem[];
   onOpenEmail: (id: string) => void;
@@ -85,6 +88,8 @@ export function TodoView({
   devlogTasks?: DevlogIssue[];
   devlogLoading?: boolean;
   onRefreshDevlog?: () => void;
+  /** Nextcloud連携が有効なときだけ渡る（期限を予定として登録）。期限必須。 */
+  onAddToCalendar?: (todo: TodoItem) => void;
 }) {
   const { t } = useI18n();
   const ordered = sortTodos(todos);
@@ -175,6 +180,26 @@ export function TodoView({
                         className="bg-transparent text-[11px] outline-none"
                       />
                     </span>
+                    {onAddToCalendar && todo.due && (
+                      <button
+                        onClick={() => onAddToCalendar(todo)}
+                        title={
+                          todo.ncEventUid ? t("nc.added") : t("nc.addTodo")
+                        }
+                        className={cn(
+                          "grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-surface-2",
+                          todo.ncEventUid
+                            ? "text-accent"
+                            : "text-fg-subtle hover:text-accent",
+                        )}
+                      >
+                        {todo.ncEventUid ? (
+                          <CalendarCheck className="size-3.5" />
+                        ) : (
+                          <CalendarPlus className="size-3.5" />
+                        )}
+                      </button>
+                    )}
                     {onSendToOpenProject && (
                       <button
                         onClick={() => onSendToOpenProject(todo)}

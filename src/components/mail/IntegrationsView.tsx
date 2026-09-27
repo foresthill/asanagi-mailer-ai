@@ -5,6 +5,7 @@ import {
   Blocks,
   FolderKanban,
   ScrollText,
+  CalendarDays,
   Check,
   Settings2,
   RefreshCw,
@@ -17,6 +18,7 @@ interface IntegStatus {
   configured: boolean;
   baseUrl?: string;
   projectName?: string;
+  calendarName?: string;
 }
 
 interface IntegDef {
@@ -43,6 +45,13 @@ const INTEGRATIONS: IntegDef[] = [
     icon: ScrollText,
     endpoint: "/api/integrations/devlog",
     descKey: "integrations.desc.task",
+  },
+  {
+    id: "nextcloud",
+    name: "Nextcloud",
+    icon: CalendarDays,
+    endpoint: "/api/integrations/nextcloud",
+    descKey: "integrations.desc.calendar",
   },
 ];
 
@@ -127,9 +136,12 @@ export function IntegrationsView({
                     )}
                   </span>
                   <span className="truncate text-[11px] text-fg-subtle">
-                    {connected && s?.projectName
-                      ? `${t(i.descKey)} · ${s.projectName}`
-                      : t(i.descKey)}
+                    {(() => {
+                      const detail = s?.projectName || s?.calendarName;
+                      return connected && detail
+                        ? `${t(i.descKey)} · ${detail}`
+                        : t(i.descKey);
+                    })()}
                   </span>
                 </div>
                 <button
