@@ -11,7 +11,9 @@ import {
   CalendarPlus,
   CalendarCheck,
   RefreshCw,
+  Send,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { TodoItem, OpWorkPackage, DevlogIssue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -62,11 +64,10 @@ export function TodoView({
   onSetDue,
   onToggleDone,
   onRemove,
-  onSendToOpenProject,
+  issueTargets,
   openProjectTasks,
   openProjectLoading,
   onRefreshOpenProject,
-  onSendToDevlog,
   devlogTasks,
   devlogLoading,
   onRefreshDevlog,
@@ -77,14 +78,20 @@ export function TodoView({
   onSetDue: (id: string, due: string | null) => void;
   onToggleDone: (id: string, done: boolean) => void;
   onRemove: (id: string) => void;
-  /** OpenProject連携が有効なときだけ渡る（work package 起票 / 既存を開く）。 */
-  onSendToOpenProject?: (todo: TodoItem) => void;
+  /** 起票（work package / issue 作成）連携の宛先（OpenProject / devlog 等・設定済みのみ）。
+   *  1件なら直接起票、複数なら小メニューで宛先選択。紐付け済みは isLinked で色分け。
+   *  空なら起票ボタンを出さない。 */
+  issueTargets?: {
+    id: string;
+    label: string;
+    icon?: LucideIcon;
+    onSend: (todo: TodoItem) => void;
+    isLinked: (todo: TodoItem) => boolean;
+  }[];
   /** OpenProject から pull した自分の未完了タスク（読み取り専用・連携有効時のみ）。 */
   openProjectTasks?: OpWorkPackage[];
   openProjectLoading?: boolean;
   onRefreshOpenProject?: () => void;
-  /** devlog連携が有効なときだけ渡る（issue 起票 / 既存を開く）。 */
-  onSendToDevlog?: (todo: TodoItem) => void;
   /** devlog から pull した未完了 issue（読み取り専用・連携有効時のみ）。 */
   devlogTasks?: DevlogIssue[];
   devlogLoading?: boolean;
@@ -104,6 +111,9 @@ export function TodoView({
   // Which row's calendar picker is open (only when 2+ calendar targets exist).
   const [calMenuFor, setCalMenuFor] = useState<string | null>(null);
   const cals = calendarTargets ?? [];
+  // Which row's 起票 picker is open (only when 2+ issue targets exist).
+  const [issueMenuFor, setIssueMenuFor] = useState<string | null>(null);
+  const issues = issueTargets ?? [];
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-bg">
@@ -244,34 +254,72 @@ export function TodoView({
                         )}
                       </div>
                     )}
-                    {onSendToOpenProject && (
-                      <button
-                        onClick={() => onSendToOpenProject(todo)}
-                        title={todo.opUrl ? t("op.open") : t("op.sendTodo")}
-                        className={cn(
-                          "grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-surface-2",
-                          todo.opUrl
-                            ? "text-accent"
-                            : "text-fg-subtle hover:text-accent",
-                        )}
-                      >
-                        <FolderKanban className="size-3.5" />
-                      </button>
-                    )}
-                    {onSendToDevlog && (
-                      <button
-                        onClick={() => onSendToDevlog(todo)}
-                        title={todo.devlogUrl ? t("dv.open") : t("dv.sendTodo")}
-                        className={cn(
-                          "grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-surface-2",
-                          todo.devlogUrl
-                            ? "text-accent"
-                            : "text-fg-subtle hover:text-accent",
-                        )}
-                      >
-                        <ScrollText className="size-3.5" />
-                      </button>
-                    )}
+                    {issues.length > 0 &&
+                      (() => {
+                        // 1件=直接起票 / 複数=小メニューで宛先選択（カレンダーと同じ作法）。
+                        const single = issues.length === 1 ? issues[0] : null;
+                        const linked = issues.some((i) => i.isLinked(todo));
+                        // 単一連携は当該連携のアイコンを維持（見た目の互換）、複数は汎用アイコン。
+                        const SingleIcon = single?.icon ?? Send;
+                        return (
+                          <div className="relative shrink-0">
+                            <button
+                              onClick={() => {
+                                if (single) single.onSend(todo);
+                                else
+                                  setIssueMenuFor((v) =>
+                                    v === todo.id ? null : todo.id,
+                                  );
+                              }}
+                              title={single ? single.label : t("issue.send")}
+                              className={cn(
+                                "grid size-7 place-items-center rounded-md transition-colors hover:bg-surface-2",
+                                linked
+                                  ? "text-accent"
+                                  : "text-fg-subtle hover:text-accent",
+                              )}
+                            >
+                              {single ? (
+                                <SingleIcon className="size-3.5" />
+                              ) : (
+                                <Send className="size-3.5" />
+                              )}
+                            </button>
+                            {issueMenuFor === todo.id && issues.length > 1 && (
+                              <>
+                                <button
+                                  aria-hidden
+                                  onClick={() => setIssueMenuFor(null)}
+                                  className="fixed inset-0 z-40 cursor-default"
+                                />
+                                <div className="absolute right-0 top-8 z-50 flex min-w-40 flex-col overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-[var(--shadow)]">
+                                  {issues.map((i) => {
+                                    const Icon = i.icon ?? Send;
+                                    return (
+                                      <button
+                                        key={i.id}
+                                        onClick={() => {
+                                          setIssueMenuFor(null);
+                                          i.onSend(todo);
+                                        }}
+                                        className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-2"
+                                      >
+                                        <Icon
+                                          className={cn(
+                                            "size-3.5",
+                                            i.isLinked(todo) && "text-accent",
+                                          )}
+                                        />
+                                        {i.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
                     <button
                       onClick={() => onRemove(todo.id)}
                       title={t("todo.remove")}
