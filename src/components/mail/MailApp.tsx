@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FolderKanban, ScrollText } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type {
   Email,
   EmailAddress,
@@ -699,6 +701,50 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     label: string;
     onAdd: (todo: TodoItem) => void;
     isAdded: (todo: TodoItem) => boolean;
+  }[];
+
+  // 起票（work package / issue 作成）連携の宛先（設定済みのものだけ）。カレンダーと同じ
+  // 「1件=直接／複数=小メニュー」作法を、メール本文（EmailReader）と TODO（TodoView）両方で使う。
+  const emailIssueTargets = [
+    opEnabled && {
+      id: "openproject" as const,
+      label: t("op.sendMail"),
+      icon: FolderKanban,
+      onSend: sendEmailToOpenProject,
+    },
+    devlogEnabled && {
+      id: "devlog" as const,
+      label: t("dv.sendMail"),
+      icon: ScrollText,
+      onSend: sendEmailToDevlog,
+    },
+  ].filter(Boolean) as {
+    id: "openproject" | "devlog";
+    label: string;
+    icon: LucideIcon;
+    onSend: (email: Email) => void;
+  }[];
+  const todoIssueTargets = [
+    opEnabled && {
+      id: "openproject" as const,
+      label: t("op.sendTodo"),
+      icon: FolderKanban,
+      onSend: sendTodoToOpenProject,
+      isLinked: (todo: TodoItem) => !!todo.opUrl,
+    },
+    devlogEnabled && {
+      id: "devlog" as const,
+      label: t("dv.sendTodo"),
+      icon: ScrollText,
+      onSend: sendTodoToDevlog,
+      isLinked: (todo: TodoItem) => !!todo.devlogUrl,
+    },
+  ].filter(Boolean) as {
+    id: "openproject" | "devlog";
+    label: string;
+    icon: LucideIcon;
+    onSend: (todo: TodoItem) => void;
+    isLinked: (todo: TodoItem) => boolean;
   }[];
 
   // Live-ish clock for「期限切れ」判定（renderでDate.now禁止のReact19対応）。
@@ -1879,16 +1925,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onMarkSafe={() => selected && markSafe(selected)}
       isTodo={isSelectedTodo}
       onToggleTodo={() => selected && toggleTodo(selected)}
-      onSendToOpenProject={
-        opEnabled
-          ? () => selected && sendEmailToOpenProject(selected)
-          : undefined
-      }
-      onSendToDevlog={
-        devlogEnabled
-          ? () => selected && sendEmailToDevlog(selected)
-          : undefined
-      }
+      issueTargets={emailIssueTargets}
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
       onOpenMessage={selectEmail}
@@ -1963,11 +2000,10 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
           onSetDue={setTodoDue}
           onToggleDone={setTodoDone}
           onRemove={removeTodoItem}
-          onSendToOpenProject={opEnabled ? sendTodoToOpenProject : undefined}
+          issueTargets={todoIssueTargets}
           openProjectTasks={opEnabled ? opTasks : undefined}
           openProjectLoading={opTasksLoading}
           onRefreshOpenProject={opEnabled ? loadOpTasks : undefined}
-          onSendToDevlog={devlogEnabled ? sendTodoToDevlog : undefined}
           devlogTasks={devlogEnabled ? devlogTasks : undefined}
           devlogLoading={devlogTasksLoading}
           onRefreshDevlog={devlogEnabled ? loadDevlogTasks : undefined}

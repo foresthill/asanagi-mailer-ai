@@ -18,12 +18,12 @@ import {
   List,
   PenLine,
   ShieldAlert,
-  FolderKanban,
-  ScrollText,
   Square,
   SquareCheck,
   Flag,
+  Send,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type {
   Email,
   FolderView,
@@ -69,8 +69,7 @@ export function EmailReader({
   onMarkSafe,
   isTodo,
   onToggleTodo,
-  onSendToOpenProject,
-  onSendToDevlog,
+  issueTargets,
   onNoteSaved,
   onOpenMessage,
   highlight,
@@ -102,10 +101,14 @@ export function EmailReader({
   isTodo?: boolean;
   /** 「あとで」トグル（TODO 追加/解除）。 */
   onToggleTodo?: () => void;
-  /** OpenProject連携が有効なときだけ渡る（このメールを work package に起票）。 */
-  onSendToOpenProject?: () => void;
-  /** devlog連携が有効なときだけ渡る（このメールを devlog issue に起票）。 */
-  onSendToDevlog?: () => void;
+  /** 起票（work package / issue 作成）連携の宛先（OpenProject / devlog 等・設定済みのみ）。
+   *  1件なら直接起票、複数なら小メニューで宛先選択。空なら起票ボタンを出さない。 */
+  issueTargets?: {
+    id: string;
+    label: string;
+    icon?: LucideIcon;
+    onSend: (email: Email) => void;
+  }[];
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
   onNoteSaved?: () => void;
   /** Re-anchor the reader to a thread message (open it as the current email). */
@@ -287,19 +290,8 @@ export function EmailReader({
             active={isTodo}
           />
         )}
-        {onSendToOpenProject && (
-          <IconBtn
-            icon={FolderKanban}
-            title={t("op.sendMail")}
-            onClick={onSendToOpenProject}
-          />
-        )}
-        {onSendToDevlog && (
-          <IconBtn
-            icon={ScrollText}
-            title={t("dv.sendMail")}
-            onClick={onSendToDevlog}
-          />
+        {issueTargets && issueTargets.length > 0 && (
+          <IssueButton targets={issueTargets} email={email} />
         )}
         {folder !== "archived" && folder !== "sent" && (
           <IconBtn
@@ -787,6 +779,78 @@ function ImportanceMenu({
                 {o.label}
               </button>
             ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 起票ボタン（メール本文ツールバー）。連携が1件なら直接起票、複数なら宛先メニュー。
+ * カレンダーの「1件=直接／複数=メニュー」作法を起票側にも適用（TodoView と対）。
+ */
+function IssueButton({
+  targets,
+  email,
+}: {
+  targets: {
+    id: string;
+    label: string;
+    icon?: LucideIcon;
+    onSend: (email: Email) => void;
+  }[];
+  email: Email;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  // 単一連携は当該連携のアイコンを維持（見た目の互換）、複数は汎用アイコンでまとめる。
+  if (targets.length === 1) {
+    const only = targets[0];
+    return (
+      <IconBtn
+        icon={only.icon ?? Send}
+        title={only.label}
+        onClick={() => only.onSend(email)}
+      />
+    );
+  }
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title={t("issue.send")}
+        className={cn(
+          "grid size-8 shrink-0 place-items-center rounded-lg transition-colors hover:bg-surface-2 hover:text-fg",
+          open ? "bg-surface-2 text-fg" : "text-fg-muted",
+        )}
+      >
+        <Send className="size-4" />
+      </button>
+      {open && (
+        <>
+          <button
+            aria-hidden
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div className="absolute left-0 top-9 z-50 flex min-w-40 flex-col overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-[var(--shadow)]">
+            {targets.map((tg) => {
+              const Icon = tg.icon ?? Send;
+              return (
+                <button
+                  key={tg.id}
+                  onClick={() => {
+                    setOpen(false);
+                    tg.onSend(email);
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-2"
+                >
+                  <Icon className="size-3.5" />
+                  {tg.label}
+                </button>
+              );
+            })}
           </div>
         </>
       )}
