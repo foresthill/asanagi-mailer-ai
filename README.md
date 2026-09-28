@@ -114,6 +114,8 @@ npm run lint     # ESLint
 - [03 — プロバイダ・同期戦略（新着のみ）・Macネイティブ](docs/03-providers-sync-native.md)
 - [04 — スレッド表示とインボックス整理（バンドル/ビュー）](docs/04-threads-and-organization.md)
 - [05 — カレンダー連携（招待メール→会議カード→Googleカレンダー登録）](docs/05-calendar-bridge.md)
+- [06 — PIIマスキング／ローカルNER](docs/06-pii-masking.md)
+- [07 — 外部ツール連携（OpenProject / devlog / Nextcloud / Google カレンダー）](docs/07-integrations.md)
 
 ## ロードマップ
 
