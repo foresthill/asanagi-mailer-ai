@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Mail } from "lucide-react";
+import { Loader2, Mail, AlertCircle } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { GmailConnectSection, type GmailView } from "./GmailConnectSection";
 import { ImapConnectSection, type ImapView } from "./ImapConnectSection";
@@ -29,6 +29,7 @@ const CHOICES: { value: EmailView["choice"]; labelKey: string }[] = [
 export function EmailConnectSection() {
   const { t } = useI18n();
   const [view, setView] = useState<EmailView | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   const [savingCutoff, setSavingCutoff] = useState(false);
 
@@ -47,8 +48,26 @@ export function EmailConnectSection() {
   }
 
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/settings/email");
-    setView((await res.json()) as EmailView);
+    // Never leave the panel spinning forever: time out, and surface any error
+    // with a retry instead of an infinite spinner (Linux desktop 500 / hang).
+    setError(null);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    try {
+      const res = await fetch("/api/settings/email", { signal: ctrl.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setView((await res.json()) as EmailView);
+    } catch (e) {
+      setError(
+        e instanceof Error && e.name === "AbortError"
+          ? "timeout"
+          : e instanceof Error
+            ? e.message
+            : "error",
+      );
+    } finally {
+      clearTimeout(timer);
+    }
   }, []);
 
   useEffect(() => {
@@ -72,6 +91,23 @@ export function EmailConnectSection() {
   }
 
   if (!view) {
+    if (error) {
+      return (
+        <div className="flex flex-col items-center gap-2 py-6 text-center text-xs text-fg-muted">
+          <AlertCircle className="size-5 text-high" />
+          <span>{t("email.loadError")}</span>
+          <span className="break-all font-mono text-[10px] text-fg-subtle">
+            {error}
+          </span>
+          <button
+            onClick={refresh}
+            className="mt-1 rounded-lg border border-border px-3 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-accent"
+          >
+            {t("aisearch.retry")}
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="grid place-items-center py-6 text-fg-muted">
         <Loader2 className="size-4 animate-spin" />

@@ -237,7 +237,9 @@ export function ConnectionsSettings({
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
-            <div className="flex items-center gap-2">
+            {/* メール設定を最上部に（まずメールを繋ぐ→次にAI）。 */}
+            <EmailConnectSection />
+            <div className="flex items-center gap-2 border-t border-border pt-4">
               <Sparkles className="size-4 text-accent" />
               <h3 className="text-xs font-semibold">{t("conn.byok")}</h3>
             </div>
@@ -500,10 +502,6 @@ export function ConnectionsSettings({
             <ReplySignatureSection />
 
             <WritingNoteSection />
-
-            <div className="border-t border-border pt-4">
-              <EmailConnectSection />
-            </div>
 
             <OpenProjectSection />
 
