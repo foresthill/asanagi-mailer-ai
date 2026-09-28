@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   ListTodo,
   ArrowUpRight,
@@ -17,6 +16,7 @@ import type { LucideIcon } from "lucide-react";
 import type { TodoItem, OpWorkPackage, DevlogIssue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { TargetMenu } from "./TargetMenu";
 
 /** ISO → <input type="datetime-local"> value (local time, no seconds). */
 function toLocalInput(iso?: string): string {
@@ -108,11 +108,8 @@ export function TodoView({
   const { t } = useI18n();
   const ordered = sortTodos(todos);
   const openCount = todos.filter((x) => !x.done).length;
-  // Which row's calendar picker is open (only when 2+ calendar targets exist).
-  const [calMenuFor, setCalMenuFor] = useState<string | null>(null);
+  // 宛先メニュー（カレンダー登録 / 起票）は TargetMenu が開閉状態を内包する。
   const cals = calendarTargets ?? [];
-  // Which row's 起票 picker is open (only when 2+ issue targets exist).
-  const [issueMenuFor, setIssueMenuFor] = useState<string | null>(null);
   const issues = issueTargets ?? [];
 
   return (
@@ -200,126 +197,38 @@ export function TodoView({
                         className="bg-transparent text-[11px] outline-none"
                       />
                     </span>
+                    {/* カレンダー登録: 期限ありのTODOのみ。1件=直接／複数=メニュー。 */}
                     {cals.length > 0 && todo.due && (
-                      <div className="relative shrink-0">
-                        <button
-                          onClick={() => {
-                            if (cals.length === 1) cals[0].onAdd(todo);
-                            else
-                              setCalMenuFor((v) =>
-                                v === todo.id ? null : todo.id,
-                              );
-                          }}
-                          title={t("nc.addTodo")}
-                          className={cn(
-                            "grid size-7 place-items-center rounded-md transition-colors hover:bg-surface-2",
-                            cals.some((c) => c.isAdded(todo))
-                              ? "text-accent"
-                              : "text-fg-subtle hover:text-accent",
-                          )}
-                        >
-                          {cals.some((c) => c.isAdded(todo)) ? (
-                            <CalendarCheck className="size-3.5" />
-                          ) : (
-                            <CalendarPlus className="size-3.5" />
-                          )}
-                        </button>
-                        {calMenuFor === todo.id && cals.length > 1 && (
-                          <>
-                            <button
-                              aria-hidden
-                              onClick={() => setCalMenuFor(null)}
-                              className="fixed inset-0 z-40 cursor-default"
-                            />
-                            <div className="absolute right-0 top-8 z-50 flex min-w-40 flex-col overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-[var(--shadow)]">
-                              {cals.map((c) => (
-                                <button
-                                  key={c.id}
-                                  onClick={() => {
-                                    setCalMenuFor(null);
-                                    c.onAdd(todo);
-                                  }}
-                                  className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-2"
-                                >
-                                  {c.isAdded(todo) ? (
-                                    <CalendarCheck className="size-3.5 text-accent" />
-                                  ) : (
-                                    <CalendarPlus className="size-3.5" />
-                                  )}
-                                  {c.label}
-                                </button>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      <TargetMenu
+                        variant="row"
+                        summaryIcon={CalendarPlus}
+                        summaryActiveIcon={CalendarCheck}
+                        summaryLabel={t("nc.addTodo")}
+                        targets={cals.map((c) => ({
+                          id: c.id,
+                          label: c.label,
+                          icon: CalendarPlus,
+                          activeIcon: CalendarCheck,
+                          active: c.isAdded(todo),
+                          onSelect: () => c.onAdd(todo),
+                        }))}
+                      />
                     )}
-                    {issues.length > 0 &&
-                      (() => {
-                        // 1件=直接起票 / 複数=小メニューで宛先選択（カレンダーと同じ作法）。
-                        const single = issues.length === 1 ? issues[0] : null;
-                        const linked = issues.some((i) => i.isLinked(todo));
-                        // 単一連携は当該連携のアイコンを維持（見た目の互換）、複数は汎用アイコン。
-                        const SingleIcon = single?.icon ?? Send;
-                        return (
-                          <div className="relative shrink-0">
-                            <button
-                              onClick={() => {
-                                if (single) single.onSend(todo);
-                                else
-                                  setIssueMenuFor((v) =>
-                                    v === todo.id ? null : todo.id,
-                                  );
-                              }}
-                              title={single ? single.label : t("issue.send")}
-                              className={cn(
-                                "grid size-7 place-items-center rounded-md transition-colors hover:bg-surface-2",
-                                linked
-                                  ? "text-accent"
-                                  : "text-fg-subtle hover:text-accent",
-                              )}
-                            >
-                              {single ? (
-                                <SingleIcon className="size-3.5" />
-                              ) : (
-                                <Send className="size-3.5" />
-                              )}
-                            </button>
-                            {issueMenuFor === todo.id && issues.length > 1 && (
-                              <>
-                                <button
-                                  aria-hidden
-                                  onClick={() => setIssueMenuFor(null)}
-                                  className="fixed inset-0 z-40 cursor-default"
-                                />
-                                <div className="absolute right-0 top-8 z-50 flex min-w-40 flex-col overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-[var(--shadow)]">
-                                  {issues.map((i) => {
-                                    const Icon = i.icon ?? Send;
-                                    return (
-                                      <button
-                                        key={i.id}
-                                        onClick={() => {
-                                          setIssueMenuFor(null);
-                                          i.onSend(todo);
-                                        }}
-                                        className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-2"
-                                      >
-                                        <Icon
-                                          className={cn(
-                                            "size-3.5",
-                                            i.isLinked(todo) && "text-accent",
-                                          )}
-                                        />
-                                        {i.label}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })()}
+                    {/* 起票: 1件=当該連携アイコンで直接／複数=メニュー。 */}
+                    {issues.length > 0 && (
+                      <TargetMenu
+                        variant="row"
+                        summaryIcon={Send}
+                        summaryLabel={t("issue.send")}
+                        targets={issues.map((i) => ({
+                          id: i.id,
+                          label: i.label,
+                          icon: i.icon ?? Send,
+                          active: i.isLinked(todo),
+                          onSelect: () => i.onSend(todo),
+                        }))}
+                      />
+                    )}
                     <button
                       onClick={() => onRemove(todo.id)}
                       title={t("todo.remove")}
