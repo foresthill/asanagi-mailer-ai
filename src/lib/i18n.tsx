@@ -650,6 +650,7 @@ const ja: Dict = {
 
   // Email account settings (EmailConnectSection)
   "email.accountTitle": "メールアカウント",
+  "email.loadError": "メール設定を読み込めませんでした。",
   "email.current": "現在: {provider}",
   "email.backend": "使用するバックエンド",
   "email.provider.gmail": "Gmail",
@@ -1357,6 +1358,7 @@ const en: Dict = {
 
   // Email account settings (EmailConnectSection)
   "email.accountTitle": "Email account",
+  "email.loadError": "Couldn't load email settings.",
   "email.current": "Current: {provider}",
   "email.backend": "Backend to use",
   "email.provider.gmail": "Gmail",
@@ -2091,6 +2093,7 @@ const fr: Dict = {
 
   // Email account settings (EmailConnectSection)
   "email.accountTitle": "Compte de messagerie",
+  "email.loadError": "Impossible de charger les paramètres de messagerie.",
   "email.current": "Actuel : {provider}",
   "email.backend": "Backend à utiliser",
   "email.provider.gmail": "Gmail",
@@ -2759,6 +2762,7 @@ const zh: Dict = {
 
   // Email account settings (EmailConnectSection)
   "email.accountTitle": "邮件账户",
+  "email.loadError": "无法加载邮件设置。",
   "email.current": "当前：{provider}",
   "email.backend": "使用的后端",
   "email.provider.gmail": "Gmail",

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getEmailSettings, saveEmailSettings } from "@/lib/store";
-import { getProvider } from "@/lib/email";
 import type { EmailSettings } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +31,10 @@ async function safeView() {
   const s = await getEmailSettings();
   let active = "error";
   try {
+    // Dynamic import so a load failure in the email/provider chain (e.g. a dep
+    // pruned from the desktop standalone bundle) degrades to active:"error"
+    // instead of 500-ing the whole settings view (Linux desktop くるくる対策)。
+    const { getProvider } = await import("@/lib/email");
     active = (await getProvider()).name;
   } catch {
     // e.g. explicit choice without credentials — surface as not-running
@@ -48,7 +51,9 @@ async function safeView() {
     },
     gmail: {
       clientIdSet: Boolean(g.clientId || process.env.GOOGLE_CLIENT_ID),
-      clientSecretSet: Boolean(g.clientSecret || process.env.GOOGLE_CLIENT_SECRET),
+      clientSecretSet: Boolean(
+        g.clientSecret || process.env.GOOGLE_CLIENT_SECRET,
+      ),
       connected: Boolean(g.refreshToken || process.env.GOOGLE_REFRESH_TOKEN),
       address: g.address,
     },
@@ -57,7 +62,9 @@ async function safeView() {
       passwordSet: Boolean(i.password),
       smtpPasswordSet: Boolean(i.smtpPassword),
       envConfigured: Boolean(
-        process.env.IMAP_HOST && process.env.IMAP_USER && process.env.IMAP_PASSWORD,
+        process.env.IMAP_HOST &&
+        process.env.IMAP_USER &&
+        process.env.IMAP_PASSWORD,
       ),
     },
   };
@@ -92,7 +99,11 @@ export async function POST(req: Request) {
   if (typeof body.inboxCutoff === "string") {
     const v = body.inboxCutoff.trim();
     if (v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v)) patch.inboxCutoff = v;
-    else return NextResponse.json({ error: "日付は YYYY-MM-DD 形式で指定してください" }, { status: 400 });
+    else
+      return NextResponse.json(
+        { error: "日付は YYYY-MM-DD 形式で指定してください" },
+        { status: 400 },
+      );
   }
   // アカウント別の表示開始日（gmail / imap）。空文字 = そのアカウントの解除。
   if (body.cutoffs) {
@@ -100,9 +111,16 @@ export async function POST(req: Request) {
     for (const acct of ["gmail", "imap"] as const) {
       const v = body.cutoffs[acct];
       // 未指定のアカウントは現在の実効値（アカウント別 ?? 旧グローバル）を維持。
-      const t = (typeof v === "string" ? v : (cur[acct]?.inboxCutoff ?? cur.inboxCutoff ?? "")).trim();
+      const t = (
+        typeof v === "string"
+          ? v
+          : (cur[acct]?.inboxCutoff ?? cur.inboxCutoff ?? "")
+      ).trim();
       if (t !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(t)) {
-        return NextResponse.json({ error: "日付は YYYY-MM-DD 形式で指定してください" }, { status: 400 });
+        return NextResponse.json(
+          { error: "日付は YYYY-MM-DD 形式で指定してください" },
+          { status: 400 },
+        );
       }
       patch[acct] = { ...(patch[acct] ?? {}), inboxCutoff: t };
     }
