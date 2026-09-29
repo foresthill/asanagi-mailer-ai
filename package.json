@@ -42,6 +42,7 @@
     "@tiptap/extension-underline": "3.25.0",
     "@tiptap/pm": "^3.25.0",
     "@tiptap/react": "^3.25.0",
+    "@typesafe-ai/sdk": "^0.6.0",
     "ai": "^6.0.195",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",

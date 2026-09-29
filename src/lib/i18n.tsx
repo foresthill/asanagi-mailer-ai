@@ -330,6 +330,9 @@ const ja: Dict = {
     "朝の一凪・重要度判定は本文を送らない軽い仕分けなので、安価なモデルでコストを大きく下げられます。",
   "conn.judge.note.b": "空欄ならメインと同じ",
   "conn.judge.note.c": "。返信生成・添削は常にメインのモデルを使います。",
+  "conn.jev": "Jev（分類専用・System One）APIキー",
+  "conn.jev.note":
+    "設定すると、重要度判定・スパム/フィッシング検知・朝の一凪の処分を Jev（TypeSafe AI）で高速・安価に分類します（型付き＋確信度）。未設定なら判定用モデルにフォールバック。返信生成・添削・要約は常にメインのLLMを使います。キーは端末内のみ。",
   "conn.active.current": "現在の有効設定: ",
   "conn.active.ok": "（接続可・{source}）",
   "conn.active.noKey": "（キー未設定）",
@@ -1041,6 +1044,9 @@ const en: Dict = {
   "conn.judge.note.b": "Empty = same as main",
   "conn.judge.note.c":
     ". Reply generation and proofreading always use the main model.",
+  "conn.jev": "Jev (classification · System One) API key",
+  "conn.jev.note":
+    "When set, importance / spam & phishing / morning-sweep disposition are classified by Jev (TypeSafe AI) — fast, cheap, typed + confidence. Falls back to the judgment model when unset. Reply generation, proofreading and summaries always use the main LLM. The key stays on this device.",
   "conn.active.current": "Active settings: ",
   "conn.active.ok": " (connectable · {source})",
   "conn.active.noKey": " (no key set)",
@@ -1768,6 +1774,9 @@ const fr: Dict = {
   "conn.judge.note.b": "Vide = identique au principal",
   "conn.judge.note.c":
     ". La génération de réponses et la relecture utilisent toujours le modèle principal.",
+  "conn.jev": "Clé API Jev (classification · System One)",
+  "conn.jev.note":
+    "Une fois définie, l'importance, le spam/hameçonnage et le tri du matin sont classés par Jev (TypeSafe AI) — rapide, économique, typé + confiance. Repli sur le modèle de jugement si non définie. La génération de réponses, la relecture et les résumés utilisent toujours le LLM principal. La clé reste sur cet appareil.",
   "conn.active.current": "Réglages actifs : ",
   "conn.active.ok": " (connectable · {source})",
   "conn.active.noKey": " (aucune clé définie)",
@@ -2479,6 +2488,9 @@ const zh: Dict = {
     "晨间一凪与重要度判定是不发送正文的轻量分拣，用更便宜的模型可大幅降低成本。",
   "conn.judge.note.b": "留空＝与主模型相同",
   "conn.judge.note.c": "。回复生成与润色始终使用主模型。",
+  "conn.jev": "Jev（分类专用 · System One）API 密钥",
+  "conn.jev.note":
+    "设置后，重要度判定、垃圾/钓鱼检测、晨间整理的处置将由 Jev（TypeSafe AI）快速、低成本地分类（类型化＋置信度）。未设置时回退到判定模型。回复生成、润色与摘要始终使用主 LLM。密钥仅保存在本机。",
   "conn.active.current": "当前生效设置：",
   "conn.active.ok": "（可连接・{source}）",
   "conn.active.noKey": "（未设置密钥）",

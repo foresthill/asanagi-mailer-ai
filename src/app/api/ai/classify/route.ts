@@ -9,6 +9,7 @@ import {
   langDirective,
 } from "@/lib/ai/prompts";
 import {
+  getAISettings,
   getJudgmentProfile,
   guessFromSignals,
   listSignals,
@@ -17,9 +18,21 @@ import {
 } from "@/lib/store";
 import { heuristicImportance, projectKeyFromSubject } from "@/lib/importance";
 import { detectThreat } from "@/lib/threat";
+import { isJevEnabled, jevClassify } from "@/lib/ai/jev";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage, logJudgment } from "@/lib/db";
 import type { Email, Importance } from "@/lib/types";
+
+/** Threat の最終判定（safe veto／AI単独phishingは不採用でheuristicに委ねる／spamは採用）。 */
+function resolveThreat(
+  aiThreat: "spam" | "phishing" | undefined,
+  heuristic: "spam" | "phishing" | undefined,
+  isSafe: boolean,
+): "spam" | "phishing" | undefined {
+  if (isSafe) return undefined;
+  if (aiThreat === "phishing") return heuristic; // AI単独phishingは不採用
+  return aiThreat ?? heuristic;
+}
 
 export const maxDuration = 30;
 
@@ -89,6 +102,38 @@ export async function POST(req: Request) {
   }
 
   const cfg = await loadAIConfig();
+  const ai = await getAISettings();
+
+  // Jev（System One 分類モデル）: キーがあれば分類は Jev に載せる（高速・安価・型付き）。
+  // 失敗時は下の LLM / ヒューリスティックへフォールバックする。
+  if (isJevEnabled(ai)) {
+    try {
+      const masker = new PiiMasker();
+      const mask = (s?: string) =>
+        cfg.piiMask && s ? masker.mask(s) : (s ?? "");
+      const res = await jevClassify(ai.jevApiKey!.trim(), {
+        subject: mask(email.subject),
+        from: `${email.from.name ?? ""} <${mask(email.from.email)}>`.trim(),
+        body: mask(email.body),
+      });
+      const finalThreat = resolveThreat(res.threat, threat, isSafe);
+      const reason = `Jev（System One）判定・確信度 ${Math.round(res.importanceConfidence * 100)}%`;
+      record(email, res.importance, reason, "jev");
+      logAiUsage("classify", "jev", undefined, undefined, {
+        prompt: "[jev systemOne] importance + threat",
+        response: JSON.stringify(res),
+      });
+      return NextResponse.json({
+        importance: res.importance,
+        reason,
+        source: "jev",
+        threat: finalThreat,
+      });
+    } catch {
+      // Jev 失敗 → 下の LLM / ヒューリスティックにフォールバック。
+    }
+  }
+
   if (!cfg.configured) {
     // Keyword fallback (shared with the list annotator) so the UI still works.
     const importance = heuristicImportance(email);
@@ -152,20 +197,11 @@ export async function POST(req: Request) {
     //    ドメイン不一致＝高精度）が検出したときのみ。
     // 3. AI の "spam"（害の小さい宣伝・勧誘）は AI 単独でも採用する。
     const aiThreat = object.threat === "none" ? undefined : object.threat;
-    let finalThreat: "spam" | "phishing" | undefined;
-    if (isSafe) {
-      finalThreat = undefined;
-    } else if (aiThreat === "phishing") {
-      // AI 単独の phishing は不採用。ヒューリスティックの結果に委ねる。
-      finalThreat = threat;
-    } else {
-      finalThreat = aiThreat ?? threat;
-    }
     return NextResponse.json({
       importance: object.importance,
       reason: masker.unmask(object.reason),
       source: "ai",
-      threat: finalThreat,
+      threat: resolveThreat(aiThreat, threat, isSafe),
     });
   } catch (err) {
     return NextResponse.json(

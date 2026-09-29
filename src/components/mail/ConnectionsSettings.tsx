@@ -33,6 +33,7 @@ interface View {
   piiMask: boolean;
   nerMask: boolean;
   keys: Record<AIProvider, KeyStatus>;
+  jevKey: KeyStatus;
   defaultModels: Record<AIProvider, string>;
   cheapModels: Record<AIProvider, string>;
   active: {
@@ -114,6 +115,8 @@ export function ConnectionsSettings({
   const [keyInputs, setKeyInputs] = useState<
     Partial<Record<AIProvider, string>>
   >({});
+  // Jev (TypeSafe) key typed this session; undefined = untouched, "" = clear.
+  const [jevKeyInput, setJevKeyInput] = useState<string | undefined>(undefined);
   const [test, setTest] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -134,6 +137,7 @@ export function ConnectionsSettings({
       setJudgmentModel(data.judgmentModel ?? "");
       setBaseUrl(data.baseUrl ?? "");
       setKeyInputs({});
+      setJevKeyInput(undefined);
     } finally {
       setLoading(false);
     }
@@ -159,11 +163,20 @@ export function ConnectionsSettings({
     const res = await fetch("/api/settings/ai", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ provider, model, judgmentModel, baseUrl, keys }),
+      body: JSON.stringify({
+        provider,
+        model,
+        judgmentModel,
+        baseUrl,
+        keys,
+        // Only send the Jev key when the user touched the field (undefined = keep).
+        ...(jevKeyInput !== undefined ? { jevApiKey: jevKeyInput } : {}),
+      }),
     });
     const data = (await res.json()) as View & { ok: boolean };
     setView(data);
     setKeyInputs({});
+    setJevKeyInput(undefined);
     onSaved(data.active.configured);
     return data;
   }
@@ -391,6 +404,45 @@ export function ConnectionsSettings({
                 {t("conn.judge.note.a")}
                 <strong>{t("conn.judge.note.b")}</strong>
                 {t("conn.judge.note.c")}
+              </span>
+            </label>
+
+            {/* Jev（分類専用モデル）— 設定すると重要度/脅威/朝の一凪の分類を Jev に */}
+            <label className="flex flex-col gap-1.5 rounded-xl border border-border bg-bg px-3 py-2.5">
+              <span className="flex items-center gap-2 text-xs font-medium text-fg-muted">
+                {t("conn.jev")}
+                {view?.jevKey.set && (
+                  <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
+                    {t("conn.keySet").replace(
+                      "{last4}",
+                      view.jevKey.last4 ?? "",
+                    )}
+                  </span>
+                )}
+              </span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={jevKeyInput ?? ""}
+                onChange={(e) => setJevKeyInput(e.target.value)}
+                placeholder={
+                  view?.jevKey.set
+                    ? t("conn.keyPlaceholder.change")
+                    : "ts-... (TypeSafe API key)"
+                }
+                className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+              />
+              {view?.jevKey.set && (
+                <button
+                  type="button"
+                  onClick={() => setJevKeyInput("")}
+                  className="self-start text-[11px] text-fg-subtle underline hover:text-high"
+                >
+                  {t("conn.keyClear")}
+                </button>
+              )}
+              <span className="text-[11px] leading-relaxed text-fg-subtle">
+                {t("conn.jev.note")}
               </span>
             </label>
 

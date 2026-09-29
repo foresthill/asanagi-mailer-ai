@@ -6,6 +6,7 @@ import { SWEEP_SYSTEM, profileBlock, langDirective } from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage } from "@/lib/db";
 import {
+  getAISettings,
   getJudgmentProfile,
   getSweptIds,
   guessFromSignals,
@@ -14,6 +15,7 @@ import {
   listSweepActions,
 } from "@/lib/store";
 import { heuristicImportance } from "@/lib/importance";
+import { isJevEnabled, jevSweep } from "@/lib/ai/jev";
 import type { Email } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -117,6 +119,54 @@ export async function POST(req: Request) {
   }
 
   const cfg = await loadAIConfig();
+  const ai = await getAISettings();
+
+  // Jev（System One）: 未判定分を Jev で処分判定（高速・安価・型付き）。1メール=1コール
+  // なので控えめな並列で回す。失敗時は下の LLM / 簡易判定にフォールバック。
+  if (undecided.length > 0 && isJevEnabled(ai)) {
+    try {
+      const masker = new PiiMasker();
+      const mask = (s?: string) =>
+        cfg.piiMask && s ? masker.mask(s) : (s ?? "");
+      const key = ai.jevApiKey!.trim();
+      const done: SweepItem[] = [];
+      for (let i = 0; i < undecided.length; i += 8) {
+        const chunk = undecided.slice(i, i + 8);
+        const rs = await Promise.all(
+          chunk.map(async (e) => {
+            const r = await jevSweep(key, {
+              subject: mask(e.subject),
+              from: `${mask(e.from.name ?? "")} <${mask(e.from.email)}>`.trim(),
+              body: mask(e.snippet),
+            });
+            return { e, r };
+          }),
+        );
+        for (const { e, r } of rs) {
+          done.push({
+            id: e.id,
+            ...disp(e),
+            action: r.disposition,
+            reason: `Jev・確信度 ${Math.round(r.confidence * 100)}%`,
+            source: "ai",
+          });
+        }
+      }
+      items.push(...done);
+      logAiUsage("sweep", "jev", undefined, undefined, {
+        prompt: `[jev systemOne] ${undecided.length} items (disposition + importance)`,
+        response: "(per-item typed answers)",
+      });
+      return NextResponse.json({ items, ai: true });
+    } catch (err) {
+      console.warn(
+        "[sweep] Jev フォールバック:",
+        err instanceof Error ? err.message : err,
+      );
+      // fall through to LLM / heuristic below
+    }
+  }
+
   if (!cfg.configured || undecided.length === 0) {
     // No AI key → keyword heuristic only (free).
     for (const e of undecided) items.push(heuristicItem(e));
