@@ -217,6 +217,13 @@ export interface AISettings {
   /** API keys keyed by provider. Stored locally only. */
   keys?: Partial<Record<AIProvider, string>>;
   /**
+   * TypeSafe AI (Jev / System One) API key. When set, the classification tasks
+   * (importance / threat / 朝の一凪の処分) run on Jev instead of the LLM —
+   * typed values + confidence, far faster/cheaper for classification. Reply
+   * drafting / 添削 / 要約 stay on the LLM (Jev doesn't generate text). Local only.
+   */
+  jevApiKey?: string;
+  /**
    * Custom base URL for the `openai` provider — points at any OpenAI-compatible
    * endpoint (e.g. a local/on-prem Ollama's `/v1`, http://localhost:11434/v1).
    * Empty → the provider's default endpoint. Lets the mail AI run fully on-prem

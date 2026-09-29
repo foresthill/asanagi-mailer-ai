@@ -5,7 +5,12 @@ import type { AIProvider, AISettings } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const PROVIDERS: readonly AIProvider[] = ["anthropic", "openai", "openrouter", "gateway"];
+const PROVIDERS: readonly AIProvider[] = [
+  "anthropic",
+  "openai",
+  "openrouter",
+  "gateway",
+];
 
 /** Never return the raw key — only whether it's set and its last 4 chars. */
 function maskKey(key?: string): { set: boolean; last4?: string } {
@@ -27,6 +32,7 @@ async function safeView() {
     piiMask: s.piiMask ?? true,
     nerMask: s.nerMask ?? false,
     keys,
+    jevKey: maskKey(s.jevApiKey),
     defaultModels: DEFAULT_MODELS,
     cheapModels: CHEAP_MODELS,
     active: {
@@ -52,12 +58,17 @@ export async function POST(req: Request) {
   }
 
   const patch: AISettings = {};
-  if (body.provider && (body.provider === "auto" || PROVIDERS.includes(body.provider))) {
+  if (
+    body.provider &&
+    (body.provider === "auto" || PROVIDERS.includes(body.provider))
+  ) {
     patch.provider = body.provider;
   }
   if (typeof body.model === "string") patch.model = body.model;
-  if (typeof body.judgmentModel === "string") patch.judgmentModel = body.judgmentModel;
+  if (typeof body.judgmentModel === "string")
+    patch.judgmentModel = body.judgmentModel;
   if (typeof body.baseUrl === "string") patch.baseUrl = body.baseUrl.trim();
+  if (typeof body.jevApiKey === "string") patch.jevApiKey = body.jevApiKey; // "" clears (store)
   if (typeof body.piiMask === "boolean") patch.piiMask = body.piiMask;
   if (typeof body.nerMask === "boolean") patch.nerMask = body.nerMask;
   if (body.keys && typeof body.keys === "object") {

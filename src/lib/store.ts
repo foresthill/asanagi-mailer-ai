@@ -82,6 +82,9 @@ export async function saveAISettings(patch: AISettings): Promise<AISettings> {
     }
     if (Object.keys(next.keys).length === 0) delete next.keys;
   }
+  // Jev key: blank clears it (like the provider keys).
+  if (next.jevApiKey !== undefined && !next.jevApiKey.trim())
+    delete next.jevApiKey;
   await writeJson(AI_SETTINGS, next);
   return next;
 }
