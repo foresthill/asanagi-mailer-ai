@@ -1,5 +1,34 @@
 use std::path::{Path, PathBuf};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Manager;
+
+/// Open a file or folder with the OS default handler (file manager / text
+/// viewer). Used by the Help menu so users can reach logs from the GUI instead
+/// of `cat` — and it works even when the Next.js server never started.
+fn open_in_os(path: &Path) {
+    #[cfg(target_os = "linux")]
+    let prog = "xdg-open";
+    #[cfg(target_os = "macos")]
+    let prog = "open";
+    #[cfg(target_os = "windows")]
+    let prog = "explorer";
+    if let Err(e) = std::process::Command::new(prog).arg(path).spawn() {
+        log::error!("open_in_os failed for {}: {e}", path.display());
+    }
+}
+
+/// Read the last ~`max` bytes of a log file for display (whole file if smaller).
+/// Returns a placeholder line when the file is missing/unreadable so the error
+/// page always shows *something* rather than a blank.
+fn read_log_tail(path: &Path, max: u64) -> String {
+    match std::fs::read(path) {
+        Ok(bytes) => {
+            let start = bytes.len().saturating_sub(max as usize);
+            String::from_utf8_lossy(&bytes[start..]).into_owned()
+        }
+        Err(e) => format!("(読み込めません: {} — {e})", path.display()),
+    }
+}
 
 /// Release builds run the bundled Next.js standalone server with a **bundled
 /// Node runtime** and point the window at it; dev builds use `devUrl` (next dev
@@ -166,6 +195,7 @@ fn start_server(handle: &tauri::AppHandle) {
     }
 
     let handle = handle.clone();
+    let data_dir_for_thread = data_dir.clone();
     std::thread::spawn(move || {
         // Wait (up to ~20s) for the server to accept connections, then load it.
         let mut up = false;
@@ -186,13 +216,98 @@ fn start_server(handle: &tauri::AppHandle) {
                     Err(e) => log::error!("bad server url: {e}"),
                 }
             } else {
-                // The server never came up — show an actionable error instead of
-                // a blank/frozen window.
+                // The server never came up — show an actionable error with the
+                // actual logs embedded (+ a Copy button), so the user doesn't
+                // need a terminal / `cat`. The Help menu opens the same logs.
                 log::error!("server did not start within timeout (port {port})");
-                let _ = win.eval(
-                    "document.documentElement.innerHTML = '<div style=\"font-family:system-ui,sans-serif;max-width:40rem;margin:3rem auto;padding:0 1.5rem;line-height:1.8;color:#222\"><h2>ローカルサーバを起動できませんでした</h2><p>Node ランタイムはアプリに同梱されているため、通常インストールは不要です。何度か再起動しても直らない場合は、詳細ログをご確認ください。</p><p>ログ: データフォルダの <code>server.log</code>（Node サーバ）と、アプリログ <code>logs/asanagi.log</code>（起動処理）。Linux では <code>~/.local/share/com.foresthill.asanagi/</code> 配下です。この内容を開発者にお知らせください。</p></div>'",
+                let app_log = handle
+                    .path()
+                    .app_log_dir()
+                    .ok()
+                    .map(|d| d.join("asanagi.log"));
+                let server_log = data_dir_for_thread.as_ref().map(|d| d.join("server.log"));
+                let combined = format!(
+                    "=== logs/asanagi.log（起動処理） ===\n{}\n\n=== server.log（Node サーバ） ===\n{}",
+                    app_log
+                        .as_deref()
+                        .map(|p| read_log_tail(p, 16 * 1024))
+                        .unwrap_or_else(|| "(ログの場所を特定できません)".into()),
+                    server_log
+                        .as_deref()
+                        .map(|p| read_log_tail(p, 16 * 1024))
+                        .unwrap_or_else(|| "(ログの場所を特定できません)".into()),
                 );
+                // Embed the log text as a JSON string literal (serde handles all
+                // escaping), then set it via textContent to dodge HTML/JS injection.
+                let txt = serde_json::to_string(&combined)
+                    .unwrap_or_else(|_| "\"(ログを表示できません)\"".into());
+                let js = ERROR_PAGE_JS.replace("__LOG_TEXT__", &txt);
+                let _ = win.eval(&js);
             }
+        }
+    });
+}
+
+/// The error page shown when the local server never comes up. `__LOG_TEXT__` is
+/// replaced with a JSON string of the log tail; the page renders it read-only
+/// with a Copy button and points at the Help menu for the log folder.
+const ERROR_PAGE_JS: &str = r#"(function(){
+  var txt = __LOG_TEXT__;
+  document.documentElement.innerHTML =
+    '<div style="font-family:system-ui,sans-serif;max-width:52rem;margin:2.5rem auto;padding:0 1.5rem;line-height:1.7;color:#222">'
+    + '<h2 style="margin:0 0 .5rem">ローカルサーバを起動できませんでした</h2>'
+    + '<p style="margin:.3rem 0">Node ランタイムはアプリに同梱されているため通常インストールは不要です。何度か再起動しても直らない場合は、下のログを開発者にお知らせください。</p>'
+    + '<p style="margin:.3rem 0;color:#555">メニューバーの <b>ヘルプ → ログフォルダを開く</b> からも同じログを開けます。</p>'
+    + '<div style="display:flex;gap:.5rem;margin:.8rem 0"><button id="asanagi-copy" style="padding:.4rem .9rem;border:1px solid #888;border-radius:.4rem;background:#f5f5f5;cursor:pointer;font-size:.9rem">ログをコピー</button></div>'
+    + '<pre id="asanagi-log" style="background:#111;color:#eee;padding:1rem;border-radius:.5rem;max-height:24rem;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:.8rem;line-height:1.5"></pre>'
+    + '</div>';
+  document.getElementById('asanagi-log').textContent = txt;
+  document.getElementById('asanagi-copy').onclick = function(){
+    navigator.clipboard.writeText(txt).then(function(){ document.getElementById('asanagi-copy').textContent='コピーしました'; });
+  };
+})();"#;
+
+/// Native Help menu → open the log folder / individual log files with the OS
+/// default app. Native so it works even when the web UI failed to load.
+fn install_menu(app: &tauri::App) {
+    let build = || -> tauri::Result<()> {
+        let open_dir = MenuItemBuilder::with_id("open_log_dir", "ログフォルダを開く").build(app)?;
+        let open_app_log =
+            MenuItemBuilder::with_id("open_app_log", "アプリログを表示 (asanagi.log)").build(app)?;
+        let open_server_log =
+            MenuItemBuilder::with_id("open_server_log", "サーバログを表示 (server.log)").build(app)?;
+        let help = SubmenuBuilder::new(app, "ヘルプ")
+            .items(&[&open_dir, &open_app_log, &open_server_log])
+            .build()?;
+        let menu = MenuBuilder::new(app).items(&[&help]).build()?;
+        app.set_menu(menu)?;
+        Ok(())
+    };
+    if let Err(e) = build() {
+        log::error!("install_menu failed: {e}");
+        return;
+    }
+    app.on_menu_event(move |app, event| {
+        let log_dir = app.path().app_log_dir().ok();
+        let data_dir = app.path().app_data_dir().ok();
+        match event.id().as_ref() {
+            "open_log_dir" => {
+                // Prefer the log dir; fall back to the data dir (server.log lives there).
+                if let Some(d) = log_dir.or(data_dir) {
+                    open_in_os(&d);
+                }
+            }
+            "open_app_log" => {
+                if let Some(d) = log_dir {
+                    open_in_os(&d.join("asanagi.log"));
+                }
+            }
+            "open_server_log" => {
+                if let Some(d) = data_dir {
+                    open_in_os(&d.join("server.log"));
+                }
+            }
+            _ => {}
         }
     });
 }
@@ -219,6 +334,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(log_plugin())
         .setup(|app| {
+            // Native Help menu (log access) — available in both dev and release.
+            install_menu(app);
             // Release: launch the bundled standalone server. Dev: use devUrl.
             if !cfg!(debug_assertions) {
                 start_server(app.handle());
