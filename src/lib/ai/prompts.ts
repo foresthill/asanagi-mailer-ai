@@ -142,14 +142,23 @@ export const PROJECTS_SYSTEM = `あなたは、業務メールの履歴から「
  *  + masked sender/date). One line per thread — bodies are NOT sent whole. */
 export function projectsContext(
   threads: { date: string; from: string; subject: string; snippet: string }[],
+  excludedLabels: string[] = [],
 ): string {
-  return [
+  const parts = [
     "## スレッド要約（新しい順）",
     ...threads.map(
       (t, i) =>
         `${i + 1}. [${t.date.slice(0, 10)}] From: ${t.from}\n   件名: ${t.subject}\n   冒頭: ${t.snippet.slice(0, 160)}`,
     ),
-  ].join("\n");
+  ];
+  if (excludedLabels.length > 0) {
+    parts.push(
+      "",
+      "## 除外指定（ユーザーが「案件ではない」と判断済み。抽出しないこと）",
+      ...excludedLabels.map((l) => `- ${l}`),
+    );
+  }
+  return parts.join("\n");
 }
 
 export const SUBJECT_SYSTEM = `あなたはメールの件名を考えるアシスタントです。与えられた本文にふさわしい件名を1つだけ作ります。

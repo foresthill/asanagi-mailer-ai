@@ -60,6 +60,9 @@ const ja: Dict = {
   "projects.empty":
     "まだ案件がありません。「メール履歴から更新」で受信箱から抽出します。",
   "projects.noMatch": "該当なし。条件を変えてください。",
+  "projects.exclude": "この案件を除外（今後も出さない）",
+  "projects.excludedCount": "除外 {n} 件",
+  "projects.excludedReset": "リセット",
   "projects.openLatest": "最新メールを開く",
   "projects.genFailed": "生成に失敗しました",
   "nav.projects.title": "メール履歴から抽出した案件の進捗・次アクション",
@@ -764,6 +767,9 @@ const en: Dict = {
   "projects.empty":
     "No projects yet. Use 'Update from email history' to extract from the inbox.",
   "projects.noMatch": "No matches. Try different filters.",
+  "projects.exclude": "Exclude this (won't show again)",
+  "projects.excludedCount": "{n} excluded",
+  "projects.excludedReset": "reset",
   "projects.openLatest": "Open latest email",
   "projects.genFailed": "Generation failed",
   "nav.projects.title":
@@ -1473,6 +1479,9 @@ const fr: Dict = {
   "projects.empty":
     "Aucun projet. Utilisez « Mettre à jour depuis l'historique » pour extraire de la boîte de réception.",
   "projects.noMatch": "Aucun résultat. Modifiez les filtres.",
+  "projects.exclude": "Exclure (ne plus afficher)",
+  "projects.excludedCount": "{n} exclus",
+  "projects.excludedReset": "réinitialiser",
   "projects.openLatest": "Ouvrir le dernier e-mail",
   "projects.genFailed": "Échec de la génération",
   "nav.projects.title":
@@ -2207,6 +2216,9 @@ const zh: Dict = {
   "projects.prio.low": "低",
   "projects.empty": "暂无项目。请用「从邮件历史更新」从收件箱提取。",
   "projects.noMatch": "无匹配项。请尝试其他筛选条件。",
+  "projects.exclude": "排除该案件（今后不再显示）",
+  "projects.excludedCount": "已排除 {n} 项",
+  "projects.excludedReset": "重置",
   "projects.openLatest": "打开最新邮件",
   "projects.genFailed": "生成失败",
   "nav.projects.title": "从邮件历史提取的项目——进度与后续行动",
