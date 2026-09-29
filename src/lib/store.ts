@@ -7,7 +7,9 @@ import type {
   EmailSettings,
   ImportanceSignal,
   Importance,
+  Project,
   ProjectHub,
+  ExcludedProject,
   ScheduledSend,
   SavedDraft,
   ContactMeta,
@@ -262,6 +264,84 @@ export async function getProjectHub(): Promise<ProjectHub> {
 
 export async function saveProjectHub(hub: ProjectHub): Promise<void> {
   await writeJson(PROJECTS, hub);
+}
+
+// 除外した案件の学習（無関係な案件を今後の生成から弾く）。
+const EXCLUDED_PROJECTS = "excluded-projects.json";
+
+/** 正規化: 記号・空白を除いて比較しやすくする（org/name のゆらぎ対策）。 */
+function normProject(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .replace(/[\s/／・（）()、,，。.．\-–—_|]/g, "");
+}
+
+export async function listExcludedProjects(): Promise<ExcludedProject[]> {
+  return readJson<ExcludedProject[]>(EXCLUDED_PROJECTS, []);
+}
+
+/** この案件を除外として学習（案件名＋相手先org）。同じ key は上書き。 */
+export async function addExcludedProject(
+  project: Pick<Project, "name" | "parties">,
+  now = new Date(),
+): Promise<ExcludedProject[]> {
+  const rows = await readJson<ExcludedProject[]>(EXCLUDED_PROJECTS, []);
+  const key = normProject(project.name);
+  if (!key) return rows;
+  const orgs = Array.from(
+    new Set(
+      (project.parties ?? []).map((p) => normProject(p.org)).filter(Boolean),
+    ),
+  );
+  const entry: ExcludedProject = {
+    key,
+    label: project.name,
+    orgs,
+    addedAt: now.toISOString(),
+  };
+  const idx = rows.findIndex((r) => r.key === key);
+  if (idx >= 0) rows[idx] = entry;
+  else rows.push(entry);
+  await writeJson(EXCLUDED_PROJECTS, rows);
+  return rows;
+}
+
+/** 除外を1件解除（key 指定）。 */
+export async function removeExcludedProject(
+  key: string,
+): Promise<ExcludedProject[]> {
+  const rows = await readJson<ExcludedProject[]>(EXCLUDED_PROJECTS, []);
+  const kept = rows.filter((r) => r.key !== key);
+  if (kept.length !== rows.length) await writeJson(EXCLUDED_PROJECTS, kept);
+  return kept;
+}
+
+/** 全解除。 */
+export async function clearExcludedProjects(): Promise<void> {
+  await writeJson(EXCLUDED_PROJECTS, []);
+}
+
+/**
+ * この案件が除外対象か（生成後の post-filter 用）。案件名の完全一致、または相手先org
+ * の部分一致（3文字以上）で判定。再生成で名前が言い換わっても org で弾ける。
+ */
+export function isProjectExcluded(
+  project: Pick<Project, "name" | "parties">,
+  rules: ExcludedProject[],
+): boolean {
+  if (rules.length === 0) return false;
+  const pn = normProject(project.name);
+  const porgs = (project.parties ?? [])
+    .map((p) => normProject(p.org))
+    .filter(Boolean);
+  return rules.some((r) => {
+    if (pn && r.key && pn === r.key) return true;
+    return r.orgs.some(
+      (ro) =>
+        ro.length >= 3 &&
+        porgs.some((po) => po.includes(ro) || ro.includes(po)),
+    );
+  });
 }
 
 // ---------------------------------------------------------------------------

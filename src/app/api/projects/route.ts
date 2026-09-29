@@ -10,14 +10,45 @@ import {
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { cachedList, logAiUsage } from "@/lib/db";
 import { listAccounts } from "@/lib/email/accounts";
-import { getProjectHub, saveProjectHub } from "@/lib/store";
+import {
+  getProjectHub,
+  saveProjectHub,
+  listExcludedProjects,
+  addExcludedProject,
+  isProjectExcluded,
+} from "@/lib/store";
 import type { Email, Project, ProjectHub } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/** Hub + how many projects are currently learned as "excluded" (for the reset UI). */
+async function withCount(hub: ProjectHub) {
+  return { ...hub, excludedCount: (await listExcludedProjects()).length };
+}
+
 /** GET → the saved project hub (pull型: generated on demand, not per view). */
 export async function GET() {
-  return NextResponse.json(await getProjectHub());
+  return NextResponse.json(await withCount(await getProjectHub()));
+}
+
+/**
+ * DELETE ?id=... → この案件をハブから外し、除外として学習する（今後の生成でも弾く）。
+ * 無関係な案件（OSS通知・無関係な営業）を「関係ない」と1クリックで片付ける用。
+ */
+export async function DELETE(req: Request) {
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id)
+    return NextResponse.json({ error: "id が必要です" }, { status: 400 });
+  const hub = await getProjectHub();
+  const target = hub.projects.find((p) => p.id === id);
+  if (!target) return NextResponse.json(await withCount(hub)); // 既に無い＝冪等
+  await addExcludedProject({ name: target.name, parties: target.parties });
+  const next: ProjectHub = {
+    ...hub,
+    projects: hub.projects.filter((p) => p.id !== id),
+  };
+  await saveProjectHub(next);
+  return NextResponse.json(await withCount(next));
 }
 
 const schema = z.object({
@@ -120,7 +151,13 @@ export async function POST(req: Request) {
       subject: cfg.piiMask ? masker.mask(e.subject) : e.subject,
       snippet: cfg.piiMask ? masker.mask(e.snippet) : e.snippet,
     }));
-    const prompt = projectsContext(rows);
+    // 除外学習: プロンプトにも「出さない」ヒントを入れつつ（節約）、生成後にも
+    // post-filter で確実に弾く（LLMが指示を無視しても漏れないように）。
+    const excluded = await listExcludedProjects();
+    const prompt = projectsContext(
+      rows,
+      excluded.map((e) => e.label),
+    );
 
     const system = PROJECTS_SYSTEM + langDirective(locale);
     const { object, usage } = await generateObject({
@@ -172,9 +209,11 @@ export async function POST(req: Request) {
       anchorId: anchorOf(p.sources),
     }));
 
-    const hub: ProjectHub = { projects, generatedAt };
+    // 学習済みの除外を確実に反映（生成後フィルタ）。除外した案件・相手先は出さない。
+    const kept = projects.filter((p) => !isProjectExcluded(p, excluded));
+    const hub: ProjectHub = { projects: kept, generatedAt };
     await saveProjectHub(hub);
-    return NextResponse.json(hub);
+    return NextResponse.json(await withCount(hub));
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "生成に失敗しました" },

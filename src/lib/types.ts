@@ -325,6 +325,21 @@ export interface ProjectHub {
   generatedAt?: string;
 }
 
+/**
+ * 除外した案件の学習データ。プロジェクト・ハブは AI 抽出（pull型）なので、無関係な
+ * 案件（bitcoin 等のOSS通知・自分のビジネスと無関係な営業）を除外したら、その特徴を
+ * 憶えて次回以降の生成から弾く（プロンプト依存にせず生成後に post-filter で確実に）。
+ */
+export interface ExcludedProject {
+  /** 正規化した案件名（一意キー・解除にも使う）。 */
+  key: string;
+  /** 表示用の元の案件名。 */
+  label: string;
+  /** 正規化した相手先org群（再生成で名前が変わっても org で弾けるように）。 */
+  orgs: string[];
+  addedAt: string;
+}
+
 /** 連絡先ラベル: 重要取引先 / 通常 / 迷惑（スパム）。 */
 export type ContactLabel = "vip" | "normal" | "spam";
 

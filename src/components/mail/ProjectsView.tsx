@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Search,
   Sparkles,
+  EyeOff,
 } from "lucide-react";
 import type { Project, ProjectHub } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -75,6 +76,7 @@ export function ProjectsView({
 }) {
   const { t, locale } = useI18n();
   const [hub, setHub] = useState<ProjectHub | null>(null);
+  const [excludedCount, setExcludedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +89,9 @@ export function ProjectsView({
     fetch("/api/projects")
       .then((r) => r.json())
       .then((d) => {
-        if (alive) setHub(d);
+        if (!alive) return;
+        setHub(d);
+        setExcludedCount(d?.excludedCount ?? 0);
       })
       .catch(() => {})
       .finally(() => {
@@ -97,6 +101,35 @@ export function ProjectsView({
       alive = false;
     };
   }, []);
+
+  // 無関係な案件を除外（＝ハブから外し、今後も出さないよう学習）。
+  async function exclude(id: string) {
+    setHub((h) =>
+      h ? { ...h, projects: h.projects.filter((p) => p.id !== id) } : h,
+    );
+    try {
+      const res = await fetch(`/api/projects?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setHub(d);
+        setExcludedCount(d?.excludedCount ?? 0);
+      }
+    } catch {
+      /* optimistic; a regenerate reconciles */
+    }
+  }
+
+  // 除外の学習をリセット（次回の再生成で戻る）。
+  async function resetExclusions() {
+    try {
+      await fetch("/api/projects/excluded", { method: "DELETE" });
+      setExcludedCount(0);
+    } catch {
+      /* best-effort */
+    }
+  }
 
   async function generate() {
     setGenerating(true);
@@ -110,6 +143,7 @@ export function ProjectsView({
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? t("projects.genFailed"));
       setHub(d);
+      setExcludedCount(d?.excludedCount ?? 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("projects.genFailed"));
     } finally {
@@ -157,6 +191,21 @@ export function ProjectsView({
                     minute: "2-digit",
                   }),
                 )}
+              </span>
+            )}
+            {excludedCount > 0 && (
+              <span className="ml-1">
+                ／{" "}
+                {t("projects.excludedCount").replace(
+                  "{n}",
+                  String(excludedCount),
+                )}{" "}
+                <button
+                  onClick={resetExclusions}
+                  className="underline hover:text-accent"
+                >
+                  {t("projects.excludedReset")}
+                </button>
               </span>
             )}
           </p>
@@ -265,10 +314,18 @@ export function ProjectsView({
               <div
                 key={p.id}
                 className={cn(
-                  "grid grid-cols-1 gap-2 px-4 py-3.5 text-sm sm:grid-cols-[1.4fr_1.2fr_1fr_2fr] sm:gap-4",
+                  "group relative grid grid-cols-1 gap-2 px-4 py-3.5 pr-9 text-sm sm:grid-cols-[1.4fr_1.2fr_1fr_2fr] sm:gap-4",
                   i > 0 && "border-t border-border",
                 )}
               >
+                {/* 無関係な案件を除外（＋学習）。 */}
+                <button
+                  onClick={() => exclude(p.id)}
+                  title={t("projects.exclude")}
+                  className="absolute right-2 top-2.5 grid size-6 place-items-center rounded-md text-fg-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-high group-hover:opacity-100"
+                >
+                  <EyeOff className="size-3.5" />
+                </button>
                 {/* Project + status */}
                 <div>
                   <div className="font-semibold">{p.name}</div>
