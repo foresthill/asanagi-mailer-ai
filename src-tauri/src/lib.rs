@@ -208,8 +208,14 @@ fn start_server(handle: &tauri::AppHandle) {
         }
         if let Some(win) = handle.get_webview_window("main") {
             if up {
-                log::info!("server up on {port}; navigating window");
-                match format!("http://localhost:{port}").parse() {
+                // Navigate to 127.0.0.1, NOT "localhost": the Next server binds
+                // HOSTNAME=127.0.0.1 (IPv4) and the readiness probe above also
+                // hits 127.0.0.1, but on many Linux boxes "localhost" resolves to
+                // IPv6 ::1 first — where nothing listens — so a localhost load
+                // fails with a webview connection error ("通信エラー") even though
+                // the server is up. Matching the bound host removes that mismatch.
+                log::info!("server up on {port}; navigating window to 127.0.0.1");
+                match format!("http://127.0.0.1:{port}").parse() {
                     Ok(url) => {
                         let _ = win.navigate(url);
                     }
