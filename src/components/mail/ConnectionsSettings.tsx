@@ -11,6 +11,11 @@ import {
 } from "lucide-react";
 import type { AIProvider } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
+import {
+  getSweepAutoMode,
+  setSweepAutoMode,
+  type SweepAutoMode,
+} from "@/lib/sweep-prefs";
 import { EmailConnectSection } from "./EmailConnectSection";
 import { ReplySignatureSection } from "./ReplySignatureSection";
 import { WritingNoteSection } from "./WritingNoteSection";
@@ -549,6 +554,8 @@ export function ConnectionsSettings({
               </span>
             </label>
 
+            <SweepAutoSection />
+
             <AiUsageSection />
 
             <ReplySignatureSection />
@@ -582,6 +589,40 @@ export function ConnectionsSettings({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 朝の一凪（morning sweep）の自動表示モード設定（表示しない / 朝だけ / 常に）。
+ * 端末ごとの表示タイミングの好みなので localStorage 保存（@/lib/sweep-prefs）。
+ */
+function SweepAutoSection() {
+  const { t } = useI18n();
+  // Lazy init: getSweepAutoMode is localStorage-safe (try/catch → default on
+  // server / no storage), so read it once during the first client render.
+  const [mode, setMode] = useState<SweepAutoMode>(getSweepAutoMode);
+  return (
+    <div className="flex items-start gap-2 rounded-xl border border-border bg-bg px-3 py-2.5">
+      <span className="flex flex-1 flex-col gap-1 text-xs">
+        <span className="font-medium">{t("conn.sweep.title")}</span>
+        <span className="text-[11px] leading-relaxed text-fg-subtle">
+          {t("conn.sweep.desc")}
+        </span>
+        <select
+          value={mode}
+          onChange={(e) => {
+            const next = e.target.value as SweepAutoMode;
+            setMode(next);
+            setSweepAutoMode(next);
+          }}
+          className="mt-1 w-fit rounded-lg border border-border bg-bg px-2 py-1 text-xs"
+        >
+          <option value="off">{t("conn.sweep.off")}</option>
+          <option value="morning">{t("conn.sweep.morning")}</option>
+          <option value="always">{t("conn.sweep.always")}</option>
+        </select>
+      </span>
     </div>
   );
 }
