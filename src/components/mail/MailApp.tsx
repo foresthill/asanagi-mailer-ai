@@ -43,6 +43,7 @@ import {
 } from "./compose";
 import { buildRows } from "./threadList";
 import { useI18n } from "@/lib/i18n";
+import { getSweepAutoMode, sweepAutoAllowed } from "@/lib/sweep-prefs";
 import type { GroupAxis } from "./EmailList";
 import type { SearchDigest } from "@/app/api/ai/search-digest/route";
 
@@ -873,6 +874,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     )
       return;
     if (emails.length < 5) return;
+    // 自動表示モード（設定: 表示しない / 朝だけ / 常に）。同期読み取りで非ブロッキング。
+    // off・時間外なら自動では出さない（手動ボタンからはいつでも開ける）。
+    if (!sweepAutoAllowed(getSweepAutoMode())) return;
     const last = Number(localStorage.getItem("asanagi:last-sweep") ?? 0);
     if (Date.now() - last < 12 * 3600_000) return;
     sweepPrompted.current = true;

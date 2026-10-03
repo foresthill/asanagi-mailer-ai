@@ -344,6 +344,12 @@ const ja: Dict = {
     "本文中のメールアドレス・電話番号・クレジットカード番号・12桁番号・郵便番号を端末内で ",
   "conn.pii.note.b":
     " 等に置換してからAIへ送り、AIの出力では原文に復元します（可逆なので品質への影響は最小）。人名・社名のマスキングは下の設定で追加できます。",
+  "conn.sweep.title": "朝の一凪の自動表示",
+  "conn.sweep.desc":
+    "受信箱を開いたときに片付け提案を自動で出すか。急ぎのときは「表示しない」、朝の習慣にするなら「朝だけ」。いつでも画面上部のボタンから手動で開けます。",
+  "conn.sweep.off": "表示しない",
+  "conn.sweep.morning": "朝だけ（4:00〜11:00）",
+  "conn.sweep.always": "常に（12時間に1回）",
   "conn.ner.title": "人名・社名もマスク（ローカルNER・実験的）",
   "conn.ner.note.a": "端末内のAIモデルで本文中の人名・会社名を検出し ",
   "conn.ner.note.b":
@@ -1058,6 +1064,12 @@ const en: Dict = {
     "Email addresses, phone numbers, credit-card numbers, 12-digit numbers and postal codes in the body are replaced on-device with ",
   "conn.pii.note.b":
     " etc. before being sent to the AI, and restored to the original in the AI's output (reversible, so quality impact is minimal). Masking of names and company names can be added below.",
+  "conn.sweep.title": "Morning sweep auto-popup",
+  "conn.sweep.desc":
+    "Whether the cleanup suggestion opens automatically when you open the inbox. Choose “Off” when you're in a hurry, or “Morning only” to make it a ritual. You can always open it manually from the button at the top.",
+  "conn.sweep.off": "Off",
+  "conn.sweep.morning": "Morning only (4:00–11:00)",
+  "conn.sweep.always": "Always (once per 12h)",
   "conn.ner.title": "Also mask names & companies (local NER, experimental)",
   "conn.ner.note.a":
     "An on-device AI model detects personal and company names in the body and replaces them with ",
@@ -1789,6 +1801,12 @@ const fr: Dict = {
     "Les adresses e-mail, numéros de téléphone, numéros de carte bancaire, nombres à 12 chiffres et codes postaux du corps sont remplacés sur l'appareil par ",
   "conn.pii.note.b":
     " etc. avant l'envoi à l'IA, puis restaurés à l'original dans la sortie de l'IA (réversible, impact minime sur la qualité). Le masquage des noms de personnes et d'entreprises s'ajoute ci-dessous.",
+  "conn.sweep.title": "Affichage auto du tri du matin",
+  "conn.sweep.desc":
+    "Ouvrir automatiquement la suggestion de tri à l'ouverture de la boîte de réception. Choisissez « Désactivé » si vous êtes pressé, ou « Le matin seulement » pour en faire un rituel. Vous pouvez toujours l'ouvrir manuellement depuis le bouton en haut.",
+  "conn.sweep.off": "Désactivé",
+  "conn.sweep.morning": "Le matin seulement (4:00–11:00)",
+  "conn.sweep.always": "Toujours (une fois / 12 h)",
   "conn.ner.title":
     "Masquer aussi noms et entreprises (NER local, expérimental)",
   "conn.ner.note.a":
@@ -2502,6 +2520,12 @@ const zh: Dict = {
     "正文中的邮箱、电话、信用卡号、12 位号码与邮编会在本机替换为 ",
   "conn.pii.note.b":
     " 等再发送给 AI，并在 AI 输出中还原为原文（可逆，故对质量影响极小）。姓名・公司名的脱敏可在下方追加设置。",
+  "conn.sweep.title": "晨间整理自动弹出",
+  "conn.sweep.desc":
+    "打开收件箱时是否自动弹出整理建议。赶时间就选「关闭」，想作为晨间习惯就选「仅早晨」。随时可从顶部按钮手动打开。",
+  "conn.sweep.off": "关闭",
+  "conn.sweep.morning": "仅早晨（4:00–11:00）",
+  "conn.sweep.always": "始终（每 12 小时一次）",
   "conn.ner.title": "同时脱敏姓名・公司名（本地 NER，实验性）",
   "conn.ner.note.a": "用本机 AI 模型检测正文中的人名与公司名，替换为 ",
   "conn.ner.note.b": " 后再发送给 AI（输出中还原）。完全本地、不外发。",
