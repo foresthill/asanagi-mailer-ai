@@ -1388,14 +1388,21 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   /** 朝の一掃の実行: 推奨ごとにまとめて移動し、スヌーズ時刻を記録。 */
   const applySweep = async (archiveIds: string[], trashIds: string[]) => {
-    // await = サーバ反映まで待つ（mutateState が settle promise を返す）。
+    // mutateState は楽観更新（一覧から即除去）を同期で行い、サーバ反映の settle
+    // promise を返す。ここで settle を await してしまうと、100通超の Gmail 反映が
+    // 終わるまでダイアログが閉じず「確定」が数秒回り続ける（＝すぐ消えない）。
+    // UI 上は既に消えているので settle は待たず、背後で反映→完了後に受信箱を同期。
+    // 失敗時は mutateState 側がトースト＋再取得でフォローする（best-effort）。
+    const settles: Promise<unknown>[] = [];
     if (archiveIds.length)
-      await mutateState(archiveIds, "archived", "一凪: アーカイブ");
+      settles.push(mutateState(archiveIds, "archived", "一凪: アーカイブ"));
     if (trashIds.length)
-      await mutateState(trashIds, "trashed", "一凪: ゴミ箱へ");
+      settles.push(mutateState(trashIds, "trashed", "一凪: ゴミ箱へ"));
     localStorage.setItem("asanagi:last-sweep", String(Date.now()));
-    // 反映後に受信箱を再取得（新着の取り込み＋実状態に同期）。
-    if (archiveIds.length || trashIds.length) loadList(folder, account);
+    if (settles.length) {
+      // サーバ反映の完了後に受信箱を再取得（新着取り込み＋実状態に同期）。
+      void Promise.all(settles).then(() => loadList(folder, account));
+    }
   };
   const trash = (ids: string[]) =>
     mutateState(ids, "trashed", "ゴミ箱に移動しました");
