@@ -1947,6 +1947,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onOpenMessage={selectEmail}
       draft={matchingDraft}
       onResumeDraft={openDraft}
+      horizontal={layout === "geek"}
     />
   );
 

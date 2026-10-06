@@ -76,6 +76,7 @@ export function EmailReader({
   highlight,
   draft,
   onResumeDraft,
+  horizontal,
 }: {
   email: Email | null;
   /** Conversation containing the email (oldest first); null while loading. */
@@ -121,6 +122,9 @@ export function EmailReader({
   draft?: SavedDraft;
   /** Resume that draft in the composer. */
   onResumeDraft?: (d: SavedDraft) => void;
+  /** 上下表示（本文が全幅）か。左右表示（本文が半分幅）では文書アウトラインが
+   *  窮屈なので、全幅のとき（上下／全画面）だけ出す。 */
+  horizontal?: boolean;
 }) {
   const { t } = useI18n();
   // Session-sticky preference: rich HTML (default) vs plain text.
@@ -155,6 +159,9 @@ export function EmailReader({
       return nv;
     });
   const isThread = !!thread && thread.length > 1;
+  // 文書アウトライン（左ガター）は本文が全幅のときだけ出す。左右表示（本文が
+  // 半分幅）では列を奪って極小になるため、上下表示 or 全画面のときのみ許可。
+  const outlineAllowed = isThread && (horizontal || fullscreen);
   // Scroll-spy: which conversation card is at the top of the reader (現在地),
   // so the rail highlights it as you scroll. Also drives the rail's jump target.
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -353,7 +360,7 @@ export function EmailReader({
         <Divider />
 
         {/* ② 表示 */}
-        {isThread && (
+        {outlineAllowed && (
           <IconBtn
             icon={List}
             title={t("reader.outline.toggle")}
@@ -468,7 +475,7 @@ export function EmailReader({
             sticky カード/会話 bar pins flush to the top — a py on the scroll
             container leaves a gap above sticky top-0 that cards show through. */}
         <div className="flex gap-5 pt-7">
-          {isThread && showTree && (
+          {outlineAllowed && showTree && (
             <ThreadOutlineRail
               messages={thread}
               activeId={activeMsgId}
