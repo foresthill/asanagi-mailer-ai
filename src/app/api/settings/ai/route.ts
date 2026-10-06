@@ -33,6 +33,7 @@ async function safeView() {
     nerMask: s.nerMask ?? false,
     keys,
     jevKey: maskKey(s.jevApiKey),
+    jevEndpoint: s.jevEndpoint ?? "typesafe",
     defaultModels: DEFAULT_MODELS,
     cheapModels: CHEAP_MODELS,
     active: {
@@ -69,6 +70,8 @@ export async function POST(req: Request) {
     patch.judgmentModel = body.judgmentModel;
   if (typeof body.baseUrl === "string") patch.baseUrl = body.baseUrl.trim();
   if (typeof body.jevApiKey === "string") patch.jevApiKey = body.jevApiKey; // "" clears (store)
+  if (body.jevEndpoint === "typesafe" || body.jevEndpoint === "openrouter")
+    patch.jevEndpoint = body.jevEndpoint;
   if (typeof body.piiMask === "boolean") patch.piiMask = body.piiMask;
   if (typeof body.nerMask === "boolean") patch.nerMask = body.nerMask;
   if (body.keys && typeof body.keys === "object") {

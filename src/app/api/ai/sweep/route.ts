@@ -128,13 +128,12 @@ export async function POST(req: Request) {
       const masker = new PiiMasker();
       const mask = (s?: string) =>
         cfg.piiMask && s ? masker.mask(s) : (s ?? "");
-      const key = ai.jevApiKey!.trim();
       const done: SweepItem[] = [];
       for (let i = 0; i < undecided.length; i += 8) {
         const chunk = undecided.slice(i, i + 8);
         const rs = await Promise.all(
           chunk.map(async (e) => {
-            const r = await jevSweep(key, {
+            const r = await jevSweep(ai, {
               subject: mask(e.subject),
               from: `${mask(e.from.name ?? "")} <${mask(e.from.email)}>`.trim(),
               body: mask(e.snippet),

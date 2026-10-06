@@ -331,6 +331,14 @@ const ja: Dict = {
   "conn.judge.note.b": "空欄ならメインと同じ",
   "conn.judge.note.c": "。返信生成・添削は常にメインのモデルを使います。",
   "conn.jev": "Jev（分類専用・System One）APIキー",
+  "conn.jev.ep.label": "接続口",
+  "conn.jev.ep.typesafe": "TypeSafe 直",
+  "conn.jev.ep.openrouter": "OpenRouter 経由",
+  "conn.jev.ep.openrouter.note":
+    "既存の OpenRouter キーで Jev を使います（別契約不要・同じ System One API）。",
+  "conn.jev.ep.openrouter.haskey": "OpenRouter キー設定済み ✓",
+  "conn.jev.ep.openrouter.needkey":
+    "OpenRouter キーが未設定です。上の BYOK（OpenRouter）で設定してください。",
   "conn.jev.note":
     "設定すると、重要度判定・スパム/フィッシング検知・朝の一凪の処分を Jev（TypeSafe AI）で高速・安価に分類します（型付き＋確信度）。未設定なら判定用モデルにフォールバック。返信生成・添削・要約は常にメインのLLMを使います。キーは端末内のみ。",
   "conn.active.current": "現在の有効設定: ",
@@ -1051,6 +1059,14 @@ const en: Dict = {
   "conn.judge.note.c":
     ". Reply generation and proofreading always use the main model.",
   "conn.jev": "Jev (classification · System One) API key",
+  "conn.jev.ep.label": "Endpoint",
+  "conn.jev.ep.typesafe": "TypeSafe direct",
+  "conn.jev.ep.openrouter": "via OpenRouter",
+  "conn.jev.ep.openrouter.note":
+    "Use Jev with your existing OpenRouter key (no separate account — same System One API).",
+  "conn.jev.ep.openrouter.haskey": "OpenRouter key set ✓",
+  "conn.jev.ep.openrouter.needkey":
+    "No OpenRouter key yet. Set it in the BYOK (OpenRouter) field above.",
   "conn.jev.note":
     "When set, importance / spam & phishing / morning-sweep disposition are classified by Jev (TypeSafe AI) — fast, cheap, typed + confidence. Falls back to the judgment model when unset. Reply generation, proofreading and summaries always use the main LLM. The key stays on this device.",
   "conn.active.current": "Active settings: ",
@@ -1787,6 +1803,14 @@ const fr: Dict = {
   "conn.judge.note.c":
     ". La génération de réponses et la relecture utilisent toujours le modèle principal.",
   "conn.jev": "Clé API Jev (classification · System One)",
+  "conn.jev.ep.label": "Point de connexion",
+  "conn.jev.ep.typesafe": "TypeSafe direct",
+  "conn.jev.ep.openrouter": "via OpenRouter",
+  "conn.jev.ep.openrouter.note":
+    "Utiliser Jev avec votre clé OpenRouter existante (pas de compte séparé — même API System One).",
+  "conn.jev.ep.openrouter.haskey": "Clé OpenRouter définie ✓",
+  "conn.jev.ep.openrouter.needkey":
+    "Aucune clé OpenRouter. Définissez-la dans le champ BYOK (OpenRouter) ci-dessus.",
   "conn.jev.note":
     "Une fois définie, l'importance, le spam/hameçonnage et le tri du matin sont classés par Jev (TypeSafe AI) — rapide, économique, typé + confiance. Repli sur le modèle de jugement si non définie. La génération de réponses, la relecture et les résumés utilisent toujours le LLM principal. La clé reste sur cet appareil.",
   "conn.active.current": "Réglages actifs : ",
@@ -2507,6 +2531,14 @@ const zh: Dict = {
   "conn.judge.note.b": "留空＝与主模型相同",
   "conn.judge.note.c": "。回复生成与润色始终使用主模型。",
   "conn.jev": "Jev（分类专用 · System One）API 密钥",
+  "conn.jev.ep.label": "连接入口",
+  "conn.jev.ep.typesafe": "TypeSafe 直连",
+  "conn.jev.ep.openrouter": "经 OpenRouter",
+  "conn.jev.ep.openrouter.note":
+    "用你现有的 OpenRouter 密钥使用 Jev（无需另开账户 · 同一 System One API）。",
+  "conn.jev.ep.openrouter.haskey": "已设置 OpenRouter 密钥 ✓",
+  "conn.jev.ep.openrouter.needkey":
+    "尚未设置 OpenRouter 密钥。请在上方 BYOK（OpenRouter）中设置。",
   "conn.jev.note":
     "设置后，重要度判定、垃圾/钓鱼检测、晨间整理的处置将由 Jev（TypeSafe AI）快速、低成本地分类（类型化＋置信度）。未设置时回退到判定模型。回复生成、润色与摘要始终使用主 LLM。密钥仅保存在本机。",
   "conn.active.current": "当前生效设置：",
