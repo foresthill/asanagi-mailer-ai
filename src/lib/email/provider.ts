@@ -26,6 +26,11 @@ export interface EmailProvider {
   /** Move a message to inbox / archived / trashed. */
   setState(id: string, state: MailboxState): Promise<void>;
 
+  /** Move MANY messages to one state in as few provider calls as possible
+   *  (Gmail batchModify = 1 call/≤1000 ids; IMAP = 1 move per source folder).
+   *  Used by bulk operations like 朝の一凪 so N mails ≠ N round-trips. */
+  setStateBatch(ids: string[], state: MailboxState): Promise<void>;
+
   /** Mark read / unread. */
   setRead(id: string, read: boolean): Promise<void>;
 

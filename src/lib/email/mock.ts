@@ -141,6 +141,20 @@ export class MockProvider implements EmailProvider {
     }
   }
 
+  async setStateBatch(ids: string[], state: MailboxState): Promise<void> {
+    if (!ids.length) return;
+    const set = new Set(ids);
+    const all = await load();
+    let changed = false;
+    for (const e of all) {
+      if (set.has(e.id)) {
+        e.state = state;
+        changed = true;
+      }
+    }
+    if (changed) await save(all);
+  }
+
   async setRead(id: string, read: boolean): Promise<void> {
     const all = await load();
     const e = all.find((x) => x.id === id);

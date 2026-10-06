@@ -1359,22 +1359,19 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         }
       }
       return (async () => {
-        const results = await Promise.all(
-          ids.map((id) =>
-            fetch(`/api/emails/${encodeURIComponent(id)}`, {
-              method: "PATCH",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ state }),
-            }).catch(() => null),
-          ),
-        );
-        const failed = results.filter((r) => !r || !r.ok);
-        if (!failed.length) return;
-        const reauth = results.some((r) => r?.status === 401);
+        // 1リクエストでまとめて反映（サーバ側で account ごとに Gmail batchModify /
+        // IMAP 一括 move）。メールごとに PATCH を N 本投げる旧設計を廃止。
+        const res = await fetch("/api/emails/state", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ids, state }),
+        }).catch(() => null);
+        if (res && res.ok) return;
+        const reauth = res?.status === 401;
         showToast(
           reauth
             ? "Gmailの認証が切れています（接続設定から再認証してください）"
-            : `${failed.length}通を移動できませんでした（サーバ反映に失敗）`,
+            : `${ids.length > 1 ? `${ids.length}通` : "メール"}を移動できませんでした（サーバ反映に失敗）`,
         );
         if (reauth) setShowSettings(true);
         loadList(folder, account); // 楽観的除去を取り消し、実状態に同期
