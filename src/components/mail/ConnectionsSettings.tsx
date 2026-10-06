@@ -39,6 +39,7 @@ interface View {
   nerMask: boolean;
   keys: Record<AIProvider, KeyStatus>;
   jevKey: KeyStatus;
+  jevEndpoint: "typesafe" | "openrouter";
   defaultModels: Record<AIProvider, string>;
   cheapModels: Record<AIProvider, string>;
   active: {
@@ -412,39 +413,89 @@ export function ConnectionsSettings({
               </span>
             </label>
 
-            {/* Jev（分類専用モデル）— 設定すると重要度/脅威/朝の一凪の分類を Jev に */}
+            {/* Jev（分類専用モデル）— 設定すると重要度/脅威/朝の一凪の分類を Jev に。
+                接続口は TypeSafe 直 / OpenRouter 経由（既存キー再利用）を選べる。 */}
             <label className="flex flex-col gap-1.5 rounded-xl border border-border bg-bg px-3 py-2.5">
               <span className="flex items-center gap-2 text-xs font-medium text-fg-muted">
                 {t("conn.jev")}
-                {view?.jevKey.set && (
-                  <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
-                    {t("conn.keySet").replace(
-                      "{last4}",
-                      view.jevKey.last4 ?? "",
-                    )}
-                  </span>
-                )}
               </span>
-              <input
-                type="password"
-                autoComplete="off"
-                value={jevKeyInput ?? ""}
-                onChange={(e) => setJevKeyInput(e.target.value)}
-                placeholder={
-                  view?.jevKey.set
-                    ? t("conn.keyPlaceholder.change")
-                    : "ts-... (TypeSafe API key)"
-                }
-                className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
-              />
-              {view?.jevKey.set && (
-                <button
-                  type="button"
-                  onClick={() => setJevKeyInput("")}
-                  className="self-start text-[11px] text-fg-subtle underline hover:text-high"
-                >
-                  {t("conn.keyClear")}
-                </button>
+
+              {/* 接続口セレクタ（変更は即保存） */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-fg-subtle">
+                  {t("conn.jev.ep.label")}
+                </span>
+                {(["typesafe", "openrouter"] as const).map((ep) => {
+                  const on = (view?.jevEndpoint ?? "typesafe") === ep;
+                  return (
+                    <button
+                      key={ep}
+                      type="button"
+                      onClick={async () => {
+                        const res = await fetch("/api/settings/ai", {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({ jevEndpoint: ep }),
+                        });
+                        if (res.ok) setView((await res.json()) as View);
+                      }}
+                      className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                        on
+                          ? "border-accent bg-accent-soft text-accent"
+                          : "border-border text-fg-muted hover:border-fg-subtle"
+                      }`}
+                    >
+                      {t(`conn.jev.ep.${ep}`)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {(view?.jevEndpoint ?? "typesafe") === "openrouter" ? (
+                <span className="text-[11px] leading-relaxed text-fg-subtle">
+                  {t("conn.jev.ep.openrouter.note")}{" "}
+                  {view?.keys.openrouter.set ? (
+                    <span className="text-emerald-600">
+                      {t("conn.jev.ep.openrouter.haskey")}
+                    </span>
+                  ) : (
+                    <span className="text-high">
+                      {t("conn.jev.ep.openrouter.needkey")}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <>
+                  {view?.jevKey.set && (
+                    <span className="self-start rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
+                      {t("conn.keySet").replace(
+                        "{last4}",
+                        view.jevKey.last4 ?? "",
+                      )}
+                    </span>
+                  )}
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={jevKeyInput ?? ""}
+                    onChange={(e) => setJevKeyInput(e.target.value)}
+                    placeholder={
+                      view?.jevKey.set
+                        ? t("conn.keyPlaceholder.change")
+                        : "ts-... (TypeSafe API key)"
+                    }
+                    className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+                  />
+                  {view?.jevKey.set && (
+                    <button
+                      type="button"
+                      onClick={() => setJevKeyInput("")}
+                      className="self-start text-[11px] text-fg-subtle underline hover:text-high"
+                    >
+                      {t("conn.keyClear")}
+                    </button>
+                  )}
+                </>
               )}
               <span className="text-[11px] leading-relaxed text-fg-subtle">
                 {t("conn.jev.note")}

@@ -224,6 +224,12 @@ export interface AISettings {
    */
   jevApiKey?: string;
   /**
+   * Which endpoint serves Jev: "typesafe" (直契約・jevApiKey) or "openrouter"
+   * (既存の OpenRouter キー keys.openrouter を再利用・別契約不要)。既定は typesafe。
+   * 同じ System One API なので接続口だけの違い（SDK の baseURL を切替）。
+   */
+  jevEndpoint?: "typesafe" | "openrouter";
+  /**
    * Custom base URL for the `openai` provider — points at any OpenAI-compatible
    * endpoint (e.g. a local/on-prem Ollama's `/v1`, http://localhost:11434/v1).
    * Empty → the provider's default endpoint. Lets the mail AI run fully on-prem

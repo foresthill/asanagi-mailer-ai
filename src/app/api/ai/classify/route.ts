@@ -111,7 +111,7 @@ export async function POST(req: Request) {
       const masker = new PiiMasker();
       const mask = (s?: string) =>
         cfg.piiMask && s ? masker.mask(s) : (s ?? "");
-      const res = await jevClassify(ai.jevApiKey!.trim(), {
+      const res = await jevClassify(ai, {
         subject: mask(email.subject),
         from: `${email.from.name ?? ""} <${mask(email.from.email)}>`.trim(),
         body: mask(email.body),
