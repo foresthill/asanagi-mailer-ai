@@ -26,7 +26,13 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import type { Email, FolderView, Importance, ContactLabel } from "@/lib/types";
+import type {
+  Email,
+  FolderView,
+  Importance,
+  ContactLabel,
+  MailboxState,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { avatarColor, initials, relativeTime } from "./helpers";
@@ -440,6 +446,7 @@ export function EmailList({
           row={row}
           dense={horizontal} // 上下表示の上ペインは1行の密行で件数を稼ぐ
           matchQuery={searching ? searchQuery : undefined}
+          showLocation={searching} // 検索結果はフォルダ横断 → どこにあるかバッジ
           active={selectedId != null && row.ids.includes(selectedId)}
           folder={folder}
           hasNote={noteIds.has(row.email.id)}
@@ -1335,6 +1342,28 @@ function LabelBadge({ label }: { label?: ContactLabel }) {
   );
 }
 
+/** 現在地バッジ（受信箱/アーカイブ/ゴミ箱/送信箱）。検索などフォルダ横断の
+ *  一覧で、そのメールが今どこにあるかを示す。 */
+function StateChip({ state }: { state: MailboxState }) {
+  const { t } = useI18n();
+  const cls: Record<MailboxState, string> = {
+    inbox: "bg-accent-soft text-accent",
+    archived: "bg-surface-2 text-fg-muted",
+    trashed: "bg-high-soft text-high",
+    sent: "bg-surface-2 text-fg-muted",
+  };
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded px-1 text-[10px] font-semibold",
+        cls[state],
+      )}
+    >
+      {t(`folder.${state}`)}
+    </span>
+  );
+}
+
 function EmailListItem({
   row,
   active,
@@ -1357,10 +1386,14 @@ function EmailListItem({
   isTodo,
   onToggleTodo,
   contactLabel,
+  showLocation,
 }: {
   row: ThreadRow;
   active: boolean;
   folder: FolderView;
+  /** 検索結果などフォルダ横断の一覧で、各行に現在地（受信箱/アーカイブ/ゴミ箱/
+   *  送信箱）バッジを出す。通常のフォルダ表示では不要（場所は自明）。 */
+  showLocation?: boolean;
   /** Resolve the correspondent's label (重要取引先/迷惑) for the badge. */
   contactLabel?: (email?: string) => ContactLabel | undefined;
   /** 1-line compact row (上下表示の上ペイン): sender · subject · time. */
@@ -1491,6 +1524,7 @@ function EmailListItem({
         {accountLabel && (
           <AccountChip account={email.account ?? ""} label={accountLabel} />
         )}
+        {showLocation && <StateChip state={email.state} />}
         {showBadge &&
           (expandable ? (
             <button
@@ -1606,7 +1640,7 @@ function EmailListItem({
               )}
             </button>
           )}
-          {folder !== "archived" && (
+          {folder !== "archived" && email.state !== "archived" && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1618,7 +1652,7 @@ function EmailListItem({
               <Archive className="size-3.5" />
             </button>
           )}
-          {folder !== "trashed" && (
+          {folder !== "trashed" && email.state !== "trashed" && (
             <button
               onClick={(e) => {
                 e.stopPropagation();

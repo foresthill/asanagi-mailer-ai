@@ -1311,6 +1311,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     async (ids: string[], state: MailboxState, label: string) => {
       const set = new Set(ids);
       setEmails((list) => list.filter((e) => !set.has(e.id)));
+      // 検索結果はフォルダ横断で表示したまま（受信箱のように除去しない）ので、
+      // 代わりに state を更新する＝現在地バッジが変わり「操作が効いた」と分かる
+      // （検索中にアーカイブしても何も起きないように見える問題の修正）。
+      setSearchResults((prev) =>
+        prev
+          ? prev.map((e) => (set.has(e.id) ? { ...e, state } : e))
+          : prev,
+      );
       // 消したメールを選択状態からも外す（行ホバーのアーカイブ等で選択に
       // ゴミが残り、一括操作が破綻するのを防ぐ）。
       setChecked((prev) => {
