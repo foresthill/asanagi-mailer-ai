@@ -24,7 +24,7 @@ export function ThreadOutlineRail({
   return (
     <nav
       aria-label="スレッドのアウトライン"
-      className="sticky top-2 hidden max-h-[calc(100vh-8rem)] w-52 shrink-0 self-start overflow-y-auto lg:block"
+      className="sticky top-2 hidden max-h-[calc(100vh-8rem)] w-56 shrink-0 self-start overflow-y-auto lg:block"
     >
       <ul className="flex flex-col">
         {messages.map((m) => {
@@ -46,7 +46,7 @@ export function ThreadOutlineRail({
                     : "border-border text-fg-subtle hover:border-fg-subtle hover:text-fg",
                 )}
               >
-                <span className="flex w-full items-center gap-1.5 text-[11px]">
+                <span className="flex w-full items-center gap-1.5 text-xs">
                   <span
                     className="size-1.5 shrink-0 rounded-full"
                     style={{ background: avatarColor(m.from.email) }}
@@ -55,13 +55,13 @@ export function ThreadOutlineRail({
                     {who}
                   </span>
                   {m.hasAttachment && (
-                    <Paperclip className="size-2.5 shrink-0 opacity-70" />
+                    <Paperclip className="size-3 shrink-0 opacity-70" />
                   )}
-                  <span className="ml-auto shrink-0 text-[10px] tabular-nums opacity-70">
+                  <span className="ml-auto shrink-0 text-[11px] tabular-nums opacity-70">
                     {md}
                   </span>
                 </span>
-                <span className="line-clamp-2 w-full text-[10px] text-fg-subtle">
+                <span className="line-clamp-2 w-full text-[11px] leading-snug text-fg-subtle">
                   {preview}
                 </span>
               </button>
