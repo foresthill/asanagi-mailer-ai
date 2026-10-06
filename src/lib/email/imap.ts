@@ -551,6 +551,35 @@ export class ImapProvider implements EmailProvider {
     }
   }
 
+  async setStateBatch(ids: string[], state: MailboxState): Promise<void> {
+    if (!ids.length) return;
+    // Group by source folder; one messageMove (UID set) per folder, one
+    // connection total — instead of connect+move+logout per message.
+    const byFolder = new Map<string, string[]>();
+    for (const id of ids) {
+      const { folder, uid } = this.splitId(id);
+      const arr = byFolder.get(folder);
+      if (arr) arr.push(uid);
+      else byFolder.set(folder, [uid]);
+    }
+    const c = this.connection();
+    await c.connect();
+    try {
+      const folders = await this.resolveFolders(c);
+      for (const [folder, uids] of byFolder) {
+        const lock = await c.getMailboxLock(folder);
+        try {
+          // imapflow accepts a comma-separated UID set as the range.
+          await c.messageMove(uids.join(","), folders[state], { uid: true });
+        } finally {
+          lock.release();
+        }
+      }
+    } finally {
+      await c.logout();
+    }
+  }
+
   async setRead(id: string, read: boolean): Promise<void> {
     const { folder, uid } = this.splitId(id);
     const c = this.connection();

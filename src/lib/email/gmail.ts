@@ -414,6 +414,23 @@ export class GmailProvider implements EmailProvider {
     });
   }
 
+  async setStateBatch(ids: string[], state: MailboxState): Promise<void> {
+    if (!ids.length) return;
+    // batchModify applies the same label change to up to 1000 ids in ONE call
+    // (trashed = add TRASH / remove INBOX, same as labelFor). Chunk at 1000.
+    const { add, remove } = labelFor(state);
+    for (let i = 0; i < ids.length; i += 1000) {
+      await this.gmail.users.messages.batchModify({
+        userId: "me",
+        requestBody: {
+          ids: ids.slice(i, i + 1000),
+          addLabelIds: add,
+          removeLabelIds: remove,
+        },
+      });
+    }
+  }
+
   async setRead(id: string, read: boolean): Promise<void> {
     await this.gmail.users.messages.modify({
       userId: "me",

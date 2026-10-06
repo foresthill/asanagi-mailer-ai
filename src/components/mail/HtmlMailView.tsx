@@ -102,6 +102,30 @@ function foldQuote(doc: Document, show: boolean): boolean {
   return true;
 }
 
+/** Would folding the quote leave any visible new content? Clones the body so the
+ *  check is non-destructive, then removes the quote marker and everything after
+ *  it (mirroring foldQuote). Empty (whitespace only, no image) → the whole mail
+ *  IS the quote (本文なし転送 / 全文引用) and folding would blank the body. */
+function hasNewContentOutsideQuote(doc: Document): boolean {
+  const clone = doc.body.cloneNode(true) as HTMLElement;
+  const marker = clone.querySelector(QUOTE_SELECTOR);
+  if (!marker) return true; // no quote → everything is new content
+  let node: Node = marker;
+  let removedMarker = false;
+  while (node.nodeName !== "BODY") {
+    const parent = node.parentNode;
+    if (!parent) break;
+    while (node.nextSibling) parent.removeChild(node.nextSibling);
+    if (!removedMarker) {
+      parent.removeChild(node);
+      removedMarker = true;
+    }
+    node = parent;
+  }
+  const text = (clone.textContent ?? "").replace(/\s+/g, "");
+  return text.length > 0 || clone.querySelector("img") != null;
+}
+
 export function HtmlMailView({
   html,
   fontScale = 1,
@@ -161,7 +185,13 @@ export function HtmlMailView({
 
     // Fold the quoted history by default. When searching, keep it expanded so a
     // match inside the quote isn't hidden.
-    const hasQuote = foldQuote(doc, showQuote || !!highlight?.trim());
+    const forceShow = showQuote || !!highlight?.trim();
+    // 全文が引用（新規本文なし）のメールは、畳むと本文が真っ白になる → 畳まず
+    // 全文表示する（プレーンテキスト版 QuotedText の hasNewText ガードと同趣旨）。
+    const allQuote = !forceShow && !hasNewContentOutsideQuote(doc);
+    const hasQuote = foldQuote(doc, forceShow || allQuote);
+    // 畳むと空になるメールでは「隠す」トグルを出さない（押しても真っ白なため）。
+    const offerToggle = hasQuote && !allQuote;
 
     // ライト/ダークで本文の地色・文字色・リンク色を切替。padding は両モードで
     // ゆとりを持たせる（枠に文字がベタ付き＝「padding0」の見栄えを解消）。
@@ -171,7 +201,7 @@ export function HtmlMailView({
     const body = doc.body.innerHTML;
     return {
       blockedImages: blocked,
-      hasQuote,
+      hasQuote: offerToggle,
       srcDoc: `<!doctype html><html><head><meta charset="utf-8"><base target="_blank">
 <style>
   html { color-scheme: ${dark ? "dark" : "light"}; }
