@@ -6,6 +6,7 @@ import { upsertEmails } from "@/lib/db";
 import { addScheduled, dueScheduled, listScheduled, updateScheduled } from "@/lib/store";
 import { attachmentsWithinCap, totalAttachmentBytes } from "@/lib/attachments";
 import { friendlyEmailError } from "@/lib/email/errors";
+import { recordLog, errMsg } from "@/lib/logbuf";
 import type { EmailProvider } from "@/lib/email";
 import type { OutgoingMessage, ScheduledSend } from "@/lib/types";
 
@@ -46,12 +47,14 @@ async function runFlush(): Promise<number> {
       await provider.send(item);
       sentVia.set(provider.name, provider);
       await updateScheduled(item.id, { status: "sent" });
+      recordLog("info", "schedule", `予約送信OK (${provider.name})`);
     } catch (err) {
       // 予約送信の失敗理由も分かりやすい日本語に（送信箱/予約一覧で表示される）。
       await updateScheduled(item.id, {
         status: "failed",
         error: friendlyEmailError(err, { bytes: totalAttachmentBytes(item.attachments) }).message,
       });
+      recordLog("error", "schedule", `予約送信失敗: ${errMsg(err)}`);
     }
   }
   // Refresh sent-folder caches so flushed sends join threads/replied marks.

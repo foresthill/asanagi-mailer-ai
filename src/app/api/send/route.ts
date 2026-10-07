@@ -5,6 +5,7 @@ import { getProviderFor } from "@/lib/email/accounts";
 import { upsertEmails } from "@/lib/db";
 import { attachmentsWithinCap, totalAttachmentBytes } from "@/lib/attachments";
 import { friendlyEmailError } from "@/lib/email/errors";
+import { recordLog, errMsg as rawErrMsg } from "@/lib/logbuf";
 import type { OutgoingMessage } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -41,6 +42,11 @@ export async function POST(req: Request) {
       }
     });
 
+    recordLog(
+      "info",
+      "send",
+      `送信OK (${provider.name}) → ${message.to?.map((a) => a.email).join(", ") ?? ""}`,
+    );
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     // 低レベルの生エラー（write ERANGE / 535 / ECONNREFUSED 等）を、ユーザーが
@@ -48,6 +54,7 @@ export async function POST(req: Request) {
     const { message: errMsg, needsReauth } = friendlyEmailError(err, {
       bytes: totalAttachmentBytes(message.attachments),
     });
+    recordLog("error", "send", `送信失敗: ${rawErrMsg(err)}`);
     return NextResponse.json({ error: errMsg, needsReauth }, { status: needsReauth ? 401 : 500 });
   }
 }

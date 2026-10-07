@@ -17,6 +17,7 @@ import {
 import { annotateImportance } from "@/lib/importance";
 import { detectThreat } from "@/lib/threat";
 import type { Email, FolderView } from "@/lib/types";
+import { recordLog, errMsg } from "@/lib/logbuf";
 
 export const dynamic = "force-dynamic";
 
@@ -161,9 +162,14 @@ export async function GET(req: Request) {
           return markReplied(a.key, [...merged.values()]).map((e) =>
             tag(a.key, e),
           );
-        } catch {
+        } catch (err) {
           // Provider unreachable → serve the local cache for this account.
           stale.push(a.key);
+          recordLog(
+            "warn",
+            "fetch",
+            `${a.key}: 取得失敗、キャッシュを表示: ${errMsg(err)}`,
+          );
           return markReplied(a.key, cachedList([a.key], state)).map((e) =>
             tag(a.key, e),
           );

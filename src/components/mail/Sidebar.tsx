@@ -24,6 +24,7 @@ import {
   ScrollText,
   FolderKanban,
   Blocks,
+  Activity,
 } from "lucide-react";
 import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -82,7 +83,8 @@ export function Sidebar({
     | "ailog"
     | "projects"
     | "todo"
-    | "integrations";
+    | "integrations"
+    | "logs";
   onSelect: (f: FolderView) => void;
   onSelectView: (
     v:
@@ -92,7 +94,8 @@ export function Sidebar({
       | "ailog"
       | "projects"
       | "todo"
-      | "integrations",
+      | "integrations"
+      | "logs",
   ) => void;
   /** Pick an account AND folder together (folders nested per account). */
   onSelectAccountFolder: (key: string, f: FolderView) => void;
@@ -343,6 +346,21 @@ export function Sidebar({
             className={cn("size-4", view === "integrations" && "text-accent")}
           />
           <span className="flex-1 text-left">{t("nav.integrations")}</span>
+        </button>
+        <button
+          onClick={() => onSelectView("logs")}
+          title={t("nav.logs.title")}
+          className={cn(
+            "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+            view === "logs"
+              ? "bg-accent-soft font-medium text-fg"
+              : "text-fg-muted hover:bg-surface hover:text-fg",
+          )}
+        >
+          <Activity
+            className={cn("size-4", view === "logs" && "text-accent")}
+          />
+          <span className="flex-1 text-left">{t("nav.logs")}</span>
         </button>
       </nav>
 
