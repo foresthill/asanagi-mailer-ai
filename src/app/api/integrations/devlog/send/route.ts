@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordLog, errMsg } from "@/lib/logbuf";
 import { getDevlogSettings, setTodoDevlogLink } from "@/lib/store";
 import { createIssue, isDevlogConfigured } from "@/lib/integrations/devlog";
 
@@ -42,8 +43,10 @@ export async function POST(req: Request) {
     if (body.todoId) {
       await setTodoDevlogLink(body.todoId, issue.issueKey, issue.url);
     }
+    recordLog("info", "devlog", `起票OK ${issue.issueKey}`);
     return NextResponse.json({ ok: true, key: issue.issueKey, url: issue.url });
   } catch (e) {
+    recordLog("error", "devlog", `起票失敗: ${errMsg(e)}`);
     return NextResponse.json(
       {
         ok: false,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordLog, errMsg } from "@/lib/logbuf";
 import { getOpenProjectSettings, setTodoOpLink } from "@/lib/store";
 import {
   createWorkPackage,
@@ -53,8 +54,10 @@ export async function POST(req: Request) {
     if (body.todoId) {
       await setTodoOpLink(body.todoId, String(wp.id), wp.url);
     }
+    recordLog("info", "openproject", `起票OK #${wp.id}`);
     return NextResponse.json({ ok: true, id: wp.id, url: wp.url });
   } catch (e) {
+    recordLog("error", "openproject", `起票失敗: ${errMsg(e)}`);
     return NextResponse.json(
       {
         ok: false,

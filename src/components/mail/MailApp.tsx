@@ -27,6 +27,7 @@ import { ScheduledPanel } from "./ScheduledPanel";
 import { DraftsPanel } from "./DraftsPanel";
 import { ContactsView } from "./ContactsView";
 import { TriageView } from "./TriageView";
+import { LogView } from "./LogView";
 import { AiLogView } from "./AiLogView";
 import { ProjectsView } from "./ProjectsView";
 import { TodoView } from "./TodoView";
@@ -103,6 +104,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     | "projects"
     | "todo"
     | "integrations"
+    | "logs"
   >("mail");
   // "all" = unified inbox across accounts; otherwise a single account key.
   const [account, setAccount] = useState("all");
@@ -1996,6 +1998,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       )}
       {view === "triage" && (!compose || composeMinimized) && <TriageView />}
       {view === "ailog" && (!compose || composeMinimized) && <AiLogView />}
+      {view === "logs" && (!compose || composeMinimized) && <LogView />}
       {view === "integrations" && (!compose || composeMinimized) && (
         <IntegrationsView onOpenSettings={() => setShowSettings(true)} />
       )}

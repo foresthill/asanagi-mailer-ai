@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
 import { resolveImapCreds } from "@/lib/email";
+import { recordLog, errMsg } from "@/lib/logbuf";
 
 export const maxDuration = 30;
 export const dynamic = "force-dynamic";
@@ -49,8 +50,18 @@ export async function POST() {
     } finally {
       await c.logout();
     }
+    recordLog(
+      "info",
+      "imap",
+      `接続OK ${creds.host}:${creds.port} (secure=${creds.secure}) total=${result.imap.total ?? "?"}`,
+    );
   } catch (err) {
     result.imap = { ok: false, error: err instanceof Error ? err.message : "IMAP接続失敗" };
+    recordLog(
+      "error",
+      "imap",
+      `接続失敗 ${creds.host}:${creds.port} (secure=${creds.secure}): ${errMsg(err)}`,
+    );
   }
 
   // SMTP: verify login/connection without sending.
@@ -63,8 +74,18 @@ export async function POST() {
     });
     await transport.verify();
     result.smtp = { ok: true };
+    recordLog(
+      "info",
+      "smtp",
+      `接続OK ${creds.smtp.host}:${creds.smtp.port} (secure=${creds.smtp.secure})`,
+    );
   } catch (err) {
     result.smtp = { ok: false, error: err instanceof Error ? err.message : "SMTP接続失敗" };
+    recordLog(
+      "error",
+      "smtp",
+      `接続失敗 ${creds.smtp.host}:${creds.smtp.port} (secure=${creds.smtp.secure}): ${errMsg(err)}`,
+    );
   }
 
   result.ok = result.imap.ok && result.smtp.ok;

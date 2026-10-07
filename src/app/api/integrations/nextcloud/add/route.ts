@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordLog, errMsg } from "@/lib/logbuf";
 import { getNextcloudSettings, setTodoNcEvent } from "@/lib/store";
 import {
   createEvent,
@@ -55,8 +56,10 @@ export async function POST(req: Request) {
       uid: body.uid,
     });
     if (body.todoId) await setTodoNcEvent(body.todoId, uid);
+    recordLog("info", "nextcloud", `カレンダー登録OK ${uid}`);
     return NextResponse.json({ ok: true, uid });
   } catch (e) {
+    recordLog("error", "nextcloud", `カレンダー登録失敗: ${errMsg(e)}`);
     return NextResponse.json(
       {
         ok: false,

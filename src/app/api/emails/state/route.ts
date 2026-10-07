@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/email";
 import { getProviderFor } from "@/lib/email/accounts";
 import { updateCached } from "@/lib/db";
+import { recordLog, errMsg } from "@/lib/logbuf";
 import type { MailboxState } from "@/lib/types";
 
 /**
@@ -62,6 +63,11 @@ export async function POST(req: Request) {
     } catch (err) {
       failed = true;
       if (isAuthError(err)) reauth = true;
+      recordLog(
+        "error",
+        "state",
+        `${account ?? "default"}: ${state} 反映失敗 (${pids.length}通): ${errMsg(err)}`,
+      );
     }
   }
 
