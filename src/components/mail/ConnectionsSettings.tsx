@@ -22,6 +22,7 @@ import { WritingNoteSection } from "./WritingNoteSection";
 import { OpenProjectSection } from "./OpenProjectSection";
 import { DevlogSection } from "./DevlogSection";
 import { NextcloudSection } from "./NextcloudSection";
+import { JevPlayground } from "./JevPlayground";
 
 type ProviderChoice = AIProvider | "auto";
 
@@ -501,6 +502,9 @@ export function ConnectionsSettings({
                 {t("conn.jev.note")}
               </span>
             </label>
+
+            {/* Jev プレイグラウンド（Claude と比較・sandbox） */}
+            <JevPlayground />
 
             {/* Active status */}
             {view && (
