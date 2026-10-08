@@ -13,7 +13,20 @@ export const maxDuration = 30;
  * UIが再認証へ誘導する。
  */
 export async function POST(req: Request) {
-  const { id } = (await req.json()) as { id: string };
+  // start/end/timeZone は「本文リンクのみで開始時刻が ICS に無い会議」を、ユーザー
+  // 指定 or 本文解析した日時で登録するための上書き（任意）。ISO ローカル
+  // （YYYY-MM-DDTHH:mm）＋ timeZone で送る。
+  const {
+    id,
+    start: ovStart,
+    end: ovEnd,
+    timeZone,
+  } = (await req.json()) as {
+    id: string;
+    start?: string;
+    end?: string;
+    timeZone?: string;
+  };
   if (!id)
     return NextResponse.json({ error: "id が必要です" }, { status: 400 });
 
@@ -36,7 +49,9 @@ export async function POST(req: Request) {
     const provider = await getProviderFor(account);
     const email = await provider.get(rawId);
     const invite = email?.invite;
-    if (!invite?.start) {
+    // 開始時刻は ICS 優先、無ければ上書き（本文解析/ユーザー指定）を使う。
+    const startIso = invite?.start ?? ovStart;
+    if (!startIso) {
       return NextResponse.json(
         {
           error:
@@ -45,16 +60,24 @@ export async function POST(req: Request) {
         { status: 422 },
       );
     }
+    const endIso = invite?.start ? (invite.end ?? invite.start) : (ovEnd ?? startIso);
+    const allDay = invite?.start ? !!invite.allDay : false;
 
     const auth = new google.auth.OAuth2(creds.clientId, creds.clientSecret);
     auth.setCredentials({ refresh_token: creds.refreshToken });
     const calendar = google.calendar({ version: "v3", auth });
 
+    // allDay は date、時刻ありは dateTime(+timeZone)。上書き(ローカルISO)は
+    // timeZone を付けて正しい絶対時刻として登録する。
     const time = (iso: string) =>
-      invite.allDay ? { date: iso.slice(0, 10) } : { dateTime: iso };
+      allDay
+        ? { date: iso.slice(0, 10) }
+        : timeZone
+          ? { dateTime: iso, timeZone }
+          : { dateTime: iso };
     const description = [
-      invite.joinUrl ? `会議URL: ${invite.joinUrl}` : "",
-      invite.organizer
+      invite?.joinUrl ? `会議URL: ${invite.joinUrl}` : "",
+      invite?.organizer
         ? `主催: ${invite.organizer.name ?? ""} <${invite.organizer.email}>`
         : "",
       "（Asanagi: 招待メールから登録）",
@@ -62,23 +85,20 @@ export async function POST(req: Request) {
       .filter(Boolean)
       .join("\n");
     const event = {
-      summary: invite.summary ?? email?.subject ?? "会議",
-      location: invite.location,
+      summary: invite?.summary ?? email?.subject ?? "会議",
+      location: invite?.location,
       description,
-      start: time(invite.start),
-      end: time(invite.end ?? invite.start),
+      start: time(startIso),
+      end: time(endIso),
     };
 
-    // iCalUIDがあれば import（同一UIDは同一イベント＝重複しない）。
-    const res = invite.uid
-      ? await calendar.events.import({
-          calendarId: "primary",
-          requestBody: { ...event, iCalUID: invite.uid },
-        })
-      : await calendar.events.insert({
-          calendarId: "primary",
-          requestBody: event,
-        });
+    // iCalUID で重複防止。ICS が無い（本文リンクのみ）場合はメール id から合成する。
+    const uid =
+      invite?.uid ?? `asanagi-${account}-${rawId}`.replace(/[^\w.-]/g, "");
+    const res = await calendar.events.import({
+      calendarId: "primary",
+      requestBody: { ...event, iCalUID: uid },
+    });
 
     return NextResponse.json({
       ok: true,

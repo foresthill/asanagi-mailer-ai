@@ -10,6 +10,7 @@ import {
 import type { Email, Importance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { detectMeetingTime } from "@/lib/email/ics";
 import { MeetingCard } from "./MeetingCard";
 import { PrivateNote } from "./PrivateNote";
 
@@ -64,6 +65,7 @@ export function ReaderMeta({
   hasNote,
   onImportanceFeedback,
   onNoteSaved,
+  onAddTodoDue,
 }: {
   email: Email;
   classifying: boolean;
@@ -71,6 +73,8 @@ export function ReaderMeta({
   hasNote?: boolean;
   onImportanceFeedback: (i: Importance) => void;
   onNoteSaved?: () => void;
+  /** 会議カードの「TODOに追加（期限付き）」用。期限は会議開始 ISO。 */
+  onAddTodoDue?: (dueIso: string) => void;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState<Set<MetaKey>>(new Set());
@@ -115,9 +119,23 @@ export function ReaderMeta({
         />
       </div>
 
-      {open.has("meeting") && email.invite && (
-        <MeetingCard emailId={email.id} invite={email.invite} />
-      )}
+      {open.has("meeting") &&
+        email.invite &&
+        (() => {
+          // 本文から日時を推測してピッカーの初期値に（invite.start には入れない）。
+          const guess = email.invite.start
+            ? {}
+            : detectMeetingTime(email.body || email.snippet);
+          return (
+            <MeetingCard
+              emailId={email.id}
+              invite={email.invite}
+              prefillStart={guess.start}
+              prefillEnd={guess.end}
+              onAddTodoDue={onAddTodoDue}
+            />
+          );
+        })()}
 
       {open.has("importance") && (
         <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5">

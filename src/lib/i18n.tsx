@@ -370,6 +370,10 @@ const ja: Dict = {
     "本文中のメールアドレス・電話番号・クレジットカード番号・12桁番号・郵便番号を端末内で ",
   "conn.pii.note.b":
     " 等に置換してからAIへ送り、AIの出力では原文に復元します（可逆なので品質への影響は最小）。人名・社名のマスキングは下の設定で追加できます。",
+  "notify.title": "OS通知（期限リマインド）",
+  "notify.desc":
+    "期限を過ぎた TODO をデスクトップの通知で知らせます（端末内のみ）。ONにすると通知の許可を求めます。macOSの「リマインダー」アプリ登録ではありません。",
+  "notify.denied": "通知が許可されていません。OSの通知設定で許可してください。",
   "conn.sweep.title": "朝の一凪の自動表示",
   "conn.sweep.desc":
     "受信箱を開いたときに片付け提案を自動で出すか。急ぎのときは「表示しない」、朝の習慣にするなら「朝だけ」。いつでも画面上部のボタンから手動で開けます。",
@@ -1119,6 +1123,10 @@ const en: Dict = {
     "Email addresses, phone numbers, credit-card numbers, 12-digit numbers and postal codes in the body are replaced on-device with ",
   "conn.pii.note.b":
     " etc. before being sent to the AI, and restored to the original in the AI's output (reversible, so quality impact is minimal). Masking of names and company names can be added below.",
+  "notify.title": "OS notifications (due reminders)",
+  "notify.desc":
+    "Notify you on the desktop when a TODO is overdue (this device only). Turning it on asks for notification permission. This is not the macOS Reminders app.",
+  "notify.denied": "Notifications are blocked. Allow them in your OS settings.",
   "conn.sweep.title": "Morning sweep auto-popup",
   "conn.sweep.desc":
     "Whether the cleanup suggestion opens automatically when you open the inbox. Choose “Off” when you're in a hurry, or “Morning only” to make it a ritual. You can always open it manually from the button at the top.",
@@ -1885,6 +1893,10 @@ const fr: Dict = {
     "Les adresses e-mail, numéros de téléphone, numéros de carte bancaire, nombres à 12 chiffres et codes postaux du corps sont remplacés sur l'appareil par ",
   "conn.pii.note.b":
     " etc. avant l'envoi à l'IA, puis restaurés à l'original dans la sortie de l'IA (réversible, impact minime sur la qualité). Le masquage des noms de personnes et d'entreprises s'ajoute ci-dessous.",
+  "notify.title": "Notifications OS (rappels d'échéance)",
+  "notify.desc":
+    "Vous alerter sur le bureau quand une tâche est en retard (cet appareil). L'activer demande l'autorisation. Ce n'est pas l'app Rappels de macOS.",
+  "notify.denied": "Notifications bloquées. Autorisez-les dans les réglages du système.",
   "conn.sweep.title": "Affichage auto du tri du matin",
   "conn.sweep.desc":
     "Ouvrir automatiquement la suggestion de tri à l'ouverture de la boîte de réception. Choisissez « Désactivé » si vous êtes pressé, ou « Le matin seulement » pour en faire un rituel. Vous pouvez toujours l'ouvrir manuellement depuis le bouton en haut.",
@@ -2633,6 +2645,10 @@ const zh: Dict = {
     "正文中的邮箱、电话、信用卡号、12 位号码与邮编会在本机替换为 ",
   "conn.pii.note.b":
     " 等再发送给 AI，并在 AI 输出中还原为原文（可逆，故对质量影响极小）。姓名・公司名的脱敏可在下方追加设置。",
+  "notify.title": "系统通知（到期提醒）",
+  "notify.desc":
+    "当 TODO 逾期时在桌面通知你（仅本设备）。开启会请求通知权限。这不是 macOS 的「提醒事项」应用。",
+  "notify.denied": "通知被阻止。请在系统通知设置中允许。",
   "conn.sweep.title": "晨间整理自动弹出",
   "conn.sweep.desc":
     "打开收件箱时是否自动弹出整理建议。赶时间就选「关闭」，想作为晨间习惯就选「仅早晨」。随时可从顶部按钮手动打开。",

@@ -82,6 +82,54 @@ export function detectJoinUrl(text: string): string | undefined {
   return JOIN_URL_RE.exec(text)?.[0];
 }
 
+/**
+ * Best-effort guess of a meeting date+time from a plain-text body — used ONLY as
+ * a prefill for the user-editable datetime picker (never written to
+ * invite.start), so a wrong guess can't silently register a wrong calendar time.
+ * Returns local "YYYY-MM-DDTHH:mm" (datetime-local shape), requiring both a date
+ * and a time. Conservative: common explicit JP/ISO formats only.
+ */
+export function detectMeetingTime(text: string): {
+  start?: string;
+  end?: string;
+} {
+  if (!text) return {};
+  const pad = (n: number) => String(n).padStart(2, "0");
+  let y: number | undefined;
+  let mo: number | undefined;
+  let d: number | undefined;
+  let m = text.match(/(\d{4})\s*[-/年]\s*(\d{1,2})\s*[-/月]\s*(\d{1,2})/);
+  if (m) {
+    y = +m[1];
+    mo = +m[2];
+    d = +m[3];
+  } else {
+    m = text.match(/(\d{1,2})\s*[/月]\s*(\d{1,2})\s*日?/);
+    if (m) {
+      y = new Date().getFullYear();
+      mo = +m[1];
+      d = +m[2];
+    }
+  }
+  if (!y || !mo || !d || mo > 12 || d > 31) return {};
+  // time + optional end (〜/~/-/–/から/to)
+  const tm = text.match(
+    /(\d{1,2})\s*[:時]\s*(\d{2})?\s*分?\s*(?:[〜~\-–]|から|to)?\s*(?:(\d{1,2})\s*[:時]\s*(\d{2})?\s*分?)?/,
+  );
+  if (!tm) return {};
+  const h1 = +tm[1];
+  const mi1 = tm[2] ? +tm[2] : 0;
+  if (h1 > 23 || mi1 > 59) return {};
+  const start = `${y}-${pad(mo)}-${pad(d)}T${pad(h1)}:${pad(mi1)}`;
+  let end: string | undefined;
+  if (tm[3]) {
+    const h2 = +tm[3];
+    const mi2 = tm[4] ? +tm[4] : 0;
+    if (h2 <= 23 && mi2 <= 59) end = `${y}-${pad(mo)}-${pad(d)}T${pad(h2)}:${pad(mi2)}`;
+  }
+  return { start, end };
+}
+
 /** Parse the first VEVENT of an iCalendar document. Null when none. */
 export function parseIcs(ics: string): MeetingInvite | null {
   const lines = unfold(ics);
