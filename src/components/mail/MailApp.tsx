@@ -1950,6 +1950,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       draft={matchingDraft}
       onResumeDraft={openDraft}
       horizontal={layout === "geek"}
+      hasNote={selected ? noteIds.has(selected.id) : false}
     />
   );
 

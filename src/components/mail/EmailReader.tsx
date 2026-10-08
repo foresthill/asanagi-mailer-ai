@@ -5,7 +5,6 @@ import {
   Archive,
   Trash2,
   Mail,
-  Sparkles,
   RotateCcw,
   Loader2,
   Star,
@@ -44,10 +43,9 @@ import { ThreadView } from "./ThreadView";
 import { ThreadOutlineRail } from "./ThreadOutlineRail";
 import { QuotedText, segmentReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
-import { MeetingCard } from "./MeetingCard";
+import { ReaderMeta } from "./ReaderMeta";
 import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
-import { PrivateNote } from "./PrivateNote";
 import { ReplyButton, AiReplyButton } from "./ReplyButtons";
 import { TargetMenu } from "./TargetMenu";
 import type { ComposeAI, ComposeKind } from "./compose";
@@ -77,6 +75,7 @@ export function EmailReader({
   draft,
   onResumeDraft,
   horizontal,
+  hasNote,
 }: {
   email: Email | null;
   /** Conversation containing the email (oldest first); null while loading. */
@@ -125,6 +124,8 @@ export function EmailReader({
   /** 上下表示（本文が全幅）か。左右表示（本文が半分幅）では文書アウトラインが
    *  窮屈なので、全幅のとき（上下／全画面）だけ出す。 */
   horizontal?: boolean;
+  /** この端末にメモが保存済みか（付帯チップの目印用）。 */
+  hasNote?: boolean;
 }) {
   const { t } = useI18n();
   // Session-sticky preference: rich HTML (default) vs plain text.
@@ -555,10 +556,14 @@ export function EmailReader({
                 </span>
               </div>
 
-              {/* Meeting invite → calendar bridge (docs/05) */}
-              {email.invite && (
-                <MeetingCard emailId={email.id} invite={email.invite} />
-              )}
+              {/* 付帯情報（会議・重要度・メモ）はコンパクトなチップに畳む。 */}
+              <ReaderMeta
+                email={email}
+                classifying={classifying}
+                hasNote={hasNote}
+                onImportanceFeedback={onImportanceFeedback}
+                onNoteSaved={onNoteSaved}
+              />
 
               {/* Single email: attachments near the top (below the header) so they're
               always visible — critical for attachment-only mail with an empty body.
@@ -576,16 +581,6 @@ export function EmailReader({
                     {t("reader.attachmentsLoading")}
                   </div>
                 ) : null)}
-
-              {/* AI importance */}
-              <ImportanceBar
-                email={email}
-                classifying={classifying}
-                onFeedback={onImportanceFeedback}
-              />
-
-              {/* 自分用メモ（端末内のみ・AIに渡さない） */}
-              <PrivateNote emailId={email.id} onSaved={onNoteSaved} />
 
               {thread && thread.length > 1 ? (
                 <ThreadView
@@ -660,70 +655,6 @@ function BodyModeButton({
     >
       {label}
     </button>
-  );
-}
-
-function ImportanceBar({
-  email,
-  classifying,
-  onFeedback,
-}: {
-  email: Email;
-  classifying: boolean;
-  onFeedback: (i: Importance) => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="mt-5 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5">
-      <Sparkles className="size-3.5 text-accent" />
-      {classifying ? (
-        <span className="flex items-center gap-1.5 text-xs text-fg-muted">
-          <Loader2 className="size-3 animate-spin" /> {t("reader.classifying")}
-        </span>
-      ) : email.importance ? (
-        <>
-          <span
-            className={cn(
-              "rounded-md px-1.5 py-0.5 text-[11px] font-semibold",
-              email.importance === "high"
-                ? "bg-high-soft text-high"
-                : email.importance === "low"
-                  ? "bg-surface-2 text-low"
-                  : "bg-accent-soft text-accent",
-            )}
-          >
-            {t(`importance.${email.importance}`)}
-          </span>
-          {email.importanceReason && (
-            <span className="text-xs text-fg-muted">
-              {email.importanceReason}
-            </span>
-          )}
-        </>
-      ) : (
-        <span className="text-xs text-fg-subtle">
-          {t("reader.importanceUnknown")}
-        </span>
-      )}
-
-      <div className="ml-auto flex items-center gap-1">
-        <span className="mr-1 text-[11px] text-fg-subtle">
-          {t("reader.learn")}
-        </span>
-        <FeedbackChip
-          label={t("importance.high")}
-          onClick={() => onFeedback("high")}
-        />
-        <FeedbackChip
-          label={t("importance.normal")}
-          onClick={() => onFeedback("normal")}
-        />
-        <FeedbackChip
-          label={t("importance.low")}
-          onClick={() => onFeedback("low")}
-        />
-      </div>
-    </div>
   );
 }
 
@@ -807,23 +738,6 @@ function ImportanceMenu({
         </>
       )}
     </div>
-  );
-}
-
-function FeedbackChip({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
-    >
-      {label}
-    </button>
   );
 }
 
