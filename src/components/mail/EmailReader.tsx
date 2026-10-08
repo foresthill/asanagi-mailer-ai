@@ -180,6 +180,11 @@ export function EmailReader({
         ?.scrollIntoView({ block: "start", behavior: "auto" });
     }, 50);
   };
+  // 別メールを開いたら本文スクロールを必ず先頭へ戻す。前のメールの位置が残って
+  // 「クリックしたのに違うところが表示される」のを防ぐ＝頭からスパッと出る。
+  useEffect(() => {
+    scrollerRef.current?.scrollTo({ top: 0 });
+  }, [email?.id]);
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller || !thread || thread.length <= 1) return;
