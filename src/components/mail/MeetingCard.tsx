@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarPlus, Check, ExternalLink, Loader2, CalendarX2, Repeat } from "lucide-react";
+import {
+  CalendarPlus,
+  Check,
+  ExternalLink,
+  Loader2,
+  CalendarX2,
+  Repeat,
+  ListTodo,
+} from "lucide-react";
 import type { MeetingInvite } from "@/lib/types";
 
 /** "6月22日(月) 17:00–18:00" style range for the card. */
@@ -25,28 +33,61 @@ function formatRange(invite: MeetingInvite): string | null {
   return out;
 }
 
+/** datetime-local value (YYYY-MM-DDTHH:mm) → ISO-ish with seconds for the API. */
+function withSeconds(v: string): string {
+  return v.length === 16 ? `${v}:00` : v;
+}
+
 /**
- * 会議カード（docs/05 §1）: 招待メールの上部に出る要約と
- * 「Googleカレンダーに登録」「会議に参加」。登録は events.import (iCalUID)
- * なので二度押しても重複しない。
+ * 会議カード（docs/05 §1）: 招待メールの要約と「Googleカレンダーに登録」「会議に
+ * 参加」。ICS に開始時刻が無い（本文の Meet/Zoom/Teams リンクのみ）会議は、日時を
+ * ピッカーで指定して登録／TODO 化できる（prefillStart は本文からの推測初期値）。
+ * 登録は events.import (iCalUID) なので二度押しても重複しない。
  */
-export function MeetingCard({ emailId, invite }: { emailId: string; invite: MeetingInvite }) {
+export function MeetingCard({
+  emailId,
+  invite,
+  prefillStart,
+  prefillEnd,
+  onAddTodoDue,
+}: {
+  emailId: string;
+  invite: MeetingInvite;
+  /** ICS に開始時刻が無いとき、日時ピッカーの初期値（本文からの推測）。 */
+  prefillStart?: string;
+  prefillEnd?: string;
+  /** 「TODOに追加（期限付き）」。期限は会議開始 ISO。 */
+  onAddTodoDue?: (dueIso: string) => void;
+}) {
   const [state, setState] = useState<"idle" | "adding" | "added" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string>(
+    invite.start?.slice(0, 16) ?? prefillStart ?? "",
+  );
+  const [todoAdded, setTodoAdded] = useState(false);
 
   const cancelled = invite.method?.toUpperCase() === "CANCEL";
   const range = formatRange(invite);
-  const canRegister = Boolean(invite.start) && !cancelled;
+  // ICS に開始があればそのまま、無ければピッカーの値で登録できる。
+  const hasFixedStart = Boolean(invite.start);
+  const effectiveStart = hasFixedStart ? invite.start! : picked;
+  const canRegister = Boolean(effectiveStart) && !cancelled;
 
   async function register() {
     setState("adding");
     setMessage(null);
     try {
+      const body: Record<string, string> = { id: emailId };
+      if (!hasFixedStart) {
+        body.start = withSeconds(picked);
+        if (prefillEnd) body.end = withSeconds(prefillEnd);
+        body.timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      }
       const res = await fetch("/api/calendar/add", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: emailId }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -62,8 +103,14 @@ export function MeetingCard({ emailId, invite }: { emailId: string; invite: Meet
     }
   }
 
+  function addTodo() {
+    if (!onAddTodoDue || !effectiveStart) return;
+    onAddTodoDue(withSeconds(effectiveStart));
+    setTodoAdded(true);
+  }
+
   return (
-    <div className="mt-5 rounded-xl border border-accent/30 bg-accent-soft/40 px-4 py-3">
+    <div className="mt-2 rounded-xl border border-accent/30 bg-accent-soft/40 px-4 py-3">
       <div className="flex items-start gap-3">
         <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-accent text-accent-fg">
           {cancelled ? <CalendarX2 className="size-4" /> : <CalendarPlus className="size-4" />}
@@ -94,6 +141,21 @@ export function MeetingCard({ emailId, invite }: { emailId: string; invite: Meet
                   主催: {invite.organizer.name ?? invite.organizer.email}
                 </p>
               )}
+              {/* ICS に開始時刻が無い → 日時を指定して登録/TODO 化できる。 */}
+              {!hasFixedStart && (
+                <label className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-fg-muted">
+                  <span>日時:</span>
+                  <input
+                    type="datetime-local"
+                    value={picked}
+                    onChange={(e) => setPicked(e.target.value)}
+                    className="rounded-md border border-border bg-bg px-2 py-1 text-xs outline-none focus:border-accent"
+                  />
+                  <span className="text-[10px] text-fg-subtle">
+                    （本文に日時が無いため指定してください）
+                  </span>
+                </label>
+              )}
             </>
           )}
           {message && <p className="mt-1 text-xs text-high">{message}</p>}
@@ -113,7 +175,7 @@ export function MeetingCard({ emailId, invite }: { emailId: string; invite: Meet
             ) : (
               <button
                 onClick={register}
-                disabled={state === "adding"}
+                disabled={state === "adding" || !effectiveStart}
                 className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-fg shadow-sm hover:opacity-90 disabled:opacity-60"
               >
                 {state === "adding" ? (
@@ -124,6 +186,16 @@ export function MeetingCard({ emailId, invite }: { emailId: string; invite: Meet
                 Googleカレンダーに登録
               </button>
             ))}
+          {onAddTodoDue && canRegister && (
+            <button
+              onClick={addTodo}
+              disabled={todoAdded || !effectiveStart}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-accent disabled:opacity-60"
+            >
+              {todoAdded ? <Check className="size-3.5" /> : <ListTodo className="size-3.5" />}
+              {todoAdded ? "TODOに追加済み" : "TODOに追加（期限付き）"}
+            </button>
+          )}
           {invite.joinUrl && !cancelled && (
             <a
               href={invite.joinUrl}

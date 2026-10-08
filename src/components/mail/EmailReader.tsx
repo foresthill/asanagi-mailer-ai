@@ -76,6 +76,7 @@ export function EmailReader({
   onResumeDraft,
   horizontal,
   hasNote,
+  onAddTodoDue,
 }: {
   email: Email | null;
   /** Conversation containing the email (oldest first); null while loading. */
@@ -126,6 +127,8 @@ export function EmailReader({
   horizontal?: boolean;
   /** この端末にメモが保存済みか（付帯チップの目印用）。 */
   hasNote?: boolean;
+  /** 会議カードの「TODOに追加（期限付き）」。期限は会議開始 ISO。 */
+  onAddTodoDue?: (dueIso: string) => void;
 }) {
   const { t } = useI18n();
   // Session-sticky preference: rich HTML (default) vs plain text.
@@ -563,6 +566,7 @@ export function EmailReader({
                 hasNote={hasNote}
                 onImportanceFeedback={onImportanceFeedback}
                 onNoteSaved={onNoteSaved}
+                onAddTodoDue={onAddTodoDue}
               />
 
               {/* Single email: attachments near the top (below the header) so they're

@@ -45,6 +45,7 @@ import {
 import { buildRows } from "./threadList";
 import { useI18n } from "@/lib/i18n";
 import { getSweepAutoMode, sweepAutoAllowed } from "@/lib/sweep-prefs";
+import { fireNotification } from "@/lib/notify-prefs";
 import type { GroupAxis } from "./EmailList";
 import type { SearchDigest } from "@/app/api/ai/search-digest/route";
 
@@ -348,6 +349,41 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       } catch {
         /* optimistic */
       }
+    }
+  };
+
+  // 会議カード等から「期限付きで TODO に追加」。期限があるので受信箱バナー＋
+  // （ONなら）OS通知のリマインド対象になる。既存TODOでも期限を上書きする。
+  const addTodoWithDue = async (email: Email, dueIso: string) => {
+    const item: TodoItem = {
+      id: email.id,
+      account: email.account,
+      subject: email.subject,
+      fromName: email.from.name,
+      fromEmail: email.from.email,
+      date: email.date,
+      createdAt: new Date().toISOString(),
+      due: dueIso,
+    };
+    setTodos((list) =>
+      list.some((x) => x.id === email.id)
+        ? list.map((x) => (x.id === email.id ? { ...x, due: dueIso } : x))
+        : [...list, item],
+    );
+    showToast("TODO に追加しました（期限付き）");
+    try {
+      await fetch("/api/todos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ item }),
+      });
+      await fetch("/api/todos", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: email.id, due: dueIso }),
+      });
+    } catch {
+      /* optimistic */
     }
   };
 
@@ -764,6 +800,40 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     ? todos.filter((x) => !x.done && x.due && new Date(x.due).getTime() < nowMs)
         .length
     : 0;
+  // 期限を過ぎた TODO を OS 通知で1回だけ知らせる（設定ONのときのみ）。既に通知した
+  // IDは localStorage で覚え、再読込でも重複通知しない。アプリ内バナーは従来どおり。
+  useEffect(() => {
+    if (!nowMs) return;
+    const due = todos.filter(
+      (x) => !x.done && x.due && new Date(x.due).getTime() < nowMs,
+    );
+    if (due.length === 0) return;
+    let notified: Set<string>;
+    try {
+      notified = new Set(
+        JSON.parse(localStorage.getItem("asanagi:notified-todos") ?? "[]"),
+      );
+    } catch {
+      notified = new Set();
+    }
+    const fresh = due.filter((x) => !notified.has(x.id));
+    if (fresh.length === 0) return;
+    for (const x of fresh) {
+      fireNotification(
+        "期限の TODO があります",
+        x.subject || x.fromName || "メール",
+      );
+      notified.add(x.id);
+    }
+    try {
+      localStorage.setItem(
+        "asanagi:notified-todos",
+        JSON.stringify([...notified].slice(-500)),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [nowMs, todos]);
   const isSelectedTodo = selected
     ? todos.some((x) => x.id === selected.id)
     : false;
@@ -1951,6 +2021,9 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onResumeDraft={openDraft}
       horizontal={layout === "geek"}
       hasNote={selected ? noteIds.has(selected.id) : false}
+      onAddTodoDue={
+        selected ? (due) => addTodoWithDue(selected, due) : undefined
+      }
     />
   );
 
