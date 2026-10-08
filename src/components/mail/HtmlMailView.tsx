@@ -54,27 +54,6 @@ function highlightDom(doc: Document, terms: string[]) {
   }
 }
 
-/**
- * Bring an iframe's first search match into view. The iframe is content-sized
- * (no internal scroll), so we scroll the parent's nearest scrollable ancestor
- * to the mark's position (iframe offset + mark offset within it).
- */
-function scrollMatchIntoView(iframe: HTMLIFrameElement, mark: HTMLElement) {
-  let sc: HTMLElement | null = iframe.parentElement;
-  while (sc) {
-    const oy = getComputedStyle(sc).overflowY;
-    if ((oy === "auto" || oy === "scroll") && sc.scrollHeight > sc.clientHeight) break;
-    sc = sc.parentElement;
-  }
-  // mark rect is relative to the iframe's own (unscrolled) viewport.
-  const targetY = iframe.getBoundingClientRect().top + mark.getBoundingClientRect().top;
-  if (sc) {
-    sc.scrollBy({ top: targetY - sc.getBoundingClientRect().top - 96, behavior: "smooth" });
-  } else {
-    window.scrollBy({ top: targetY - 96, behavior: "smooth" });
-  }
-}
-
 /** Reply-history markers used by the major clients. Conservative on purpose:
  *  we do NOT fold a bare <blockquote> (often a legitimate inline quote). */
 const QUOTE_SELECTOR =
@@ -226,27 +205,14 @@ export function HtmlMailView({
     };
   }, [html, showImages, fontScale, highlight, showQuote, dark]);
 
-  // Scroll only once per (html, highlight) — not on every image-toggle reload.
-  const scrolledRef = useRef(false);
-  useEffect(() => {
-    scrolledRef.current = false;
-  }, [html, highlight]);
-
   // Sized to content. sandbox has NO allow-scripts, so allow-same-origin is
   // safe here and lets us measure the document height.
   const fit = () => {
     const el = iframeRef.current;
     const h = el?.contentDocument?.documentElement?.scrollHeight;
     if (el && h) el.style.height = `${Math.min(h + 8, 20000)}px`;
-    // After sizing, bring the first search match into view (search mode only).
-    if (!scrolledRef.current && el) {
-      const mark = el.contentDocument?.querySelector("mark.asanagi-hl") as HTMLElement | null;
-      if (mark) {
-        scrolledRef.current = true;
-        // Let the new height settle before measuring positions.
-        requestAnimationFrame(() => scrollMatchIntoView(el, mark));
-      }
-    }
+    // 検索で開いても一致箇所へ自動スクロールしない（「クリックしたメールが頭から
+    // 出る」を優先）。一致語は asanagi-hl のハイライトで示すだけに留める。
   };
 
   return (
