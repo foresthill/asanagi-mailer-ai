@@ -66,6 +66,12 @@ jobs:
           cp "$(command -v node)" src-tauri/binaries/node
           chmod +x src-tauri/binaries/node
           echo "bundled node: $(src-tauri/binaries/node --version) on ${{ matrix.platform }}"
+          # macOS(Apple Silicon)は署名が無いと「壊れている」と表示される。同梱 node を
+          # アドホック署名しておき、アプリ側の署名(signingIdentity:"-")と整合させる。
+          if [[ "${{ matrix.platform }}" == macos* ]]; then
+            codesign --force --sign - src-tauri/binaries/node
+            codesign -dv src-tauri/binaries/node || true
+          fi
 
       # tauri build が conf の beforeBuildCommand(build:standalone)を実行し、
       # .next-standalone を bundle.resources として同梱する。bundle.targets="all"
