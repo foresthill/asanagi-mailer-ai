@@ -1,7 +1,8 @@
-name: Desktop build (Linux)
+name: Desktop build
 
-# CTO向けに Linux アプリ(AppImage/.deb)を CI でビルドし、Release に添付する。
-# macOS からは Linux バンドルを作れないため CI が最短。
+# デスクトップアプリを CI でビルドし、Release に添付する。
+# Linux（AppImage/.deb/.rpm）と macOS（.dmg/.app）を同じリリースに出す。
+# Windows は Node 同梱（node.exe）＋ランチャーの対応が要るため別途。
 # 起動: タグ push（例 `app-v0.1.0`）または Actions 画面の「Run workflow」。
 on:
   workflow_dispatch:
@@ -13,12 +14,20 @@ permissions:
   contents: write # Release 作成・アップロードに必要
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-22.04
+  build:
+    strategy:
+      # 片方の OS が失敗しても、もう片方の成果物は出す。
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04 # Linux: deb / rpm / AppImage（glibc 2.35）
+          - platform: macos-latest # macOS: dmg / app（Apple Silicon = arm64）
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Linux build deps (Tauri v2)
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -48,32 +57,34 @@ jobs:
         run: npm install --no-audit --no-fund
 
       # Bundle the Node runtime so the end user needs nothing installed.
-      # We reuse the runner's Node 24 (official linux-x64 build from setup-node),
-      # shipped as the app resource `node` (see tauri.conf.json bundle.resources).
+      # We reuse the runner's Node 24 (official build from setup-node), shipped as
+      # the app resource `node` (see tauri.conf.json bundle.resources). Linux は
+      # linux-x64(glibc)、macOS は該当ランナーのアーキ(arm64)。bash は両OSで既定。
       - name: Bundle Node runtime
         run: |
           mkdir -p src-tauri/binaries
           cp "$(command -v node)" src-tauri/binaries/node
           chmod +x src-tauri/binaries/node
-          echo "bundled node: $(src-tauri/binaries/node --version)"
-          ls -lh src-tauri/binaries/node
+          echo "bundled node: $(src-tauri/binaries/node --version) on ${{ matrix.platform }}"
 
       # tauri build が conf の beforeBuildCommand(build:standalone)を実行し、
-      # .next-standalone を bundle.resources として同梱する。
+      # .next-standalone を bundle.resources として同梱する。bundle.targets="all"
+      # なので各OSのネイティブ形式（Linux=deb/rpm/appimage, macOS=dmg/app）を作る。
       - name: Build desktop bundle + publish release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GitHub runner は FUSE が使えず linuxdeploy(AppImage)が失敗するため、
-          # AppImage を extract して実行させる（AppImageビルドの定番回避）。
+          # AppImage を extract して実行させる（Linux のみ効く・他OSでは無害）。
           APPIMAGE_EXTRACT_AND_RUN: "1"
           NO_STRIP: "1"
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('app-v0.0.0-dev-{0}', github.run_number) }}
           releaseName: "Asanagi Desktop ${{ github.ref_type == 'tag' && github.ref_name || 'dev build' }}"
           releaseBody: |
-            Linux デスクトップビルド（AppImage / .deb / .rpm）。
+            デスクトップビルド: Linux（AppImage / .deb / .rpm）＋ macOS（.dmg）。
             Node ランタイムを同梱済みのため、実行マシンへの Node インストールは不要です。
+            macOS は未署名のため初回は「開発元を確認できません」→ 右クリック→「開く」で起動してください（Apple Silicon 向け）。
             初回は Gmail 再認証と AI キー入力が必要。
             自動アップデートは未設定（署名鍵の設定後に有効化・docs/DESKTOP.md 参照）。
           releaseDraft: false
