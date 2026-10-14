@@ -1553,11 +1553,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
 
   // 検索結果はグルーピングしない（1ヒット=1行）。まとめると代表＝最新メール（＝自分の
   // 返信になりがち）が前面に出て、クリックしたいヒット本体が裏に隠れてしまうため。
-  // 「一覧で見えているメール＝クリックで開くメール」の WYSIWYG を検索で担保する。
-  // 通常フォルダはトグルどおり会話グルーピング。
+  // 通常フォルダはトグルどおり会話グルーピング。検索は本文（引用含む）を対象にする
+  // ため、同じスレッドの返信が軒並みヒットして同じ会話が何件も並ぶ。検索結果は常に
+  // スレッドで束ねて1会話=1行にし、重複を解消する（クリックでそのスレッドを開く）。
   const rows = buildRows(
     searchResults ?? emails,
-    searchResults !== null ? false : grouping,
+    searchResults !== null ? true : grouping,
   );
 
   // Bulk selection: rows are checked by representative id; an action expands
