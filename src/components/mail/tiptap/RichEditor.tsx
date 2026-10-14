@@ -165,10 +165,14 @@ export const RichEditor = forwardRef<
     onUpdate({ editor }) {
       onChangeRef.current({ html: editor.getHTML(), text: editor.getText() });
     },
-    onSelectionUpdate() {
+    onSelectionUpdate({ editor }) {
+      // IME 変換中（composing）は React 再描画を走らせない。webkit2gtk(Linux)で
+      // 変換中の再描画が入力位置を乱す（カーソルと別の場所に文字が入る）のを防ぐ。
+      if (editor.view.composing) return;
       force((n) => n + 1);
     },
-    onTransaction() {
+    onTransaction({ editor }) {
+      if (editor.view.composing) return;
       force((n) => n + 1);
     },
   });
