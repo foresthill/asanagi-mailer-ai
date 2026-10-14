@@ -596,6 +596,8 @@ const ja: Dict = {
   // ReplyComposer（作成）
   "composer.preset.polite": "もっと丁寧に",
   "composer.thinking": "考え中…",
+  "composer.review": "失礼チェック",
+  "composer.review.ok": "失礼な点は見当たりません",
   "draft.inThread": "この会話の下書きがあります",
   "draft.resume": "続きを書く",
   "draft.badge": "下書きあり",
@@ -1352,6 +1354,8 @@ const en: Dict = {
   // ReplyComposer（作成）
   "composer.preset.polite": "More polite",
   "composer.thinking": "Thinking…",
+  "composer.review": "Politeness check",
+  "composer.review.ok": "No rude points found",
   "draft.inThread": "You have a draft for this conversation",
   "draft.resume": "Continue writing",
   "draft.badge": "Has a draft",
@@ -2133,6 +2137,8 @@ const fr: Dict = {
   // ReplyComposer（作成）
   "composer.preset.polite": "Plus poli",
   "composer.thinking": "Réflexion…",
+  "composer.review": "Vérif. politesse",
+  "composer.review.ok": "Rien d'impoli détecté",
   "draft.inThread": "Vous avez un brouillon pour cette conversation",
   "draft.resume": "Continuer",
   "draft.badge": "Brouillon",
@@ -2860,6 +2866,8 @@ const zh: Dict = {
   "reply.aiForward.title": "AI 起草带摘要的转发",
   "composer.preset.polite": "更礼貌",
   "composer.thinking": "思考中…",
+  "composer.review": "礼貌检查",
+  "composer.review.ok": "未发现失礼之处",
   "draft.inThread": "你有一封此会话的草稿",
   "draft.resume": "继续撰写",
   "draft.badge": "有草稿",

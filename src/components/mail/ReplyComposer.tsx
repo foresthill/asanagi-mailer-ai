@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   Minimize2,
   Maximize2,
+  ShieldCheck,
 } from "lucide-react";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { SendConfirmDialog } from "./SendConfirmDialog";
@@ -163,6 +164,45 @@ export function ReplyComposer({
     });
 
   const reviewing = pending > 0;
+
+  // 失礼チェック（レビュー型添削）: 書き換えず、問題箇所＋修正の意図をコメントで返す。
+  const [polite, setPolite] = useState<{
+    loading: boolean;
+    ok?: boolean;
+    overall?: string;
+    issues?: { quote: string; comment: string }[];
+    error?: string;
+  } | null>(null);
+  async function runReview() {
+    const current = richMode
+      ? (richEditorRef.current?.getText() ?? richText)
+      : splitQuotedDraft(body, init.quote ?? "").head;
+    if (!current.trim()) {
+      setNote(t("composer.toast.noBody"));
+      return;
+    }
+    setPolite({ loading: true });
+    try {
+      const res = await fetch("/api/ai/review", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ draft: current, email: init.source, subject }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? t("composer.toast.suggestFailed"));
+      setPolite({
+        loading: false,
+        ok: data.ok,
+        overall: data.overall,
+        issues: data.issues ?? [],
+      });
+    } catch (e) {
+      setPolite({
+        loading: false,
+        error: e instanceof Error ? e.message : t("composer.toast.suggestFailed"),
+      });
+    }
+  }
 
   const cancelAi = () => abortRef.current?.abort();
 
@@ -987,6 +1027,54 @@ export function ReplyComposer({
             </div>
           ))}
           {note && <div className="text-xs text-fg-subtle">{note}</div>}
+          {polite && !polite.loading && (
+            <div className="rounded-lg border border-accent/30 bg-accent-soft/40 px-3 py-2 text-xs">
+              <div className="mb-1 flex items-center gap-1.5">
+                <ShieldCheck className="size-3.5 text-accent" />
+                <span className="font-semibold text-accent">
+                  {t("composer.review")}
+                </span>
+                {polite.ok && !polite.error && (
+                  <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
+                    {t("composer.review.ok")}
+                  </span>
+                )}
+                <button
+                  onClick={() => setPolite(null)}
+                  className="ml-auto text-fg-subtle hover:text-fg"
+                  aria-label={t("composer.close")}
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+              {polite.error ? (
+                <p className="text-high">{polite.error}</p>
+              ) : (
+                <>
+                  {polite.overall && (
+                    <p className="text-fg-muted">{polite.overall}</p>
+                  )}
+                  {polite.issues && polite.issues.length > 0 && (
+                    <ul className="mt-1.5 flex flex-col gap-1.5">
+                      {polite.issues.map((it, i) => (
+                        <li
+                          key={i}
+                          className="rounded-md border border-border bg-surface px-2 py-1.5"
+                        >
+                          {it.quote && (
+                            <p className="text-[11px] text-fg-subtle">
+                              「{it.quote}」
+                            </p>
+                          )}
+                          <p className="text-fg">{it.comment}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           {busy && (
             <div className="flex items-center gap-1.5 text-xs text-fg-subtle">
               <Loader2 className="size-3 animate-spin" /> {t("composer.thinking")}
@@ -1008,6 +1096,19 @@ export function ReplyComposer({
               </button>
             );
           })}
+          {/* 失礼チェック: 書き換えではなく、問題箇所＋理由をコメントで返す。 */}
+          <button
+            onClick={runReview}
+            disabled={busy || generating || reviewing || polite?.loading}
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:opacity-90 disabled:opacity-50"
+          >
+            {polite?.loading ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <ShieldCheck className="size-3" />
+            )}
+            {t("composer.review")}
+          </button>
         </div>
 
         <div className="border-t border-border p-3">
