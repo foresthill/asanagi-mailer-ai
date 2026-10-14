@@ -145,6 +145,9 @@ export function EmailConnectSection() {
             </option>
           ))}
         </select>
+        <span className="text-[11px] leading-relaxed text-fg-subtle">
+          {t("email.backend.note")}
+        </span>
       </label>
 
       <div className="flex flex-col gap-2">
@@ -192,11 +195,17 @@ export function EmailConnectSection() {
         </span>
       </div>
 
-      <GmailConnectSection gmail={view.gmail} onRefresh={refresh} />
+      {/* 選んだ接続方式のフォームだけ出す（両方同時に出さない＝どこを押すか明確に）。
+          「おまかせ」のときだけ両方見せる。デモ(mock)は接続フォーム不要。 */}
+      {(view.choice === "gmail" || view.choice === "auto") && (
+        <GmailConnectSection gmail={view.gmail} onRefresh={refresh} />
+      )}
 
-      <div className="border-t border-border pt-4">
-        <ImapConnectSection imap={view.imap} onRefresh={refresh} />
-      </div>
+      {(view.choice === "imap" || view.choice === "auto") && (
+        <div className={view.choice === "auto" ? "border-t border-border pt-4" : ""}>
+          <ImapConnectSection imap={view.imap} onRefresh={refresh} />
+        </div>
+      )}
     </div>
   );
 }
