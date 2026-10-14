@@ -50,17 +50,27 @@ export function ResizeHandle({
         }
       }}
       className={
+        // 掴みやすいよう当たり判定を広げる（見た目は細いまま・レイアウトは
+        // ネガティブマージンで相殺して詰めない）。
         horizontal
-          ? "group relative z-10 -my-0.5 h-1.5 w-full shrink-0 cursor-row-resize touch-none select-none bg-transparent"
-          : "group relative z-10 -mx-0.5 w-1.5 shrink-0 cursor-col-resize touch-none select-none bg-transparent"
+          ? "group relative z-10 -my-1.5 flex h-4 w-full shrink-0 cursor-row-resize touch-none select-none items-center justify-center bg-transparent"
+          : "group relative z-10 -mx-1.5 flex h-full w-4 shrink-0 cursor-col-resize touch-none select-none items-center justify-center bg-transparent"
       }
     >
-      {/* Visible hairline that thickens/tints on hover & drag. */}
+      {/* Resting hairline across the full divider. */}
       <span
         className={
           horizontal
-            ? "pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border transition-colors group-hover:h-0.5 group-hover:bg-accent group-active:bg-accent"
-            : "pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-colors group-hover:w-0.5 group-hover:bg-accent group-active:bg-accent"
+            ? "pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border transition-colors group-hover:bg-accent group-active:bg-accent"
+            : "pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-colors group-hover:bg-accent group-active:bg-accent"
+        }
+      />
+      {/* Centered grip pill so the divider reads as draggable even at rest. */}
+      <span
+        className={
+          horizontal
+            ? "pointer-events-none relative h-1 w-9 rounded-full bg-border transition-colors group-hover:bg-accent group-active:bg-accent"
+            : "pointer-events-none relative h-9 w-1 rounded-full bg-border transition-colors group-hover:bg-accent group-active:bg-accent"
         }
       />
     </div>
