@@ -44,6 +44,7 @@ import { ThreadOutlineRail } from "./ThreadOutlineRail";
 import { QuotedText, segmentReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
 import { ReaderMeta } from "./ReaderMeta";
+import { BodyViewBar } from "./BodyViewBar";
 import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
 import { ReplyButton, AiReplyButton } from "./ReplyButtons";
@@ -569,6 +570,17 @@ export function EmailReader({
                 onAddTodoDue={onAddTodoDue}
               />
 
+              {/* 本文の「見せ方」（HTML/テキスト・翻訳）は1か所に集約。ズーム/
+                  アウトラインは常時表示が要るので上部ツールバー側に残す。 */}
+              <BodyViewBar
+                email={email}
+                textMode={textMode}
+                onTextMode={setTextMode}
+                showHtmlToggle={Boolean(
+                  email.html && !(thread && thread.length > 1),
+                )}
+              />
+
               {/* Single email: attachments near the top (below the header) so they're
               always visible — critical for attachment-only mail with an empty body.
               While the live fetch is loading the metadata, show a placeholder so
@@ -600,20 +612,6 @@ export function EmailReader({
                 />
               ) : (
                 <>
-                  {email.html && (
-                    <div className="mt-3 flex justify-end gap-1">
-                      <BodyModeButton
-                        label="HTML"
-                        active={!textMode}
-                        onClick={() => setTextMode(false)}
-                      />
-                      <BodyModeButton
-                        label={t("reader.textMode")}
-                        active={textMode}
-                        onClick={() => setTextMode(true)}
-                      />
-                    </div>
-                  )}
                   {email.html && !textMode ? (
                     <HtmlMailView
                       html={email.html}
@@ -635,30 +633,6 @@ export function EmailReader({
         </div>
       </div>
     </div>
-  );
-}
-
-function BodyModeButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "rounded-md border px-2 py-1 text-[11px] transition-colors",
-        active
-          ? "border-accent bg-accent-soft text-accent"
-          : "border-border text-fg-muted hover:text-fg",
-      )}
-    >
-      {label}
-    </button>
   );
 }
 

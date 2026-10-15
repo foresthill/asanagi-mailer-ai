@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
   ListTodo,
   ArrowUpRight,
@@ -11,6 +12,7 @@ import {
   CalendarCheck,
   RefreshCw,
   Send,
+  NotebookPen,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { TodoItem, OpWorkPackage, DevlogIssue } from "@/lib/types";
@@ -62,6 +64,7 @@ export function TodoView({
   todos,
   onOpenEmail,
   onSetDue,
+  onSetNote,
   onToggleDone,
   onRemove,
   issueTargets,
@@ -76,6 +79,8 @@ export function TodoView({
   todos: TodoItem[];
   onOpenEmail: (id: string) => void;
   onSetDue: (id: string, due: string | null) => void;
+  /** 自由メモの保存（件名だけでは分からないタスク内容を書く）。端末内のみ。 */
+  onSetNote: (id: string, note: string) => void;
   onToggleDone: (id: string, done: boolean) => void;
   onRemove: (id: string) => void;
   /** 起票（work package / issue 作成）連携の宛先（OpenProject / devlog 等・設定済みのみ）。
@@ -140,10 +145,11 @@ export function TodoView({
                   <li
                     key={todo.id}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl border border-border bg-surface px-3.5 py-2.5",
+                      "flex flex-col gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5",
                       todo.done && "opacity-55",
                     )}
                   >
+                   <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
                       checked={!!todo.done}
@@ -236,6 +242,14 @@ export function TodoView({
                     >
                       <Trash2 className="size-3.5" />
                     </button>
+                   </div>
+                    {/* 自由メモ: 件名だけでは分からないタスク内容を書く（端末内のみ）。 */}
+                    <TodoNote
+                      value={todo.note}
+                      done={!!todo.done}
+                      placeholder={t("todo.note.placeholder")}
+                      onCommit={(v) => onSetNote(todo.id, v)}
+                    />
                   </li>
                 );
               })}
@@ -357,6 +371,66 @@ export function TodoView({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * TODO 1件の自由メモ。件名だけでは分からないタスクの中身を書く欄。
+ * 端末内のみ（PATCH /api/todos）。毎打鍵では送らず、フォーカスを外した時
+ * （＝変更があった時だけ）保存する。高さは内容に合わせて伸びる。
+ */
+function TodoNote({
+  value,
+  done,
+  placeholder,
+  onCommit,
+}: {
+  value?: string;
+  done: boolean;
+  placeholder: string;
+  onCommit: (v: string) => void;
+}) {
+  const [text, setText] = useState(value ?? "");
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  // 外部から値が変わったら同期（別経路での更新・再読込に追従）。prop 変化を
+  // レンダー中に取り込む React 公式パターン（effect で setState しない）。
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setText(value ?? "");
+  }
+
+  // 内容に合わせて高さを自動調整（DOM 同期なので effect が適切）。
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
+
+  const commit = () => {
+    const next = text.trim();
+    if (next !== (value ?? "").trim()) onCommit(next);
+  };
+
+  return (
+    <div className="flex items-start gap-2 pl-7 pr-1">
+      <NotebookPen className="mt-1 size-3.5 shrink-0 text-fg-subtle" />
+      <textarea
+        ref={ref}
+        rows={1}
+        value={text}
+        placeholder={placeholder}
+        disabled={done}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        className={cn(
+          "w-full resize-none bg-transparent text-xs leading-relaxed text-fg outline-none placeholder:text-fg-subtle",
+          done && "line-through",
+        )}
+      />
     </div>
   );
 }

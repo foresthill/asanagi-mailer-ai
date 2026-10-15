@@ -402,6 +402,21 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     }
   };
 
+  const setTodoNote = async (id: string, note: string) => {
+    setTodos((list) =>
+      list.map((x) => (x.id === id ? { ...x, note: note || undefined } : x)),
+    );
+    try {
+      await fetch("/api/todos", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, note }),
+      });
+    } catch {
+      /* optimistic */
+    }
+  };
+
   const setTodoDone = async (id: string, done: boolean) => {
     setTodos((list) =>
       list.map((x) =>
@@ -2093,6 +2108,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
             void selectEmail(id);
           }}
           onSetDue={setTodoDue}
+          onSetNote={setTodoNote}
           onToggleDone={setTodoDone}
           onRemove={removeTodoItem}
           issueTargets={todoIssueTargets}

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
  * TODO（「あとで」）— メールをタスク化。local-first: .data にのみ保存。
  * - GET            → 全 TODO
  * - POST  { item } → 追加（既存はそのまま）
- * - PATCH { id, due?, done? } → 更新
+ * - PATCH { id, due?, done?, note? } → 更新
  * - DELETE ?id=... → 削除
  */
 export async function GET() {
@@ -30,13 +30,15 @@ export async function PATCH(req: Request) {
     id?: string;
     due?: string | null;
     done?: boolean;
+    note?: string | null;
   } | null;
   if (!body?.id) {
     return NextResponse.json({ error: "id が必要です" }, { status: 400 });
   }
-  const patch: { due?: string; done?: boolean } = {};
+  const patch: { due?: string; done?: boolean; note?: string } = {};
   if ("due" in body) patch.due = body.due ?? undefined;
   if ("done" in body) patch.done = body.done;
+  if ("note" in body) patch.note = body.note ?? undefined;
   return NextResponse.json({
     ok: true,
     todos: await updateTodo(body.id, patch),

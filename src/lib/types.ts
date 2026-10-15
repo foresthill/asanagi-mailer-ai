@@ -403,6 +403,8 @@ export interface TodoItem {
   createdAt: string;
   /** 任意の期限（ISO）。 */
   due?: string;
+  /** 任意の自由メモ（件名だけでは分からないタスクの中身を書く）。端末内のみ。 */
+  note?: string;
   done?: boolean;
   doneAt?: string;
   /** OpenProject に送った場合の work package id（重複送信の抑止＆リンク表示用）。 */
