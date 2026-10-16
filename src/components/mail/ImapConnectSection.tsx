@@ -101,12 +101,37 @@ export function ImapConnectSection({
     try {
       await save();
       const res = await fetch("/api/settings/email/test", { method: "POST" });
-      setTest((await res.json()) as TestResult);
-    } catch {
+      const raw = await res.text();
+      try {
+        // Normal path: the route returns JSON (200 ok / 502 with per-protocol
+        // reasons it already logged server-side).
+        setTest(JSON.parse(raw) as TestResult);
+      } catch {
+        // The route 500'd before it could return JSON (e.g. a crash on import).
+        // Surface the raw status + body AND push it into the 動作ログ so the
+        // reason is never invisible, even in this failure mode.
+        const detail = `HTTP ${res.status} ${raw.slice(0, 500) || "(本文なし)"}`;
+        setTest({
+          ok: false,
+          imap: { ok: false, error: detail },
+          smtp: { ok: false, error: detail },
+        });
+        void fetch("/api/logs", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            scope: "imap",
+            message: `接続テストが応答を返せませんでした: ${detail}`,
+          }),
+        }).catch(() => {});
+      }
+    } catch (e) {
+      // Network-level failure reaching our own route (not the mail server).
+      const detail = e instanceof Error ? e.message : t("imap.test.failed");
       setTest({
         ok: false,
-        imap: { ok: false, error: t("imap.test.failed") },
-        smtp: { ok: false },
+        imap: { ok: false, error: detail },
+        smtp: { ok: false, error: detail },
       });
     } finally {
       setBusy(false);
