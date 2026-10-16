@@ -13,6 +13,8 @@ import {
   RefreshCw,
   Send,
   NotebookPen,
+  MessagesSquare,
+  Mail,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { TodoItem, OpWorkPackage, DevlogIssue } from "@/lib/types";
@@ -113,6 +115,29 @@ export function TodoView({
   const { t } = useI18n();
   const ordered = sortTodos(todos);
   const openCount = todos.filter((x) => !x.done).length;
+
+  // 会話ごとに1行。この1通TODOが、同じ会話のスレッドTODO配下にあるなら、その
+  // スレッド行の下にネスト表示する（＝一覧で同じ会話が重複しない）。親スレッド
+  // TODOが無いこの1通TODOは、そのまま独立行で出す。
+  const threadKeyOf = (x: TodoItem): string | null =>
+    x.account && x.threadId ? `${x.account}/thread:${x.threadId}` : null;
+  const threadTodoIds = new Set(
+    ordered.filter((x) => x.kind === "thread").map((x) => x.id),
+  );
+  const nestedByThread = new Map<string, TodoItem[]>();
+  const topLevel: TodoItem[] = [];
+  for (const x of ordered) {
+    if (x.kind !== "thread") {
+      const parent = threadKeyOf(x);
+      if (parent && threadTodoIds.has(parent)) {
+        const arr = nestedByThread.get(parent) ?? [];
+        arr.push(x);
+        nestedByThread.set(parent, arr);
+        continue;
+      }
+    }
+    topLevel.push(x);
+  }
   // 宛先メニュー（カレンダー登録 / 起票）は TargetMenu が開閉状態を内包する。
   const cals = calendarTargets ?? [];
   const issues = issueTargets ?? [];
@@ -139,8 +164,10 @@ export function TodoView({
             </div>
           ) : (
             <ul className="flex flex-col gap-1.5">
-              {ordered.map((todo) => {
+              {topLevel.map((todo) => {
                 const s = dueState(todo.due);
+                const nested =
+                  todo.kind === "thread" ? nestedByThread.get(todo.id) : undefined;
                 return (
                   <li
                     key={todo.id}
@@ -158,7 +185,7 @@ export function TodoView({
                       className="size-4 shrink-0 accent-[var(--accent,#6d5ae6)]"
                     />
                     <button
-                      onClick={() => onOpenEmail(todo.id)}
+                      onClick={() => onOpenEmail(todo.anchorId || todo.id)}
                       className="flex min-w-0 flex-1 flex-col items-start text-left"
                     >
                       <span
@@ -167,6 +194,18 @@ export function TodoView({
                           todo.done && "line-through",
                         )}
                       >
+                        {/* 単位バッジ: 会話（スレッド）か この1通か を一目で。 */}
+                        {todo.kind === "thread" ? (
+                          <MessagesSquare
+                            className="size-3.5 shrink-0 text-accent"
+                            aria-label={t("todo.unit.thread")}
+                          />
+                        ) : (
+                          <Mail
+                            className="size-3.5 shrink-0 text-fg-subtle"
+                            aria-label={t("todo.unit.message")}
+                          />
+                        )}
                         <span className="truncate">
                           {todo.subject || t("drafts.noSubject")}
                         </span>
@@ -250,6 +289,45 @@ export function TodoView({
                       placeholder={t("todo.note.placeholder")}
                       onCommit={(v) => onSetNote(todo.id, v)}
                     />
+
+                    {/* この会話内の「この1通だけ」TODO を配下にネスト（会話1行・重複なし）。 */}
+                    {nested?.map((m) => (
+                      <div
+                        key={m.id}
+                        className={cn(
+                          "ml-7 flex items-center gap-2 border-l border-border pl-3",
+                          m.done && "opacity-55",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!m.done}
+                          onChange={(e) => onToggleDone(m.id, e.target.checked)}
+                          title={t("todo.done")}
+                          className="size-3.5 shrink-0 accent-[var(--accent,#6d5ae6)]"
+                        />
+                        <Mail className="size-3 shrink-0 text-fg-subtle" />
+                        <button
+                          onClick={() => onOpenEmail(m.anchorId || m.id)}
+                          className={cn(
+                            "flex min-w-0 flex-1 items-center gap-1 truncate text-left text-xs text-fg-muted",
+                            m.done && "line-through",
+                          )}
+                        >
+                          <span className="truncate">
+                            {m.subject || t("drafts.noSubject")}
+                          </span>
+                          <ArrowUpRight className="size-3 shrink-0 text-fg-subtle" />
+                        </button>
+                        <button
+                          onClick={() => onRemove(m.id)}
+                          title={t("todo.remove")}
+                          className="grid size-6 shrink-0 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-high"
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
+                      </div>
+                    ))}
                   </li>
                 );
               })}
