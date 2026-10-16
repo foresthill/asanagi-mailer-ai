@@ -37,10 +37,23 @@ interface KeyStatus {
   last4?: string;
 }
 
+/** 選択プロバイダに保存されたモデルID（per-provider → 旧・共通のフォールバック）。 */
+function modelForProvider(v: View, p: ProviderChoice): string {
+  if (p === "auto") return v.model ?? "";
+  return v.models?.[p] || v.model || "";
+}
+function judgmentForProvider(v: View, p: ProviderChoice): string {
+  if (p === "auto") return v.judgmentModel ?? "";
+  return v.judgmentModels?.[p] || v.judgmentModel || "";
+}
+
 interface View {
   provider: ProviderChoice;
   model: string;
   judgmentModel: string;
+  /** プロバイダごとに保存されたモデルID（切替時の復元用）。 */
+  models: Record<AIProvider, string>;
+  judgmentModels: Record<AIProvider, string>;
   baseUrl: string;
   piiMask: boolean;
   nerMask: boolean;
@@ -141,13 +154,14 @@ export function ConnectionsSettings({
       setView(data);
       // Default the picker to OpenRouter on a pristine ("auto") state so the
       // key field is visible immediately; "auto" stays selectable explicitly.
-      setProvider(
+      const initProvider: ProviderChoice =
         data.provider && data.provider !== "auto"
           ? data.provider
-          : "openrouter",
-      );
-      setModel(data.model ?? "");
-      setJudgmentModel(data.judgmentModel ?? "");
+          : "openrouter";
+      setProvider(initProvider);
+      // モデルは選択中プロバイダの保存値で初期化（無ければ旧・共通値）。
+      setModel(modelForProvider(data, initProvider));
+      setJudgmentModel(judgmentForProvider(data, initProvider));
       setBaseUrl(data.baseUrl ?? "");
       setKeyInputs({});
       setJevKeyInput(undefined);
@@ -173,13 +187,22 @@ export function ConnectionsSettings({
     for (const [k, v] of Object.entries(keyInputs)) {
       if (v !== undefined) keys[k as AIProvider] = v;
     }
+    // モデルはプロバイダ別に保存（切替で復元される）。auto は旧・共通へ。
+    const modelFields =
+      provider === "auto"
+        ? { model, judgmentModel }
+        : {
+            models: { [provider]: model } as Partial<Record<AIProvider, string>>,
+            judgmentModels: { [provider]: judgmentModel } as Partial<
+              Record<AIProvider, string>
+            >,
+          };
     const res = await fetch("/api/settings/ai", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         provider,
-        model,
-        judgmentModel,
+        ...modelFields,
         baseUrl,
         keys,
         // Only send the Jev key when the user touched the field (undefined = keep).
@@ -277,7 +300,13 @@ export function ConnectionsSettings({
               <select
                 value={provider}
                 onChange={(e) => {
-                  setProvider(e.target.value as ProviderChoice);
+                  const next = e.target.value as ProviderChoice;
+                  setProvider(next);
+                  // 切替先プロバイダの保存モデルを復元（モデル欄を触らなくてよい）。
+                  if (view) {
+                    setModel(modelForProvider(view, next));
+                    setJudgmentModel(judgmentForProvider(view, next));
+                  }
                   setTest(null);
                 }}
                 className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"

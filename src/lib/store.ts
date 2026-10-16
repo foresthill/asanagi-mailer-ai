@@ -75,12 +75,24 @@ export async function saveAISettings(patch: AISettings): Promise<AISettings> {
     ...cur,
     ...patch,
     keys: { ...(cur.keys ?? {}), ...(patch.keys ?? {}) },
+    models: { ...(cur.models ?? {}), ...(patch.models ?? {}) },
+    judgmentModels: { ...(cur.judgmentModels ?? {}), ...(patch.judgmentModels ?? {}) },
   };
   if (next.keys) {
     for (const k of Object.keys(next.keys) as AIProvider[]) {
       if (!next.keys[k]?.trim()) delete next.keys[k];
     }
     if (Object.keys(next.keys).length === 0) delete next.keys;
+  }
+  // 空文字はそのプロバイダのモデル設定を消す（既定に戻す）。マップごと空なら撤去。
+  for (const field of ["models", "judgmentModels"] as const) {
+    const m = next[field];
+    if (m) {
+      for (const k of Object.keys(m) as AIProvider[]) {
+        if (!m[k]?.trim()) delete m[k];
+      }
+      if (Object.keys(m).length === 0) delete next[field];
+    }
   }
   // Jev key: blank clears it (like the provider keys).
   if (next.jevApiKey !== undefined && !next.jevApiKey.trim())

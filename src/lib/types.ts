@@ -207,9 +207,18 @@ export interface AISettings {
   piiMask?: boolean;
   /** 人名・社名もローカルNERでマスクする（実験的・既定OFF・初回モデル読込あり）。 */
   nerMask?: boolean;
-  /** Provider-specific model id. Empty → sensible per-provider default. */
+  /**
+   * Provider-specific model ids（プロバイダごとに別保存）。切替時に各プロバイダの
+   * モデルが復元される。空 → 既定モデル。旧 `model`（共通1個）は後方互換の
+   * フォールバックとして残す（models[provider] → model → env → 既定の順）。
+   */
+  models?: Partial<Record<AIProvider, string>>;
+  /** Provider-specific judgment model ids（同上）。空 → その provider の `models`。 */
+  judgmentModels?: Partial<Record<AIProvider, string>>;
+  /** @deprecated 旧・全プロバイダ共通モデル。新規は `models` を使う（後方互換で残す）。 */
   model?: string;
   /**
+   * @deprecated 旧・共通 judgment モデル。新規は `judgmentModels`。
    * Cheaper model for the high-volume, low-stakes judgments (朝の一凪 /
    * 重要度判定). Empty → use `model`. Reply drafting & 添削 always use `model`.
    */
