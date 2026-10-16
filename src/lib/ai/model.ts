@@ -97,9 +97,16 @@ export async function loadAIConfig(): Promise<AIConfig> {
   };
 
   const provider = explicitSetting ?? explicitEnv ?? autoDetect();
-  const model = s.model?.trim() || process.env.AI_MODEL || DEFAULT_MODELS[provider];
+  // Model is per-provider now: models[provider] → legacy shared `model` → env →
+  // default. Lets OpenRouter⇄Anthropic etc. keep their own model across switches.
+  const model =
+    s.models?.[provider]?.trim() ||
+    s.model?.trim() ||
+    process.env.AI_MODEL ||
+    DEFAULT_MODELS[provider];
   // Judgment model is opt-in; empty → same as the main model (no change).
-  const judgmentModel = s.judgmentModel?.trim() || model;
+  const judgmentModel =
+    s.judgmentModels?.[provider]?.trim() || s.judgmentModel?.trim() || model;
   const apiKey = mergedKey(provider);
   // baseUrl applies only to the openai provider (OpenAI-compatible endpoints
   // like Ollama). Ignored for the others.
@@ -111,7 +118,13 @@ export async function loadAIConfig(): Promise<AIConfig> {
         // no key, so a set baseUrl counts as configured on its own.
         Boolean(apiKey) || Boolean(baseUrl);
   const source: "settings" | "env" =
-    storedKey(provider) || explicitSetting || s.model?.trim() || baseUrl ? "settings" : "env";
+    storedKey(provider) ||
+    explicitSetting ||
+    s.models?.[provider]?.trim() ||
+    s.model?.trim() ||
+    baseUrl
+      ? "settings"
+      : "env";
 
   return {
     provider,

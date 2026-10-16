@@ -24,10 +24,20 @@ async function safeView() {
   const keys = Object.fromEntries(
     PROVIDERS.map((p) => [p, maskKey(s.keys?.[p])]),
   ) as Record<AIProvider, { set: boolean; last4?: string }>;
+  // Per-provider model ids (not secret — echoed so the UI can repopulate the
+  // model field when you switch providers). Legacy shared `model` is the fallback.
+  const models = Object.fromEntries(
+    PROVIDERS.map((p) => [p, s.models?.[p] ?? ""]),
+  ) as Record<AIProvider, string>;
+  const judgmentModels = Object.fromEntries(
+    PROVIDERS.map((p) => [p, s.judgmentModels?.[p] ?? ""]),
+  ) as Record<AIProvider, string>;
   return {
     provider: s.provider ?? "auto",
     model: s.model ?? "",
     judgmentModel: s.judgmentModel ?? "",
+    models,
+    judgmentModels,
     baseUrl: s.baseUrl ?? "",
     piiMask: s.piiMask ?? true,
     nerMask: s.nerMask ?? false,
@@ -68,6 +78,18 @@ export async function POST(req: Request) {
   if (typeof body.model === "string") patch.model = body.model;
   if (typeof body.judgmentModel === "string")
     patch.judgmentModel = body.judgmentModel;
+  // Per-provider model ids (empty string clears that provider's — handled in store).
+  for (const field of ["models", "judgmentModels"] as const) {
+    const m = body[field];
+    if (m && typeof m === "object") {
+      const out: Partial<Record<AIProvider, string>> = {};
+      for (const p of PROVIDERS) {
+        const v = m[p];
+        if (typeof v === "string") out[p] = v;
+      }
+      patch[field] = out;
+    }
+  }
   if (typeof body.baseUrl === "string") patch.baseUrl = body.baseUrl.trim();
   if (typeof body.jevApiKey === "string") patch.jevApiKey = body.jevApiKey; // "" clears (store)
   if (body.jevEndpoint === "typesafe" || body.jevEndpoint === "openrouter")
