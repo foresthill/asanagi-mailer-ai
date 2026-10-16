@@ -23,6 +23,7 @@ import {
   Send,
   ChevronDown,
   MessagesSquare,
+  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type {
@@ -47,6 +48,7 @@ import { QuotedText, segmentReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
 import { ReaderMeta } from "./ReaderMeta";
 import { BodyViewBar } from "./BodyViewBar";
+import { ReaderAiPanel } from "./ReaderAiPanel";
 import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
 import { ReplyButton, AiReplyButton } from "./ReplyButtons";
@@ -148,6 +150,8 @@ export function EmailReader({
   // 全画面（画面共有向け）＋本文の文字サイズ拡大。
   const [fullscreen, setFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
+  // 読む時のAIパネル（要約・質問・翻訳）。メールを変えたら畳む。
+  const [aiOpen, setAiOpen] = useState(false);
   const zoomOut = () =>
     setZoom((z) => Math.max(0.8, Math.round((z - 0.1) * 10) / 10));
   const zoomIn = () =>
@@ -201,6 +205,13 @@ export function EmailReader({
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0 });
   }, [email?.id]);
+  // 別メールを開いたらAIパネルは畳む（前のメールの結果を残さない）。effect で
+  // setState せず、prop 変化をレンダー中に取り込む React 公式パターン。
+  const [aiPrevId, setAiPrevId] = useState(email?.id);
+  if (email?.id !== aiPrevId) {
+    setAiPrevId(email?.id);
+    setAiOpen(false);
+  }
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller || !thread || thread.length <= 1) return;
@@ -301,8 +312,9 @@ export function EmailReader({
       )}
     >
       {/* Action bar — concept: one accent primary (返信), quiet icon-only
-          secondaries grouped by meaning (①仕分け ｜ ②表示 … 右 ③返信). */}
-      <div className="flex items-center gap-0.5 border-b border-border bg-surface px-4 py-2">
+          secondaries grouped by meaning (①仕分け ｜ ②表示 … 右 ③返信)。
+          狭い本文幅（左右表示）では折り返して全部に手が届くようにする。 */}
+      <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1.5 border-b border-border bg-surface px-4 py-2">
         {/* ① 仕分け */}
         <IconBtn
           icon={Star}
@@ -430,12 +442,39 @@ export function EmailReader({
           active={fullscreen}
         />
 
+        {/* ✨AI: 読む時のAIの入口（要約・質問・翻訳）。返信とは別。 */}
+        <button
+          onClick={() => setAiOpen((v) => !v)}
+          aria-pressed={aiOpen}
+          title={t("reader.ai.toggle")}
+          className={cn(
+            "ml-1 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+            aiOpen
+              ? "border-accent bg-accent text-white"
+              : "border-accent/40 bg-accent-soft text-accent hover:opacity-90",
+          )}
+        >
+          <Sparkles className="size-3.5" />
+          {t("reader.ai.label")}
+        </button>
+
         {/* ③ 返信（主役） */}
         <div className="ml-auto flex items-center gap-1.5">
           <ReplyButton onReply={replyAndExitFullscreen} />
           <AiReplyButton onReply={replyAndExitFullscreen} />
         </div>
       </div>
+
+      {/* 読む時のAIパネル（トグル）。会話ならスレッド全体を文脈に。 */}
+      {aiOpen && (
+        <div className="border-b border-border px-5 pb-3">
+          <ReaderAiPanel
+            email={email}
+            thread={thread && thread.length > 1 ? thread : undefined}
+            onClose={() => setAiOpen(false)}
+          />
+        </div>
+      )}
 
       {/* この会話に保存済みの下書き → ワンクリックで続きを書く（Gmail的）。 */}
       {draft && onResumeDraft && (
@@ -585,7 +624,6 @@ export function EmailReader({
               {/* 本文の「見せ方」（HTML/テキスト・翻訳）は1か所に集約。ズーム/
                   アウトラインは常時表示が要るので上部ツールバー側に残す。 */}
               <BodyViewBar
-                email={email}
                 textMode={textMode}
                 onTextMode={setTextMode}
                 showHtmlToggle={Boolean(
