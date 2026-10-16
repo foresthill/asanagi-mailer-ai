@@ -182,6 +182,7 @@ const ja: Dict = {
   "nav.todo.title": "TODO（後で対応するメール）",
   "todo.intro":
     "TODO に印を付けたメールの一覧。期限を付けると受信箱でリマインドします（端末内のみ・相手には出ません）。",
+  "todo.note.placeholder": "メモ（任意）… 何のタスクか書いておく",
   "todo.empty":
     "TODO はありません。メールを開いて「TODO に追加」を押すと、ここに貯まります。",
   "todo.openCount": "未完了 {n} 件",
@@ -189,6 +190,11 @@ const ja: Dict = {
   "todo.done": "完了",
   "todo.remove": "TODOから外す",
   "todo.add": "TODO に追加",
+  "todo.addThread": "この会話を TODO に（既定）",
+  "todo.chooseUnit": "TODO の単位を選ぶ",
+  "todo.unit.title": "この TODO の単位",
+  "todo.unit.thread": "この会話（スレッド）",
+  "todo.unit.message": "この1通だけ",
   "todo.overdueBanner": "⏰ 期限切れの TODO が {n} 件あります — 確認する",
   // OpenProject 連携
   "op.title": "OpenProject 連携",
@@ -575,6 +581,7 @@ const ja: Dict = {
   "meta.meeting": "会議",
   "meta.translate": "翻訳",
   "translate.note": "※ 閲覧用の翻訳です（元の本文は変更されません・構造化PIIはマスクして送信）。",
+  "translate.failed": "翻訳に失敗しました",
   "meta.importance": "重要度",
   "meta.note": "メモ",
   "reader.learn": "学習:",
@@ -940,6 +947,7 @@ const en: Dict = {
   "nav.todo.title": "TODO (mail to handle later)",
   "todo.intro":
     "Emails you flagged as TODO. Set a due date and the inbox reminds you (on-device only; nothing is sent to anyone).",
+  "todo.note.placeholder": "Note (optional)… jot what this task is",
   "todo.empty":
     "No TODOs yet. Open a mail and press ‘Add to TODO’ to add it here.",
   "todo.openCount": "{n} open",
@@ -947,6 +955,11 @@ const en: Dict = {
   "todo.done": "Done",
   "todo.remove": "Remove from TODO",
   "todo.add": "Add to TODO",
+  "todo.addThread": "Add this conversation to TODO (default)",
+  "todo.chooseUnit": "Choose TODO scope",
+  "todo.unit.title": "Scope of this TODO",
+  "todo.unit.thread": "This conversation (thread)",
+  "todo.unit.message": "This message only",
   "todo.overdueBanner": "⏰ {n} overdue TODO(s) — review",
   // OpenProject integration
   "op.title": "OpenProject integration",
@@ -1334,6 +1347,7 @@ const en: Dict = {
   "meta.meeting": "Meeting",
   "meta.translate": "Translate",
   "translate.note": "Read-only translation (the original is unchanged; structured PII is masked before sending).",
+  "translate.failed": "Translation failed",
   "meta.importance": "Importance",
   "meta.note": "Note",
   "reader.learn": "Learn:",
@@ -1704,6 +1718,7 @@ const fr: Dict = {
   "nav.todo.title": "TODO (e-mails à traiter plus tard)",
   "todo.intro":
     "E-mails marqués comme TODO. Ajoutez une échéance et la boîte de réception vous le rappelle (sur l'appareil uniquement).",
+  "todo.note.placeholder": "Note (facultatif)… notez de quoi il s'agit",
   "todo.empty":
     "Aucune tâche. Ouvrez un e-mail et cliquez « Plus tard » pour l'ajouter ici.",
   "todo.openCount": "{n} en cours",
@@ -1711,6 +1726,11 @@ const fr: Dict = {
   "todo.done": "Fait",
   "todo.remove": "Retirer du TODO",
   "todo.add": "Ajouter au TODO",
+  "todo.addThread": "Ajouter cette conversation au TODO (par défaut)",
+  "todo.chooseUnit": "Choisir la portée du TODO",
+  "todo.unit.title": "Portée de ce TODO",
+  "todo.unit.thread": "Cette conversation (fil)",
+  "todo.unit.message": "Ce message uniquement",
   "todo.overdueBanner": "⏰ {n} TODO en retard — vérifier",
   // Intégration OpenProject
   "op.title": "Intégration OpenProject",
@@ -2118,6 +2138,7 @@ const fr: Dict = {
   "meta.meeting": "Réunion",
   "meta.translate": "Traduire",
   "translate.note": "Traduction en lecture seule (l'original est inchangé ; les données personnelles structurées sont masquées avant l'envoi).",
+  "translate.failed": "Échec de la traduction",
   "meta.importance": "Importance",
   "meta.note": "Note",
   "reader.learn": "Apprendre :",
@@ -2474,12 +2495,18 @@ const zh: Dict = {
   "nav.todo.title": "TODO（稍后处理的邮件）",
   "todo.intro":
     "标记为 TODO 的邮件清单。设置期限后，收件箱会提醒你（仅在本机，不发送给任何人）。",
+  "todo.note.placeholder": "备注（可选）… 记下这是什么任务",
   "todo.empty": "暂无 TODO。打开邮件并点击「加入 TODO」即可加入这里。",
   "todo.openCount": "未完成 {n} 项",
   "todo.due": "期限",
   "todo.done": "完成",
   "todo.remove": "从 TODO 移除",
   "todo.add": "加入 TODO",
+  "todo.addThread": "把该会话加入 TODO（默认）",
+  "todo.chooseUnit": "选择 TODO 单位",
+  "todo.unit.title": "此 TODO 的单位",
+  "todo.unit.thread": "整个会话（线程）",
+  "todo.unit.message": "仅此一封",
   "todo.overdueBanner": "⏰ 有 {n} 项已过期的 TODO — 查看",
   // OpenProject 集成
   "op.title": "OpenProject 集成",
@@ -2850,6 +2877,7 @@ const zh: Dict = {
   "meta.meeting": "会议",
   "meta.translate": "翻译",
   "translate.note": "仅供阅读的翻译（原文不变；发送前对结构化个人信息脱敏）。",
+  "translate.failed": "翻译失败",
   "meta.importance": "重要度",
   "meta.note": "备注",
   "reader.learn": "学习：",

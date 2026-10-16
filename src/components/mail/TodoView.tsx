@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
   ListTodo,
   ArrowUpRight,
@@ -11,6 +12,9 @@ import {
   CalendarCheck,
   RefreshCw,
   Send,
+  NotebookPen,
+  MessagesSquare,
+  Mail,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { TodoItem, OpWorkPackage, DevlogIssue } from "@/lib/types";
@@ -62,6 +66,7 @@ export function TodoView({
   todos,
   onOpenEmail,
   onSetDue,
+  onSetNote,
   onToggleDone,
   onRemove,
   issueTargets,
@@ -76,6 +81,8 @@ export function TodoView({
   todos: TodoItem[];
   onOpenEmail: (id: string) => void;
   onSetDue: (id: string, due: string | null) => void;
+  /** 自由メモの保存（件名だけでは分からないタスク内容を書く）。端末内のみ。 */
+  onSetNote: (id: string, note: string) => void;
   onToggleDone: (id: string, done: boolean) => void;
   onRemove: (id: string) => void;
   /** 起票（work package / issue 作成）連携の宛先（OpenProject / devlog 等・設定済みのみ）。
@@ -108,6 +115,29 @@ export function TodoView({
   const { t } = useI18n();
   const ordered = sortTodos(todos);
   const openCount = todos.filter((x) => !x.done).length;
+
+  // 会話ごとに1行。この1通TODOが、同じ会話のスレッドTODO配下にあるなら、その
+  // スレッド行の下にネスト表示する（＝一覧で同じ会話が重複しない）。親スレッド
+  // TODOが無いこの1通TODOは、そのまま独立行で出す。
+  const threadKeyOf = (x: TodoItem): string | null =>
+    x.account && x.threadId ? `${x.account}/thread:${x.threadId}` : null;
+  const threadTodoIds = new Set(
+    ordered.filter((x) => x.kind === "thread").map((x) => x.id),
+  );
+  const nestedByThread = new Map<string, TodoItem[]>();
+  const topLevel: TodoItem[] = [];
+  for (const x of ordered) {
+    if (x.kind !== "thread") {
+      const parent = threadKeyOf(x);
+      if (parent && threadTodoIds.has(parent)) {
+        const arr = nestedByThread.get(parent) ?? [];
+        arr.push(x);
+        nestedByThread.set(parent, arr);
+        continue;
+      }
+    }
+    topLevel.push(x);
+  }
   // 宛先メニュー（カレンダー登録 / 起票）は TargetMenu が開閉状態を内包する。
   const cals = calendarTargets ?? [];
   const issues = issueTargets ?? [];
@@ -134,16 +164,19 @@ export function TodoView({
             </div>
           ) : (
             <ul className="flex flex-col gap-1.5">
-              {ordered.map((todo) => {
+              {topLevel.map((todo) => {
                 const s = dueState(todo.due);
+                const nested =
+                  todo.kind === "thread" ? nestedByThread.get(todo.id) : undefined;
                 return (
                   <li
                     key={todo.id}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl border border-border bg-surface px-3.5 py-2.5",
+                      "flex flex-col gap-2 rounded-xl border border-border bg-surface px-3.5 py-2.5",
                       todo.done && "opacity-55",
                     )}
                   >
+                   <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
                       checked={!!todo.done}
@@ -152,7 +185,7 @@ export function TodoView({
                       className="size-4 shrink-0 accent-[var(--accent,#6d5ae6)]"
                     />
                     <button
-                      onClick={() => onOpenEmail(todo.id)}
+                      onClick={() => onOpenEmail(todo.anchorId || todo.id)}
                       className="flex min-w-0 flex-1 flex-col items-start text-left"
                     >
                       <span
@@ -161,6 +194,18 @@ export function TodoView({
                           todo.done && "line-through",
                         )}
                       >
+                        {/* 単位バッジ: 会話（スレッド）か この1通か を一目で。 */}
+                        {todo.kind === "thread" ? (
+                          <MessagesSquare
+                            className="size-3.5 shrink-0 text-accent"
+                            aria-label={t("todo.unit.thread")}
+                          />
+                        ) : (
+                          <Mail
+                            className="size-3.5 shrink-0 text-fg-subtle"
+                            aria-label={t("todo.unit.message")}
+                          />
+                        )}
                         <span className="truncate">
                           {todo.subject || t("drafts.noSubject")}
                         </span>
@@ -236,6 +281,53 @@ export function TodoView({
                     >
                       <Trash2 className="size-3.5" />
                     </button>
+                   </div>
+                    {/* 自由メモ: 件名だけでは分からないタスク内容を書く（端末内のみ）。 */}
+                    <TodoNote
+                      value={todo.note}
+                      done={!!todo.done}
+                      placeholder={t("todo.note.placeholder")}
+                      onCommit={(v) => onSetNote(todo.id, v)}
+                    />
+
+                    {/* この会話内の「この1通だけ」TODO を配下にネスト（会話1行・重複なし）。 */}
+                    {nested?.map((m) => (
+                      <div
+                        key={m.id}
+                        className={cn(
+                          "ml-7 flex items-center gap-2 border-l border-border pl-3",
+                          m.done && "opacity-55",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!m.done}
+                          onChange={(e) => onToggleDone(m.id, e.target.checked)}
+                          title={t("todo.done")}
+                          className="size-3.5 shrink-0 accent-[var(--accent,#6d5ae6)]"
+                        />
+                        <Mail className="size-3 shrink-0 text-fg-subtle" />
+                        <button
+                          onClick={() => onOpenEmail(m.anchorId || m.id)}
+                          className={cn(
+                            "flex min-w-0 flex-1 items-center gap-1 truncate text-left text-xs text-fg-muted",
+                            m.done && "line-through",
+                          )}
+                        >
+                          <span className="truncate">
+                            {m.subject || t("drafts.noSubject")}
+                          </span>
+                          <ArrowUpRight className="size-3 shrink-0 text-fg-subtle" />
+                        </button>
+                        <button
+                          onClick={() => onRemove(m.id)}
+                          title={t("todo.remove")}
+                          className="grid size-6 shrink-0 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-high"
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
+                      </div>
+                    ))}
                   </li>
                 );
               })}
@@ -357,6 +449,66 @@ export function TodoView({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * TODO 1件の自由メモ。件名だけでは分からないタスクの中身を書く欄。
+ * 端末内のみ（PATCH /api/todos）。毎打鍵では送らず、フォーカスを外した時
+ * （＝変更があった時だけ）保存する。高さは内容に合わせて伸びる。
+ */
+function TodoNote({
+  value,
+  done,
+  placeholder,
+  onCommit,
+}: {
+  value?: string;
+  done: boolean;
+  placeholder: string;
+  onCommit: (v: string) => void;
+}) {
+  const [text, setText] = useState(value ?? "");
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  // 外部から値が変わったら同期（別経路での更新・再読込に追従）。prop 変化を
+  // レンダー中に取り込む React 公式パターン（effect で setState しない）。
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setText(value ?? "");
+  }
+
+  // 内容に合わせて高さを自動調整（DOM 同期なので effect が適切）。
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
+
+  const commit = () => {
+    const next = text.trim();
+    if (next !== (value ?? "").trim()) onCommit(next);
+  };
+
+  return (
+    <div className="flex items-start gap-2 pl-7 pr-1">
+      <NotebookPen className="mt-1 size-3.5 shrink-0 text-fg-subtle" />
+      <textarea
+        ref={ref}
+        rows={1}
+        value={text}
+        placeholder={placeholder}
+        disabled={done}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        className={cn(
+          "w-full resize-none bg-transparent text-xs leading-relaxed text-fg outline-none placeholder:text-fg-subtle",
+          done && "line-through",
+        )}
+      />
     </div>
   );
 }

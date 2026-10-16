@@ -5,8 +5,6 @@ import {
   CalendarPlus,
   NotebookPen,
   Sparkles,
-  Languages,
-  Loader2,
   type LucideIcon,
 } from "lucide-react";
 import type { Email, Importance } from "@/lib/types";
@@ -22,14 +20,7 @@ import { PrivateNote } from "./PrivateNote";
  * 状態＝本文がすぐ読める（縦の冗長さを解消）。チップはメールごとに付く。
  */
 
-type MetaKey = "meeting" | "importance" | "note" | "translate";
-
-const TRANSLATE_LANGS: { code: string; label: string }[] = [
-  { code: "en", label: "English" },
-  { code: "fr", label: "Français" },
-  { code: "ja", label: "日本語" },
-  { code: "zh", label: "中文" },
-];
+type MetaKey = "meeting" | "importance" | "note";
 
 function Chip({
   icon: Icon,
@@ -95,35 +86,6 @@ export function ReaderMeta({
       return next;
     });
 
-  // 本文翻訳（閲覧用）。言語を選ぶと /api/ai/translate で訳す。
-  const [tr, setTr] = useState<{
-    lang?: string;
-    loading: boolean;
-    text?: string;
-    error?: string;
-  }>({ loading: false });
-  const translate = async (code: string) => {
-    setTr({ lang: code, loading: true });
-    try {
-      const r = await fetch("/api/ai/translate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          text: email.body || email.snippet,
-          target: code,
-        }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d?.error ?? "翻訳に失敗しました");
-      setTr({ lang: code, loading: false, text: d.text });
-    } catch (e) {
-      setTr({
-        lang: code,
-        loading: false,
-        error: e instanceof Error ? e.message : "翻訳に失敗しました",
-      });
-    }
-  };
 
   const impLabel = classifying
     ? t("reader.classifying")
@@ -155,12 +117,6 @@ export function ReaderMeta({
           active={open.has("note")}
           onClick={() => toggle("note")}
           dot={hasNote}
-        />
-        <Chip
-          icon={Languages}
-          label={t("meta.translate")}
-          active={open.has("translate")}
-          onClick={() => toggle("translate")}
         />
       </div>
 
@@ -215,43 +171,6 @@ export function ReaderMeta({
         <PrivateNote emailId={email.id} onSaved={onNoteSaved} />
       )}
 
-      {open.has("translate") && (
-        <div className="mt-2 rounded-xl border border-border bg-surface px-3.5 py-2.5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-fg-subtle">
-              {t("meta.translate")}:
-            </span>
-            {TRANSLATE_LANGS.map((l) => (
-              <button
-                key={l.code}
-                type="button"
-                onClick={() => translate(l.code)}
-                disabled={tr.loading}
-                className={cn(
-                  "rounded-md border px-2 py-0.5 text-[11px] transition-colors disabled:opacity-60",
-                  tr.lang === l.code
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-border text-fg-muted hover:border-accent hover:text-accent",
-                )}
-              >
-                {l.label}
-              </button>
-            ))}
-            {tr.loading && (
-              <Loader2 className="size-3.5 animate-spin text-fg-subtle" />
-            )}
-          </div>
-          {tr.error && <p className="mt-1.5 text-[11px] text-high">{tr.error}</p>}
-          {tr.text && (
-            <div className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-fg">
-              {tr.text}
-            </div>
-          )}
-          <p className="mt-1.5 text-[10px] text-fg-subtle">
-            {t("translate.note")}
-          </p>
-        </div>
-      )}
     </div>
   );
 }

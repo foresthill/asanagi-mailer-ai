@@ -44,6 +44,12 @@ import {
 } from "./compose";
 import { buildRows } from "./threadList";
 import { useI18n } from "@/lib/i18n";
+import {
+  emailThreadTodoId,
+  isEmailOnTodo,
+  splitTodoKeys,
+  threadTodoId,
+} from "@/lib/todo-keys";
 import { getSweepAutoMode, sweepAutoAllowed } from "@/lib/sweep-prefs";
 import { fireNotification } from "@/lib/notify-prefs";
 import type { GroupAxis } from "./EmailList";
@@ -316,58 +322,98 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
   }, []);
 
   // Add/remove the open mail as a TODO（reader「あとで」toggle）。
+  // TODO アイテムを組み立てる。kind="thread" なら会話まるごと（既定）、
+  // "message" ならこの1通だけ。スレッド未取得のメールは message にフォールバック。
+  const makeTodoItem = (
+    email: Email,
+    kind: "thread" | "message",
+    extra?: Partial<TodoItem>,
+  ): TodoItem => {
+    const threadKey = emailThreadTodoId(email);
+    const asThread = kind === "thread" && threadKey;
+    return {
+      id: asThread ? threadKey : email.id,
+      kind: asThread ? "thread" : "message",
+      account: email.account,
+      threadId: email.threadId,
+      anchorId: asThread ? email.id : undefined,
+      subject: email.subject,
+      fromName: email.from.name,
+      fromEmail: email.from.email,
+      date: email.date,
+      createdAt: new Date().toISOString(),
+      ...extra,
+    };
+  };
+
+  const addTodoItem = async (item: TodoItem, toast: string) => {
+    setTodos((list) =>
+      list.some((x) => x.id === item.id) ? list : [...list, item],
+    );
+    showToast(toast);
+    try {
+      await fetch("/api/todos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ item }),
+      });
+    } catch {
+      /* optimistic */
+    }
+  };
+
+  const removeTodoById = async (id: string, toast: string) => {
+    setTodos((list) => list.filter((x) => x.id !== id));
+    showToast(toast);
+    try {
+      await fetch(`/api/todos?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+    } catch {
+      /* optimistic */
+    }
+  };
+
+  // 既定のトグル＝会話（スレッド）単位。スレッドが無いメールは1通単位になる。
   const toggleTodo = async (email: Email) => {
-    const exists = todos.some((x) => x.id === email.id);
-    if (exists) {
-      setTodos((list) => list.filter((x) => x.id !== email.id));
-      showToast("TODO から外しました");
-      try {
-        await fetch(`/api/todos?id=${encodeURIComponent(email.id)}`, {
-          method: "DELETE",
-        });
-      } catch {
-        /* optimistic */
-      }
+    const item = makeTodoItem(email, "thread");
+    if (todos.some((x) => x.id === item.id)) {
+      await removeTodoById(
+        item.id,
+        item.kind === "thread"
+          ? "この会話を TODO から外しました"
+          : "TODO から外しました",
+      );
     } else {
-      const item: TodoItem = {
-        id: email.id,
-        account: email.account,
-        subject: email.subject,
-        fromName: email.from.name,
-        fromEmail: email.from.email,
-        date: email.date,
-        createdAt: new Date().toISOString(),
-      };
-      setTodos((list) => [...list, item]);
-      showToast("TODO に追加しました");
-      try {
-        await fetch("/api/todos", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ item }),
-        });
-      } catch {
-        /* optimistic */
-      }
+      await addTodoItem(
+        item,
+        item.kind === "thread"
+          ? "この会話を TODO に追加しました"
+          : "TODO に追加しました",
+      );
+    }
+  };
+
+  // 「この1通だけ」TODO。長いスレッドの特定の1通を指したいとき用。
+  const toggleMessageTodo = async (email: Email) => {
+    if (todos.some((x) => x.id === email.id && x.kind !== "thread")) {
+      await removeTodoById(email.id, "この1通を TODO から外しました");
+    } else {
+      await addTodoItem(
+        makeTodoItem(email, "message"),
+        "この1通を TODO に追加しました",
+      );
     }
   };
 
   // 会議カード等から「期限付きで TODO に追加」。期限があるので受信箱バナー＋
   // （ONなら）OS通知のリマインド対象になる。既存TODOでも期限を上書きする。
   const addTodoWithDue = async (email: Email, dueIso: string) => {
-    const item: TodoItem = {
-      id: email.id,
-      account: email.account,
-      subject: email.subject,
-      fromName: email.from.name,
-      fromEmail: email.from.email,
-      date: email.date,
-      createdAt: new Date().toISOString(),
-      due: dueIso,
-    };
+    // 期限付きも既定は会話（スレッド）単位。既存TODOがあれば期限を上書き。
+    const item = makeTodoItem(email, "thread", { due: dueIso });
     setTodos((list) =>
-      list.some((x) => x.id === email.id)
-        ? list.map((x) => (x.id === email.id ? { ...x, due: dueIso } : x))
+      list.some((x) => x.id === item.id)
+        ? list.map((x) => (x.id === item.id ? { ...x, due: dueIso } : x))
         : [...list, item],
     );
     showToast("TODO に追加しました（期限付き）");
@@ -380,7 +426,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       await fetch("/api/todos", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: email.id, due: dueIso }),
+        body: JSON.stringify({ id: item.id, due: dueIso }),
       });
     } catch {
       /* optimistic */
@@ -396,6 +442,21 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id, due }),
+      });
+    } catch {
+      /* optimistic */
+    }
+  };
+
+  const setTodoNote = async (id: string, note: string) => {
+    setTodos((list) =>
+      list.map((x) => (x.id === id ? { ...x, note: note || undefined } : x)),
+    );
+    try {
+      await fetch("/api/todos", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, note }),
       });
     } catch {
       /* optimistic */
@@ -834,11 +895,20 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       /* ignore */
     }
   }, [nowMs, todos]);
+  // スレッドTODO / メールTODO を別集合に分け、会話単位でも「済み」を判定する。
+  const { threadTodoKeys, messageTodoIds } = splitTodoKeys(todos);
   const isSelectedTodo = selected
-    ? todos.some((x) => x.id === selected.id)
+    ? isEmailOnTodo(selected, threadTodoKeys, messageTodoIds)
     : false;
-  // TODO 登録済みIDの集合（一覧のチェックボックス表示・トグル判定用）。
-  const todoIdSet = new Set(todos.map((x) => x.id));
+  // この1通だけのTODOが付いているか（本文の「この1通だけ」トグル状態用）。
+  const isSelectedMessageTodo = selected
+    ? messageTodoIds.has(selected.id)
+    : false;
+  // この会話（スレッド）がTODOか（メニューの「会話」側チェック表示用）。
+  const selectedThreadKey = selected ? emailThreadTodoId(selected) : null;
+  const isSelectedThreadTodo = selectedThreadKey
+    ? threadTodoKeys.has(selectedThreadKey)
+    : false;
 
   // Newest request wins: a slow live response must never overwrite a fresher
   // folder/account the user has since switched to.
@@ -1977,7 +2047,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onArchive={archive}
       onTrash={trash}
       onToggleStar={toggleStar}
-      todoIds={todoIdSet}
+      threadTodoKeys={threadTodoKeys}
+      messageTodoIds={messageTodoIds}
       onToggleTodo={toggleTodo}
       onRefresh={() => loadList(folder, account)}
       agedDraftCount={agedDraftCount}
@@ -2014,6 +2085,14 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
       onMarkSafe={() => selected && markSafe(selected)}
       isTodo={isSelectedTodo}
       onToggleTodo={() => selected && toggleTodo(selected)}
+      // 「この1通だけ」: スレッドがある時だけ意味を持つ副選択肢。
+      isThreadTodo={isSelectedThreadTodo}
+      isMessageTodo={isSelectedMessageTodo}
+      onToggleMessageTodo={
+        selected?.threadId
+          ? () => selected && toggleMessageTodo(selected)
+          : undefined
+      }
       issueTargets={emailIssueTargets}
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
@@ -2093,6 +2172,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
             void selectEmail(id);
           }}
           onSetDue={setTodoDue}
+          onSetNote={setTodoNote}
           onToggleDone={setTodoDone}
           onRemove={removeTodoItem}
           issueTargets={todoIssueTargets}

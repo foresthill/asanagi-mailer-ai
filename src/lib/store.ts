@@ -737,16 +737,17 @@ export async function addTodo(
   return rows;
 }
 
-/** Merge fields (due / done) into an existing todo. */
+/** Merge fields (due / done / note) into an existing todo. */
 export async function updateTodo(
   id: string,
-  patch: Partial<Pick<TodoItem, "due" | "done">>,
+  patch: Partial<Pick<TodoItem, "due" | "done" | "note">>,
   now = new Date(),
 ): Promise<TodoItem[]> {
   const rows = await readJson<TodoItem[]>(TODOS, []);
   const row = rows.find((r) => r.id === id);
   if (row) {
     if ("due" in patch) row.due = patch.due || undefined;
+    if ("note" in patch) row.note = patch.note?.trim() || undefined;
     if ("done" in patch) {
       row.done = patch.done || undefined;
       row.doneAt = patch.done ? now.toISOString() : undefined;

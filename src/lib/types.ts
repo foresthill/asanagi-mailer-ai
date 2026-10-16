@@ -392,9 +392,17 @@ export interface ResolvedContactMeta {
  * （元メールを都度取りに行かなくてよい）。将来 MCP / カレンダー等へ連携する source。
  */
 export interface TodoItem {
-  /** account-qualified email id（一覧/本文の id と同じ）。 */
+  /** TODO の一意キー。メール単位＝account修飾のメールID（`{account}/{providerId}`）、
+   *  スレッド単位＝`{account}/thread:{threadId}`（メールIDと衝突しない名前空間）。 */
   id: string;
   account?: string;
+  /** 単位。"thread"＝会話まるごと（既定の付け方）、"message"＝この1通だけ。
+   *  未指定は後方互換で message 扱い（旧データ）。 */
+  kind?: "thread" | "message";
+  /** 所属する会話ID（両種で保持：会話ごとの重複排除・ネスト表示に使う）。 */
+  threadId?: string;
+  /** スレッドTODOを開くときに表示する起点メールID（付けた時点の1通）。 */
+  anchorId?: string;
   /** 一覧表示用スナップショット。 */
   subject?: string;
   fromName?: string;
@@ -403,6 +411,8 @@ export interface TodoItem {
   createdAt: string;
   /** 任意の期限（ISO）。 */
   due?: string;
+  /** 任意の自由メモ（件名だけでは分からないタスクの中身を書く）。端末内のみ。 */
+  note?: string;
   done?: boolean;
   doneAt?: string;
   /** OpenProject に送った場合の work package id（重複送信の抑止＆リンク表示用）。 */

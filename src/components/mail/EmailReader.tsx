@@ -21,6 +21,8 @@ import {
   SquareCheck,
   Flag,
   Send,
+  ChevronDown,
+  MessagesSquare,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type {
@@ -44,6 +46,7 @@ import { ThreadOutlineRail } from "./ThreadOutlineRail";
 import { QuotedText, segmentReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
 import { ReaderMeta } from "./ReaderMeta";
+import { BodyViewBar } from "./BodyViewBar";
 import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
 import { ReplyButton, AiReplyButton } from "./ReplyButtons";
@@ -68,6 +71,9 @@ export function EmailReader({
   onMarkSafe,
   isTodo,
   onToggleTodo,
+  isThreadTodo,
+  isMessageTodo,
+  onToggleMessageTodo,
   issueTargets,
   onNoteSaved,
   onOpenMessage,
@@ -99,10 +105,16 @@ export function EmailReader({
   onReportSpam?: () => void;
   /** 「問題無し」: 誤検知を打ち消して安全な差出人として学習（警告を消す）。 */
   onMarkSafe?: () => void;
-  /** このメールが TODO（「あとで」）登録済みか。 */
+  /** このメールが TODO（会話 or この1通）として登録済みか（ボタンの点灯用）。 */
   isTodo?: boolean;
-  /** 「あとで」トグル（TODO 追加/解除）。 */
+  /** 既定の「あとで」トグル＝会話（スレッド）単位。 */
   onToggleTodo?: () => void;
+  /** この会話（スレッド）が TODO 登録済みか。 */
+  isThreadTodo?: boolean;
+  /** この1通だけが TODO 登録済みか。 */
+  isMessageTodo?: boolean;
+  /** 「この1通だけ」トグル。スレッドがある時だけ渡る（無ければ副選択肢を出さない）。 */
+  onToggleMessageTodo?: () => void;
   /** 起票（work package / issue 作成）連携の宛先（OpenProject / devlog 等・設定済みのみ）。
    *  1件なら直接起票、複数なら小メニューで宛先選択。空なら起票ボタンを出さない。 */
   issueTargets?: {
@@ -300,11 +312,12 @@ export function EmailReader({
           tone="star"
         />
         {onToggleTodo && (
-          <IconBtn
-            icon={isTodo ? SquareCheck : Square}
-            title={isTodo ? t("todo.remove") : t("todo.add")}
-            onClick={onToggleTodo}
-            active={isTodo}
+          <TodoControl
+            isTodo={!!isTodo}
+            isThreadTodo={!!isThreadTodo}
+            isMessageTodo={!!isMessageTodo}
+            onToggleThread={onToggleTodo}
+            onToggleMessage={onToggleMessageTodo}
           />
         )}
         {issueTargets && issueTargets.length > 0 && (
@@ -569,6 +582,17 @@ export function EmailReader({
                 onAddTodoDue={onAddTodoDue}
               />
 
+              {/* 本文の「見せ方」（HTML/テキスト・翻訳）は1か所に集約。ズーム/
+                  アウトラインは常時表示が要るので上部ツールバー側に残す。 */}
+              <BodyViewBar
+                email={email}
+                textMode={textMode}
+                onTextMode={setTextMode}
+                showHtmlToggle={Boolean(
+                  email.html && !(thread && thread.length > 1),
+                )}
+              />
+
               {/* Single email: attachments near the top (below the header) so they're
               always visible — critical for attachment-only mail with an empty body.
               While the live fetch is loading the metadata, show a placeholder so
@@ -600,20 +624,6 @@ export function EmailReader({
                 />
               ) : (
                 <>
-                  {email.html && (
-                    <div className="mt-3 flex justify-end gap-1">
-                      <BodyModeButton
-                        label="HTML"
-                        active={!textMode}
-                        onClick={() => setTextMode(false)}
-                      />
-                      <BodyModeButton
-                        label={t("reader.textMode")}
-                        active={textMode}
-                        onClick={() => setTextMode(true)}
-                      />
-                    </div>
-                  )}
                   {email.html && !textMode ? (
                     <HtmlMailView
                       html={email.html}
@@ -635,30 +645,6 @@ export function EmailReader({
         </div>
       </div>
     </div>
-  );
-}
-
-function BodyModeButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "rounded-md border px-2 py-1 text-[11px] transition-colors",
-        active
-          ? "border-accent bg-accent-soft text-accent"
-          : "border-border text-fg-muted hover:text-fg",
-      )}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -738,6 +724,107 @@ function ImportanceMenu({
                 {o.label}
               </button>
             ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * TODO コントロール。既定（主クリック）は会話（スレッド）単位。スレッドがある
+ * メールでは右のキャレットから「この1通だけ」を選べる。会話が進めばTODOは最新に
+ * 追従し、一覧も会話ごとに1行にまとまる（重複しない）。スレッドの無いメールでは
+ * キャレットを出さず、主クリックがそのまま1通TODOになる。
+ */
+function TodoControl({
+  isTodo,
+  isThreadTodo,
+  isMessageTodo,
+  onToggleThread,
+  onToggleMessage,
+}: {
+  isTodo: boolean;
+  isThreadTodo: boolean;
+  isMessageTodo: boolean;
+  onToggleThread: () => void;
+  onToggleMessage?: () => void;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+
+  // スレッドが無いメール: 単純トグル（＝この1通）。
+  if (!onToggleMessage) {
+    return (
+      <IconBtn
+        icon={isTodo ? SquareCheck : Square}
+        title={isTodo ? t("todo.remove") : t("todo.add")}
+        onClick={onToggleThread}
+        active={isTodo}
+      />
+    );
+  }
+
+  const rowCls = (checked: boolean) =>
+    cn(
+      "flex items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-surface-2",
+      checked ? "font-semibold text-accent" : "text-fg-muted",
+    );
+
+  return (
+    <div className="relative flex items-center">
+      {/* 主クリック＝会話（スレッド）単位トグル。 */}
+      <IconBtn
+        icon={isTodo ? SquareCheck : Square}
+        title={isTodo ? t("todo.remove") : t("todo.addThread")}
+        onClick={onToggleThread}
+        active={isTodo}
+      />
+      {/* キャレット＝単位を選ぶ（会話 / この1通だけ）。 */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title={t("todo.chooseUnit")}
+        aria-label={t("todo.chooseUnit")}
+        className={cn(
+          "-ml-1 grid h-8 w-4 shrink-0 place-items-center rounded-lg transition-colors hover:bg-surface-2",
+          open ? "bg-surface-2 text-fg" : "text-fg-subtle",
+        )}
+      >
+        <ChevronDown className="size-3" />
+      </button>
+      {open && (
+        <>
+          <button
+            aria-hidden
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div className="absolute left-0 top-9 z-50 flex min-w-44 flex-col overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-[var(--shadow)]">
+            <span className="px-2.5 py-1 text-[10px] font-medium text-fg-subtle">
+              {t("todo.unit.title")}
+            </span>
+            <button
+              onClick={() => {
+                onToggleThread();
+                setOpen(false);
+              }}
+              className={rowCls(isThreadTodo)}
+            >
+              <MessagesSquare className="size-3.5 shrink-0" />
+              <span className="flex-1">{t("todo.unit.thread")}</span>
+              {isThreadTodo && <Check className="size-3.5 shrink-0 text-accent" />}
+            </button>
+            <button
+              onClick={() => {
+                onToggleMessage();
+                setOpen(false);
+              }}
+              className={rowCls(isMessageTodo)}
+            >
+              <Mail className="size-3.5 shrink-0" />
+              <span className="flex-1">{t("todo.unit.message")}</span>
+              {isMessageTodo && <Check className="size-3.5 shrink-0 text-accent" />}
+            </button>
           </div>
         </>
       )}

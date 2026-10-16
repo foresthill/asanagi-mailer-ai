@@ -35,6 +35,7 @@ import type {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { isEmailOnTodo } from "@/lib/todo-keys";
 import { avatarColor, initials, relativeTime } from "./helpers";
 import type { ThreadRow } from "./threadList";
 import type { SearchDigest } from "@/app/api/ai/search-digest/route";
@@ -60,6 +61,9 @@ function searchTerms(query?: string): string[] {
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** 安定した空集合（isTodo 判定のフォールバック・再レンダー誘発を避ける）。 */
+const EMPTY_SET: Set<string> = new Set();
 
 /** Mark the matched keywords inside a result's text (highlighter look). */
 function Highlighted({ text, terms }: { text: string; terms: string[] }) {
@@ -213,7 +217,8 @@ export function EmailList({
   onArchive,
   onTrash,
   onToggleStar,
-  todoIds,
+  threadTodoKeys,
+  messageTodoIds,
   onToggleTodo,
   onRefresh,
   agedDraftCount,
@@ -292,8 +297,10 @@ export function EmailList({
   onArchive: (ids: string[]) => void;
   onTrash: (ids: string[]) => void;
   onToggleStar: (id: string) => void;
-  /** TODO 登録済みメールIDの集合（一覧のチェックボックス表示用）。 */
-  todoIds?: Set<string>;
+  /** スレッドTODOの id 集合（`{account}/thread:{threadId}`）。会話単位の済み判定用。 */
+  threadTodoKeys?: Set<string>;
+  /** この1通だけTODOのメールID集合。 */
+  messageTodoIds?: Set<string>;
   /** 一覧行から TODO 追加/解除（連携が渡ったときだけボタンを出す）。 */
   onToggleTodo?: (email: Email) => void;
   onRefresh: () => void;
@@ -468,7 +475,11 @@ export function EmailList({
           onArchive={() => onArchive(row.ids)}
           onTrash={() => onTrash(row.ids)}
           onToggleStar={() => onToggleStar(row.email.id)}
-          isTodo={todoIds?.has(row.email.id) ?? false}
+          isTodo={isEmailOnTodo(
+            row.email,
+            threadTodoKeys ?? EMPTY_SET,
+            messageTodoIds ?? EMPTY_SET,
+          )}
           onToggleTodo={
             onToggleTodo ? () => onToggleTodo(row.email) : undefined
           }
