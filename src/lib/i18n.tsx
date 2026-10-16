@@ -565,6 +565,8 @@ const ja: Dict = {
   "reader.fullscreen.off": "全画面を解除 (Esc)",
   "reader.fullscreen.on": "全画面表示（画面共有向け）",
   "reader.textMode": "テキスト",
+  "reader.ai.label": "AI",
+  "reader.ai.toggle": "このメールにAI（要約・質問・翻訳）",
   "reader.reportSpam": "迷惑メール/フィッシングとして報告（学習してゴミ箱へ）",
   "threat.phishing.title": "フィッシングの疑いがあります。",
   "threat.phishing.body":
@@ -1331,6 +1333,8 @@ const en: Dict = {
   "reader.fullscreen.off": "Exit full screen (Esc)",
   "reader.fullscreen.on": "Full screen (for screen sharing)",
   "reader.textMode": "Text",
+  "reader.ai.label": "AI",
+  "reader.ai.toggle": "AI on this email (summarize, ask, translate)",
   "reader.reportSpam": "Report as spam/phishing (learn and move to trash)",
   "threat.phishing.title": "Suspected phishing.",
   "threat.phishing.body":
@@ -2121,6 +2125,8 @@ const fr: Dict = {
   "reader.fullscreen.off": "Quitter le plein écran (Échap)",
   "reader.fullscreen.on": "Plein écran (partage d'écran)",
   "reader.textMode": "Texte",
+  "reader.ai.label": "IA",
+  "reader.ai.toggle": "IA sur cet e-mail (résumer, demander, traduire)",
   "reader.reportSpam":
     "Signaler comme spam/hameçonnage (apprendre et mettre à la corbeille)",
   "threat.phishing.title": "Hameçonnage suspecté.",
@@ -2862,6 +2868,8 @@ const zh: Dict = {
   "reader.fullscreen.off": "退出全屏（Esc）",
   "reader.fullscreen.on": "全屏（便于共享屏幕）",
   "reader.textMode": "纯文本",
+  "reader.ai.label": "AI",
+  "reader.ai.toggle": "对这封邮件用 AI（摘要・提问・翻译）",
   "reader.reportSpam": "举报为垃圾邮件／钓鱼（学习并移入垃圾箱）",
   "threat.phishing.title": "疑似钓鱼邮件。",
   "threat.phishing.body": "请勿点击链接，也不要输入密码、卡号等任何凭据。",
