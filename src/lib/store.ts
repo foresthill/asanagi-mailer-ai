@@ -15,6 +15,7 @@ import type {
   ContactMeta,
   ResolvedContactMeta,
   TodoItem,
+  AiCacheEntry,
   OpenProjectSettings,
   DevlogSettings,
   NextcloudSettings,
@@ -927,4 +928,61 @@ export async function saveNextcloudSettings(
   merge("calendarName", patch.calendarName);
   await writeJson(NEXTCLOUD_SETTINGS, next);
   return next;
+}
+
+// ---------------------------------------------------------------------------
+// AI 出力キャッシュ（閲覧補助）— メールごとに訳文・要約を保存し、開き直しても
+// 消えないようにする。AIへ送るのは本文(PIIマスク済)だが、保存するのは生成結果のみ。
+// ---------------------------------------------------------------------------
+const AI_CACHE = "ai-cache.json";
+const AI_CACHE_MAX = 500; // 直近N通ぶんだけ保持（肥大化防止）。
+
+export async function getAiCache(id: string): Promise<AiCacheEntry> {
+  const all = await readJson<Record<string, AiCacheEntry>>(AI_CACHE, {});
+  return all[id] ?? {};
+}
+
+/** 訳文/要約をマージ保存。空文字/未指定のキーは触らない。 */
+export async function saveAiCache(
+  id: string,
+  patch: AiCacheEntry,
+  now = new Date(),
+): Promise<AiCacheEntry> {
+  const all = await readJson<Record<string, AiCacheEntry>>(AI_CACHE, {});
+  const cur = all[id] ?? {};
+  const next: AiCacheEntry = {
+    translations: { ...(cur.translations ?? {}), ...(patch.translations ?? {}) },
+    summaries: { ...(cur.summaries ?? {}), ...(patch.summaries ?? {}) },
+    updatedAt: now.toISOString(),
+  };
+  all[id] = next;
+  // Cap: drop the oldest entries beyond the limit.
+  const ids = Object.keys(all);
+  if (ids.length > AI_CACHE_MAX) {
+    ids.sort(
+      (a, b) =>
+        +new Date(all[b].updatedAt ?? 0) - +new Date(all[a].updatedAt ?? 0),
+    );
+    for (const old of ids.slice(AI_CACHE_MAX)) delete all[old];
+  }
+  await writeJson(AI_CACHE, all);
+  return next;
+}
+
+/** 保存済みの1項目を削除（translation の1言語、または summary の1スコープ）。 */
+export async function deleteAiCacheItem(
+  id: string,
+  kind: "translation" | "summary",
+  key: string,
+): Promise<AiCacheEntry> {
+  const all = await readJson<Record<string, AiCacheEntry>>(AI_CACHE, {});
+  const cur = all[id];
+  if (!cur) return {};
+  if (kind === "translation" && cur.translations) delete cur.translations[key];
+  if (kind === "summary" && cur.summaries)
+    delete cur.summaries[key as "message" | "thread"];
+  cur.updatedAt = new Date().toISOString();
+  all[id] = cur;
+  await writeJson(AI_CACHE, all);
+  return cur;
 }
