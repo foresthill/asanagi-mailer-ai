@@ -64,6 +64,10 @@ export function SweepDialog({
   const { t, locale } = useI18n();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<SweepItem[]>([]);
+  // 認知負荷を下げるため、1回にN件ずつ提示（確定で処理→次のN件）。30/50切替。
+  const [pageSize, setPageSize] = useState(50);
+  // 確定したページの累計（凪ぎ表示用）。
+  const [applied, setApplied] = useState({ archive: 0, trash: 0, spam: 0 });
   /** AI推奨を初期値に、ユーザーが行ごとに上書きできる現在の処分。 */
   const [actions, setActions] = useState<Record<string, SweepAction>>({});
   const [applying, setApplying] = useState(false);
@@ -179,7 +183,8 @@ export function SweepDialog({
   // CSS 側で抑える（globals.css）。1行あたり 50–120ms、全体で ~2s 以内に収める。
   useEffect(() => {
     if (loading || error || items.length === 0) return;
-    const total = items.length;
+    // このページ分（最大 pageSize 件）だけアニメーションで整える。
+    const total = Math.min(items.length, pageSize);
     // Stagger so it reads as a wave: brisk for long lists (rows overlap the
     // 0.45s sweep), deliberate for short ones. Whole cascade stays ~≤2s.
     const step = Math.max(35, Math.min(90, Math.floor(1800 / total)));
@@ -191,7 +196,7 @@ export function SweepDialog({
       });
     }, step);
     return () => clearInterval(timer);
-  }, [loading, error, items.length]);
+  }, [loading, error, items.length, pageSize]);
 
   const byId = useMemo(() => new Map(emails.map((e) => [e.id, e])), [emails]);
 
@@ -209,9 +214,20 @@ export function SweepDialog({
     return [...items].sort((a, b) => rank[a.action] - rank[b.action]);
   }, [items]);
 
-  const archiveCount = items.filter((i) => actions[i.id] === "archive").length;
-  const trashCount = items.filter((i) => actions[i.id] === "trash").length;
-  const spamCount = items.filter((i) => actions[i.id] === "spam").length;
+  // いま提示している「このページ」= 残りの先頭N件。確定でこの分だけ処理し、
+  // 残りが次のページになる（ぱっぱっと捌ける）。
+  const pageItems = useMemo(
+    () => ordered.slice(0, pageSize),
+    [ordered, pageSize],
+  );
+  const isLastPage = items.length <= pageSize;
+
+  // 集計は「このページ」に対して行う（フッター・一括変更の対象もこのページ）。
+  const archiveCount = pageItems.filter(
+    (i) => actions[i.id] === "archive",
+  ).length;
+  const trashCount = pageItems.filter((i) => actions[i.id] === "trash").length;
+  const spamCount = pageItems.filter((i) => actions[i.id] === "spam").length;
   const actionable = archiveCount + trashCount + spamCount;
   // Cost transparency: how many actually hit the AI this run vs were free.
   const aiCount = items.filter((i) => i.source === "ai").length;
@@ -230,16 +246,18 @@ export function SweepDialog({
           ? "color-mix(in srgb, var(--accent) 26%, transparent)"
           : "transparent";
 
-  /** 全行を一括で同じ処分に（ヘッダの一括ボタン）。 */
+  /** このページの全行を一括で同じ処分に（ヘッダの一括ボタン）。 */
   const setAll = (action: SweepAction) =>
-    setActions(Object.fromEntries(items.map((i) => [i.id, action])));
+    setActions((prev) => ({
+      ...prev,
+      ...Object.fromEntries(pageItems.map((i) => [i.id, action])),
+    }));
 
-  /** いま「from」の判定になっている行だけ、まとめて「to」へ振り替える。
-   *  例: アーカイブ推奨をまとめてゴミ箱へ（数件だけ残してあとは削除の運用）。 */
+  /** このページで「from」の判定になっている行だけ、まとめて「to」へ振り替える。 */
   const convert = (from: SweepAction, to: SweepAction) =>
     setActions((prev) => {
       const next = { ...prev };
-      for (const i of items)
+      for (const i of pageItems)
         if ((prev[i.id] ?? i.action) === from) next[i.id] = to;
       return next;
     });
@@ -248,20 +266,24 @@ export function SweepDialog({
    *  記録して閉じる → 次回以降は出さない。キャンセル（閉じる/×/背景）は
    *  何も記録せず、次回また提示される。 */
   async function apply() {
+    // このページ（提示中のN件）だけを確定する。残りは次ページで。
+    const page = pageItems;
+    const pageIds = new Set(page.map((i) => i.id));
+    const lastPage = isLastPage;
     setApplying(true);
     // 処分対象を「払い出す」演出へ（keep はその場に残る）。サーバが速くても
     // 払い出しが目に入るよう、アニメ分の最低時間を確保してから凪ぎ表示に移る。
     setPhase("sweeping");
     try {
-      const archiveIds = items
+      const archiveIds = page
         .filter((i) => actions[i.id] === "archive")
         .map((i) => i.id);
-      const trashIds = items
+      const trashIds = page
         .filter((i) => actions[i.id] === "trash")
         .map((i) => i.id);
       // 迷惑メール報告: spam rows are trashed like any other, and additionally
       // reported (threat learning) so detectThreat flags the sender next time.
-      const spamItems = items.filter((i) => actions[i.id] === "spam");
+      const spamItems = page.filter((i) => actions[i.id] === "spam");
       const spamIds = spamItems.map((i) => i.id);
       const sweepAnim = new Promise((r) => setTimeout(r, 600));
       await Promise.all([
@@ -288,7 +310,7 @@ export function SweepDialog({
         await fetch("/api/sweep/reviewed", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ids: items.map((i) => i.id) }),
+          body: JSON.stringify({ ids: page.map((i) => i.id) }),
         });
       } catch {
         /* 記録失敗は致命的でない */
@@ -297,7 +319,7 @@ export function SweepDialog({
       // 実際に選んだ処分（archive / trash）も送る — これが無いと archive と
       // trash を区別できず、毎回「アーカイブ→ゴミ箱」を押し直すことになる。
       try {
-        const signals = items
+        const signals = page
           .map((i) => {
             const from = i.fromEmail ?? byId.get(i.id)?.from.email;
             const action = actions[i.id] ?? i.action;
@@ -323,10 +345,28 @@ export function SweepDialog({
       } catch {
         /* 学習は best-effort */
       }
-      // 払い出しが済んだら、少しだけ「凪いだ」余韻を見せてから閉じる。
-      setPhase("calm");
-      await new Promise((r) => setTimeout(r, 900));
-      onClose();
+      // このページの処理数を累計へ（凪ぎ表示用）。
+      setApplied((a) => ({
+        archive: a.archive + archiveIds.length,
+        trash: a.trash + trashIds.length,
+        spam: a.spam + spamIds.length,
+      }));
+      if (lastPage) {
+        // 最後のページ → 「凪いだ」余韻を見せてから閉じる。
+        setPhase("calm");
+        await new Promise((r) => setTimeout(r, 900));
+        onClose();
+      } else {
+        // まだ残りがある → このページを一覧から外し、次のN件を出す（ぱっぱっと）。
+        setItems((prev) => prev.filter((i) => !pageIds.has(i.id)));
+        setActions((prev) => {
+          const next = { ...prev };
+          for (const id of pageIds) delete next[id];
+          return next;
+        });
+        setRevealed(0);
+        setPhase("list");
+      }
     } catch (e) {
       // 処分に失敗したら一覧へ戻し、理由を出す（勝手に閉じない）。
       setPhase("list");
@@ -396,10 +436,10 @@ export function SweepDialog({
               </p>
               <p className="text-[11px] text-fg-subtle">
                 {t("sweep.done.detail")
-                  .replace("{archive}", String(archiveCount))
-                  .replace("{trash}", String(trashCount))}
-                {spamCount > 0 &&
-                  t("sweep.spamClause").replace("{n}", String(spamCount))}
+                  .replace("{archive}", String(applied.archive))
+                  .replace("{trash}", String(applied.trash))}
+                {applied.spam > 0 &&
+                  t("sweep.spamClause").replace("{n}", String(applied.spam))}
               </p>
             </div>
           ) : (
@@ -476,7 +516,7 @@ export function SweepDialog({
                 )}
               </div>
               <div className="flex flex-col gap-0.5">
-                {ordered.slice(0, revealed).map((i) => {
+                {pageItems.slice(0, revealed).map((i) => {
                   const mail = byId.get(i.id);
                   // Prefer the fields the API echoed back; fall back to the
                   // local list, then (last resort) nothing — never the raw id.
@@ -590,24 +630,24 @@ export function SweepDialog({
                   );
                 })}
               </div>
-              {(revealed < ordered.length || streaming) && (
+              {(revealed < pageItems.length || streaming) && (
                 <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-fg-subtle">
                   <Sparkles className="size-3 animate-pulse text-accent" />
                   {streaming
                     ? t("sweep.tidying.streaming").replace(
                         "{n}",
-                        String(ordered.length),
+                        String(items.length),
                       )
                     : t("sweep.tidying.progress")
                         .replace("{revealed}", String(revealed))
-                        .replace("{total}", String(ordered.length))}
+                        .replace("{total}", String(pageItems.length))}
                 </p>
               )}
             </>
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border px-5 py-3">
           <button
             onClick={onClose}
             title={t("sweep.skip.title")}
@@ -615,13 +655,41 @@ export function SweepDialog({
           >
             {t("sweep.skip")}
           </button>
+          {/* 1回に出す件数（認知負荷を下げる）。残りが多い時だけ切替を見せる。 */}
+          {phase === "list" && !loading && items.length > 30 && (
+            <span className="flex items-center gap-1 text-[11px] text-fg-subtle">
+              {t("sweep.pageSize")}
+              {[30, 50].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => {
+                    setPageSize(n);
+                    setRevealed(0);
+                  }}
+                  className={cn(
+                    "rounded-md border px-1.5 py-0.5",
+                    pageSize === n
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-border hover:border-accent hover:text-accent",
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </span>
+          )}
           <span className="text-[11px] text-fg-subtle">
             {t("sweep.summary")
               .replace("{archive}", String(archiveCount))
               .replace("{trash}", String(trashCount))
-              .replace("{keep}", String(items.length - actionable))}
+              .replace("{keep}", String(pageItems.length - actionable))}
             {spamCount > 0 &&
               t("sweep.spamClause").replace("{n}", String(spamCount))}
+            {!isLastPage && (
+              <span className="ml-1 text-fg-subtle">
+                {t("sweep.remaining").replace("{n}", String(items.length))}
+              </span>
+            )}
           </span>
           <button
             onClick={apply}
@@ -634,7 +702,7 @@ export function SweepDialog({
             ) : (
               <Check className="size-4" />
             )}
-            {t("sweep.apply")}
+            {isLastPage ? t("sweep.apply") : t("sweep.applyPage")}
           </button>
         </div>
       </div>
