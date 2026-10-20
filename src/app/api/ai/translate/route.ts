@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateText } from "ai";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { PiiMasker } from "@/lib/ai/pii";
+import { cleanForAI } from "@/lib/ai/clean";
 
 /**
  * メール本文の翻訳（閲覧用・編集ではない）。POST { text, target } → 訳文。
@@ -37,10 +38,10 @@ export async function POST(req: Request) {
   }
 
   try {
+    // HTMLメールの残骸（mso条件コメント等）を落としてから翻訳する。
+    const clean = cleanForAI(text).slice(0, 8000);
     const masker = new PiiMasker();
-    const src = cfg.piiMask
-      ? masker.mask(text.slice(0, 8000))
-      : text.slice(0, 8000);
+    const src = cfg.piiMask ? masker.mask(clean) : clean;
     const { text: out } = await generateText({
       model: resolveModel(cfg),
       maxOutputTokens: 2000,

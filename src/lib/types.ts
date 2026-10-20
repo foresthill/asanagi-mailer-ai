@@ -400,6 +400,28 @@ export interface ResolvedContactMeta {
  * 保存し、一覧レンダリングのため件名・差出人・日時のスナップショットを保持する
  * （元メールを都度取りに行かなくてよい）。将来 MCP / カレンダー等へ連携する source。
  */
+/** 1通の要約（thread-digest の構造化出力）。 */
+export interface AiSummary {
+  summary: string;
+  decisions: string[];
+  open: string[];
+  nextActions: string[];
+  keyDates: string[];
+  participants: string[];
+}
+
+/**
+ * メールごとに保存するAI出力（閲覧補助）。開き直しても消えないよう `.data` に保持。
+ * local-first: AIへ送るのは本文（PIIマスク済）だが、保存するのは生成結果のみ。
+ */
+export interface AiCacheEntry {
+  /** 言語コード → 訳文。 */
+  translations?: Record<string, string>;
+  /** スコープ（"message" | "thread"）→ 要約。 */
+  summaries?: Partial<Record<"message" | "thread", AiSummary>>;
+  updatedAt?: string;
+}
+
 export interface TodoItem {
   /** TODO の一意キー。メール単位＝account修飾のメールID（`{account}/{providerId}`）、
    *  スレッド単位＝`{account}/thread:{threadId}`（メールIDと衝突しない名前空間）。 */

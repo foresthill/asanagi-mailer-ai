@@ -4,6 +4,7 @@ import { z } from "zod";
 import { loadAIConfig, resolveModel } from "@/lib/ai/model";
 import { DIGEST_SYSTEM, langDirective } from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
+import { cleanForAI } from "@/lib/ai/clean";
 import { logAiUsage } from "@/lib/db";
 import type { Email } from "@/lib/types";
 
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
             ? "自分"
             : `${m(e.from?.name) || m(e.from?.email)}`;
         const date = e.date ? new Date(e.date).toLocaleString("ja-JP") : "";
-        const body = m(e.body || e.snippet).slice(0, MAX_BODY);
+        const body = m(cleanForAI(e.body || e.snippet)).slice(0, MAX_BODY);
         return `--- [${i + 1}] ${date} / ${who} / 件名: ${m(e.subject)}\n${body}`;
       })
       .join("\n\n");

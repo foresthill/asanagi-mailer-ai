@@ -205,13 +205,8 @@ export function EmailReader({
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0 });
   }, [email?.id]);
-  // 別メールを開いたらAIパネルは畳む（前のメールの結果を残さない）。effect で
-  // setState せず、prop 変化をレンダー中に取り込む React 公式パターン。
-  const [aiPrevId, setAiPrevId] = useState(email?.id);
-  if (email?.id !== aiPrevId) {
-    setAiPrevId(email?.id);
-    setAiOpen(false);
-  }
+  // AIパネルは開いたままメールを跨いで追従する（パネル側が email ごとに保存済み
+  // 出力を読み込む）。閉じるのはユーザーの×操作のみ。
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller || !thread || thread.length <= 1) return;
@@ -465,17 +460,6 @@ export function EmailReader({
         </div>
       </div>
 
-      {/* 読む時のAIパネル（トグル）。会話ならスレッド全体を文脈に。 */}
-      {aiOpen && (
-        <div className="border-b border-border px-5 pb-3">
-          <ReaderAiPanel
-            email={email}
-            thread={thread && thread.length > 1 ? thread : undefined}
-            onClose={() => setAiOpen(false)}
-          />
-        </div>
-      )}
-
       {/* この会話に保存済みの下書き → ワンクリックで続きを書く（Gmail的）。 */}
       {draft && onResumeDraft && (
         <button
@@ -546,10 +530,19 @@ export function EmailReader({
           <div className="min-w-0 flex-1">
             <div
               className={cn(
-                "mx-auto animate-in",
-                fullscreen ? "max-w-5xl" : "max-w-2xl",
+                "mx-auto animate-in @container",
+                // AIパネルを開いたら2カラムに収まるよう広げる。コンテナ幅が
+                // 760px以上あれば本文左／AI右、足りなければAIは下に回る。
+                aiOpen ? "max-w-6xl" : fullscreen ? "max-w-5xl" : "max-w-2xl",
               )}
             >
+              <div
+                className={cn(
+                  "flex flex-col gap-5",
+                  aiOpen && "@[760px]:flex-row @[760px]:items-start",
+                )}
+              >
+                <div className="min-w-0 flex-1">
               <h2 className="text-xl font-semibold leading-snug tracking-tight">
                 {email.subject}
               </h2>
@@ -678,6 +671,23 @@ export function EmailReader({
                   )}
                 </>
               )}
+                </div>
+
+                {/* AI出力（訳文・要約）を本文の右に（広い時）／下に（狭い時）。
+                    sticky で本文スクロール中も見えるように。 */}
+                {aiOpen && (
+                  <aside className="shrink-0 @[760px]:w-[348px] @[760px]:sticky @[760px]:top-2 @[760px]:self-start @[760px]:max-h-[calc(100vh-7rem)] @[760px]:overflow-y-auto">
+                    <ReaderAiPanel
+                      key={email.id}
+                      email={email}
+                      thread={
+                        thread && thread.length > 1 ? thread : undefined
+                      }
+                      onClose={() => setAiOpen(false)}
+                    />
+                  </aside>
+                )}
+              </div>
             </div>
           </div>
         </div>
