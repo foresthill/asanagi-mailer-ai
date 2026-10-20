@@ -63,6 +63,30 @@ export function envImapCreds(): ImapCreds | null {
   };
 }
 
+/** Does this text look like HTML source rather than plain text? */
+function looksLikeHtml(s: string): boolean {
+  return /<!doctype html|<html[\s>]|<body[\s>]|<table[\s>]|<div[\s>]|<!--\[if /i.test(
+    s,
+  );
+}
+
+/** Convert HTML to readable plain text (comments/doctype/style/script/tags out). */
+function stripHtmlText(html: string): string {
+  return decodeEntities(
+    html
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/<!doctype[^>]*>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<(br|\/p|\/div|\/tr|\/li|\/h[1-6])\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, ""),
+  )
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t　]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function addr(a?: { name?: string; address?: string }): EmailAddress {
   return { name: a?.name ? repairMojibake(a.name) : undefined, email: a?.address ?? "" };
 }
@@ -295,23 +319,24 @@ export class ImapProvider implements EmailProvider {
           mimeType: a.contentType ?? "application/octet-stream",
           size: a.size,
         }));
-      if (parsed.text?.trim()) return { text: parsed.text.trim(), html, refRoot, ics, attachments };
-      if (html) {
-        const stripped = decodeEntities(
-          html
-            // Drop <style>/<script> CONTENT so raw CSS/JS never leaks into text.
-            .replace(/<style[\s\S]*?<\/style>/gi, "")
-            .replace(/<script[\s\S]*?<\/script>/gi, "")
-            .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
-            .replace(/<[^>]+>/g, ""),
-        )
-          .replace(/\r\n?/g, "\n")
-          .replace(/[ \t 　]+\n/g, "\n")
-          .replace(/\n{3,}/g, "\n\n")
-          .trim();
-        return { text: stripped, html, refRoot, ics, attachments };
+      const plain = parsed.text?.trim();
+      // Normally mailparser gives clean text. But if the text part is itself HTML
+      // (sender put HTML in text/plain, or no text/plain), render it as HTML and
+      // derive clean text — otherwise raw `<!DOCTYPE html>…` shows as the body.
+      if (plain && !looksLikeHtml(plain)) {
+        return { text: plain, html, refRoot, ics, attachments };
       }
-      return { text: "", refRoot, ics, attachments };
+      const rich = html || (plain && looksLikeHtml(plain) ? plain : "");
+      if (rich) {
+        return {
+          text: stripHtmlText(rich),
+          html: rich,
+          refRoot,
+          ics,
+          attachments,
+        };
+      }
+      return { text: plain ?? "", refRoot, ics, attachments };
     } catch {
       // Unparseable message — show the raw tail rather than nothing.
       const raw = source.toString("utf8");

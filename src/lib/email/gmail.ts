@@ -165,13 +165,25 @@ function decodeHtml(payload?: gmail_v1.Schema$MessagePart): string | undefined {
 }
 
 /** Plain-text fallback for HTML-only mail (list snippets, AI context). */
+/** Does this text look like HTML source (rather than plain text)? Some senders
+ *  put HTML into the text/plain part, or omit text/html entirely. */
+function looksLikeHtml(s: string): boolean {
+  return /<!doctype html|<html[\s>]|<body[\s>]|<table[\s>]|<div[\s>]|<!--\[if /i.test(
+    s,
+  );
+}
+
 function stripHtml(html: string): string {
   return decodeEntities(
     html
-      // Drop <style>/<script> CONTENT — else the raw CSS/JS leaks into the text.
+      // Comments FIRST (incl. Outlook mso conditionals) — their content must not
+      // leak into the text (`<!--[if !mso]>…` was showing up in translations).
+      .replace(/<!--[\s\S]*?-->/g, "")
+      // DOCTYPE and <style>/<script> CONTENT — else the raw markup/CSS/JS leaks.
+      .replace(/<!doctype[^>]*>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
       .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<(br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
+      .replace(/<(br|\/p|\/div|\/tr|\/li|\/h[1-6])\s*\/?>/gi, "\n")
       .replace(/<[^>]+>/g, ""),
   )
     .replace(/\r\n?/g, "\n") // normalize CRLF → LF (else blank runs slip past)
@@ -207,8 +219,15 @@ function toEmail(msg: gmail_v1.Schema$Message): Email {
   const headers = msg.payload?.headers;
   const labels = msg.labelIds ?? [];
   const state = stateFromLabels(labels);
-  const html = decodeHtml(msg.payload);
-  const body = repairMojibake(decodeBody(msg.payload) || (html ? stripHtml(html) : ""));
+  let html = decodeHtml(msg.payload);
+  let body = repairMojibake(decodeBody(msg.payload) || (html ? stripHtml(html) : ""));
+  // Some senders put HTML into the text/plain part (or omit text/html). If the
+  // "text" body is actually HTML, render it as rich HTML and derive clean text —
+  // otherwise the reader/thread card shows raw `<!DOCTYPE html>…` source.
+  if (looksLikeHtml(body)) {
+    if (!html) html = body;
+    body = stripHtml(body);
+  }
   // Meeting invite: text/calendar part first (full info), join URL fallback.
   const ics = findPart(msg.payload, "text/calendar") || findPart(msg.payload, "application/ics");
   const invite = ics ? (parseIcs(ics) ?? undefined) : undefined;
