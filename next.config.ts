@@ -8,7 +8,12 @@ const nextConfig: NextConfig = {
   // at runtime and (b) trace them into `.next-standalone/standalone/node_modules`
   // so the packaged desktop app actually ships them. Without this, IMAP/SMTP
   // "設定に失敗しました" with an empty 動作ログ because the route 500s on import.
-  serverExternalPackages: ["imapflow", "nodemailer", "mailparser"],
+  // imapflow / mailparser は動的 require 等でバンドルすると壊れるので external に
+  // する（standalone の node_modules に同梱される）。nodemailer は external にすると
+  // 深いサブパス import（nodemailer/lib/mail-composer）をバンドラが解決できず
+  // 「can't be external」エラーになるため external にしない（純JSなのでバンドルで
+  // 問題なく、ランタイムでも動く）。
+  serverExternalPackages: ["imapflow", "mailparser"],
 
   // Desktop (Tauri) packaging builds a self-contained Node server with
   // `BUILD_STANDALONE=1 next build` → .next-standalone/standalone/server.js.
