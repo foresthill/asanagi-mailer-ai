@@ -551,16 +551,21 @@ export function SweepDialog({
                         cur === "keep" ? "opacity-55" : "",
                       )}
                     >
-                      <span className="min-w-0 flex-1">
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        {/* 1行目: 差出人＋件名（長い件名でも崩れないよう truncate）。 */}
                         <span className="flex items-baseline gap-2">
-                          <span className="shrink-0 truncate text-xs font-medium">
+                          <span className="max-w-[45%] shrink-0 truncate text-xs font-medium">
                             {sender || t("sweep.unknownSender")}
                           </span>
                           <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">
                             {subject}
                           </span>
+                        </span>
+                        {/* 2行目: 判定理由 ・ 日付 ・ アカウント（小さく・次の行に逃がす）。 */}
+                        <span className="mt-0.5 flex items-center gap-2 text-[10px] text-fg-subtle">
+                          <span className="min-w-0 truncate">{i.reason}</span>
                           {mail?.date && (
-                            <span className="shrink-0 text-[10px] tabular-nums text-fg-subtle">
+                            <span className="shrink-0 tabular-nums">
                               {new Date(mail.date).toLocaleString(undefined, {
                                 month: "numeric",
                                 day: "numeric",
@@ -584,9 +589,6 @@ export function SweepDialog({
                               <span className="truncate">{acctLabel}</span>
                             </span>
                           )}
-                        </span>
-                        <span className="text-[10px] text-fg-subtle">
-                          {i.reason}
                         </span>
                       </span>
                       {/* 4択セグメント: 残す / アーカイブ / ゴミ箱 / 迷惑 */}
