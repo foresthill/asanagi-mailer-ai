@@ -334,6 +334,39 @@ fn log_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
         .build()
 }
 
+/// Check for a newer release and, if found, download+install it in the
+/// background. We do NOT force a restart (the user is reading mail): the new
+/// bundle is staged and takes effect on the next launch. Non-technical users
+/// get updates automatically just by reopening the app. Failures (offline, no
+/// latest.json yet, signature mismatch) are logged, never fatal.
+/// Note: this covers macOS (.app) and Linux AppImage. .deb/.rpm are managed by
+/// the system package manager and are not auto-updated here.
+async fn check_for_update(handle: tauri::AppHandle) {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = match handle.updater() {
+        Ok(u) => u,
+        Err(e) => {
+            log::warn!("updater unavailable: {e}");
+            return;
+        }
+    };
+    match updater.check().await {
+        Ok(Some(update)) => {
+            log::info!(
+                "update available: {} -> {} (downloading in background)",
+                update.current_version,
+                update.version
+            );
+            match update.download_and_install(|_chunk, _total| {}, || {}).await {
+                Ok(_) => log::info!("update installed; applies on next launch"),
+                Err(e) => log::warn!("update install failed: {e}"),
+            }
+        }
+        Ok(None) => log::info!("no update available (up to date)"),
+        Err(e) => log::warn!("update check failed: {e}"),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -345,6 +378,9 @@ pub fn run() {
             // Release: launch the bundled standalone server. Dev: use devUrl.
             if !cfg!(debug_assertions) {
                 start_server(app.handle());
+                // 起動時にバックグラウンドで更新確認（再起動は強制しない＝次回起動で適用）。
+                let h = app.handle().clone();
+                tauri::async_runtime::spawn(check_for_update(h));
             }
             Ok(())
         })

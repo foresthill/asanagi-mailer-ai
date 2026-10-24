@@ -80,6 +80,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 自動アップデート用の署名鍵（GitHub Secrets）。設定されていれば更新成果物を
+          # 署名し latest.json を Release に添付する。未設定なら署名はスキップされる。
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # GitHub runner は FUSE が使えず linuxdeploy(AppImage)が失敗するため、
           # AppImage を extract して実行させる（Linux のみ効く・他OSでは無害）。
           APPIMAGE_EXTRACT_AND_RUN: "1"
