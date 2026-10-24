@@ -676,7 +676,10 @@ export function EmailReader({
                 {/* AI出力（訳文・要約）を本文の右に（広い時）／下に（狭い時）。
                     sticky で本文スクロール中も見えるように。 */}
                 {aiOpen && (
-                  <aside className="shrink-0 @[760px]:w-[348px] @[760px]:sticky @[760px]:top-2 @[760px]:self-start @[760px]:max-h-[calc(100vh-7rem)] @[760px]:overflow-y-auto">
+                  // 狭い時はパネルを本文の上に（order-first）＝本文を全部スクロール
+                  // しなくても届く。パネル自身もスクロール可能に（要約が長くても見切れ
+                  // ない）。広い時は右カラム（sticky）。
+                  <aside className="order-first max-h-[75vh] shrink-0 overflow-y-auto @[760px]:order-none @[760px]:max-h-[calc(100vh-7rem)] @[760px]:w-[348px] @[760px]:sticky @[760px]:top-2 @[760px]:self-start">
                     <ReaderAiPanel
                       key={email.id}
                       email={email}

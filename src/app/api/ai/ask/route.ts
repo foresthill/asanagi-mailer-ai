@@ -15,7 +15,10 @@ export const maxDuration = 60;
  * クリック時だけ呼ぶ（自動生成しない）。回答生成なのでメインモデルを使う。
  */
 const MAX_MESSAGES = 40;
-const MAX_BODY = 1500;
+// 1通表示なら本文を丸ごと（長いメルマガも全部）見られるよう大きく取る。会話
+// （複数通）のときは肥大化を防ぐため1通あたりは控えめにする（返信は普通短い）。
+const BODY_CAP_SINGLE = 50000;
+const BODY_CAP_THREAD = 4000;
 const MAX_QUESTION = 1000;
 
 const SYSTEM = `あなたはメールを読む人の助手です。与えられたメール（または会話）の内容だけを根拠に、ユーザーの質問へ簡潔に答えます。
@@ -52,6 +55,7 @@ export async function POST(req: Request) {
     (a, b) => +new Date(a.date) - +new Date(b.date),
   );
   const window = ordered.slice(-MAX_MESSAGES);
+  const bodyCap = window.length > 1 ? BODY_CAP_THREAD : BODY_CAP_SINGLE;
 
   try {
     const masker = new PiiMasker();
@@ -68,7 +72,9 @@ export async function POST(req: Request) {
         const who =
           e.state === "sent" ? "自分" : m(e.from?.name) || m(e.from?.email);
         const date = e.date ? new Date(e.date).toLocaleString("ja-JP") : "";
-        const body = m(cleanForAI(e.body || e.snippet)).slice(0, MAX_BODY);
+        // HTMLメールは text/plain(e.body) が目次だけのことが多い。記事全文は e.html
+        // 側にあるので、HTMLがあればそれを本文化して使う（cleanForAIがタグを除去）。
+        const body = m(cleanForAI(e.html || e.body || e.snippet)).slice(0, bodyCap);
         return `--- [${i + 1}] ${date} / ${who} / 件名: ${m(e.subject)}\n${body}`;
       })
       .join("\n\n");
