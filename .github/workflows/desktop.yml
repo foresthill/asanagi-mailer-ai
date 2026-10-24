@@ -98,4 +98,7 @@ jobs:
             初回は Gmail 再認証と AI キー入力が必要。
             自動アップデートは未設定（署名鍵の設定後に有効化・docs/DESKTOP.md 参照）。
           releaseDraft: false
-          prerelease: true
+          # 自動アップデートは `releases/latest` を参照する。app-v* をプレリリースに
+          # すると GitHub が別系列(mcp-v*)を Latest 扱いし、更新が見つからなくなるため
+          # 正式リリースにする（最新の app-v* が Latest になり latest.json が解決する）。
+          prerelease: false
