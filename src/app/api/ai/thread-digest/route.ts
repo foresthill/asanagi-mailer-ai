@@ -35,7 +35,10 @@ export type ThreadDigest = z.infer<typeof schema>;
 
 /** Cap the payload: newest ~40 messages, each body trimmed — controls cost. */
 const MAX_MESSAGES = 40;
-const MAX_BODY = 1200;
+// 1通表示なら本文を丸ごと（長いメルマガも全部）要約できるよう大きく取る。会話
+// （複数通）のときは肥大化を防ぐため1通あたりは控えめに。
+const BODY_CAP_SINGLE = 50000;
+const BODY_CAP_THREAD = 4000;
 
 export async function POST(req: Request) {
   const { messages, locale } = (await req.json()) as {
@@ -62,6 +65,7 @@ export async function POST(req: Request) {
     (a, b) => +new Date(a.date) - +new Date(b.date),
   );
   const window = ordered.slice(-MAX_MESSAGES);
+  const bodyCap = window.length > 1 ? BODY_CAP_THREAD : BODY_CAP_SINGLE;
 
   try {
     const masker = new PiiMasker();
@@ -80,7 +84,9 @@ export async function POST(req: Request) {
             ? "自分"
             : `${m(e.from?.name) || m(e.from?.email)}`;
         const date = e.date ? new Date(e.date).toLocaleString("ja-JP") : "";
-        const body = m(cleanForAI(e.body || e.snippet)).slice(0, MAX_BODY);
+        // HTMLメールは text/plain(e.body) が目次だけのことが多い。記事全文は e.html
+        // 側にあるので、HTMLがあればそれを本文化して使う（cleanForAIがタグを除去）。
+        const body = m(cleanForAI(e.html || e.body || e.snippet)).slice(0, bodyCap);
         return `--- [${i + 1}] ${date} / ${who} / 件名: ${m(e.subject)}\n${body}`;
       })
       .join("\n\n");

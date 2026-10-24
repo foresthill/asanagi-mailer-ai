@@ -168,7 +168,10 @@ export function ReaderAiPanel({
       const r = await fetch("/api/ai/translate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: email.body || email.snippet, target: code }),
+        body: JSON.stringify({
+          text: email.html || email.body || email.snippet,
+          target: code,
+        }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d?.error ?? t("translate.failed"));
@@ -196,7 +199,10 @@ export function ReaderAiPanel({
       const r = await fetch("/api/ai/translate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: email.body || email.snippet, target: code }),
+        body: JSON.stringify({
+          text: email.html || email.body || email.snippet,
+          target: code,
+        }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d?.error ?? t("translate.failed"));
