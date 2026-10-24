@@ -135,7 +135,7 @@ export function HtmlMailView({
     return () => obs.disconnect();
   }, []);
 
-  const { srcDoc, blockedImages, hasQuote } = useMemo(() => {
+  const { srcDoc, blockedImages, images, hasQuote } = useMemo(() => {
     const clean = DOMPurify.sanitize(html, {
       USE_PROFILES: { html: true },
       FORBID_TAGS: ["form", "input", "button"],
@@ -143,11 +143,19 @@ export function HtmlMailView({
 
     // Neutralize remote images unless the user opted in.
     let blocked = 0;
+    const imgSrcs: string[] = []; // コピー/保存できる「意味のある」画像URL（重複・1x1除外）
     const doc = new DOMParser().parseFromString(clean, "text/html");
     doc.querySelectorAll("img").forEach((img) => {
       const src = img.getAttribute("src") ?? "";
       if (/^https?:/i.test(src)) {
         blocked++;
+        // トラッキング用1x1やスペーサーは除外。重複も除く。上限で肥大化防止。
+        const w = parseInt(img.getAttribute("width") ?? "", 10);
+        const h = parseInt(img.getAttribute("height") ?? "", 10);
+        const tiny = (w > 0 && w <= 2) || (h > 0 && h <= 2);
+        if (!tiny && imgSrcs.length < 60 && !imgSrcs.includes(src)) {
+          imgSrcs.push(src);
+        }
         if (!showImages) {
           img.setAttribute("data-blocked-src", src);
           img.removeAttribute("src");
@@ -180,6 +188,7 @@ export function HtmlMailView({
     const body = doc.body.innerHTML;
     return {
       blockedImages: blocked,
+      images: imgSrcs,
       hasQuote: offerToggle,
       srcDoc: `<!doctype html><html><head><meta charset="utf-8"><base target="_blank">
 <style>
@@ -263,6 +272,136 @@ export function HtmlMailView({
         >
           {showQuote ? "引用（過去のやりとり）を隠す ▴" : "引用（過去のやりとり）を表示 ▾"}
         </button>
+      )}
+      {/* 画像のコピー/保存。右クリックやクロスオリジンに頼らず、アプリが画像の
+          実体を取得してクリップボード/ファイルへ。画像を表示した後のみ出す。 */}
+      {showImages && images.length > 0 && <MailImageActions images={images} />}
+    </div>
+  );
+}
+
+/** メール本文の画像を列挙し、各画像を［コピー］（クリップボードへPNG）／［保存］
+ *  （ファイルへDL）できるようにする。取得は /api/image-proxy 経由（CORS回避）。 */
+function MailImageActions({ images }: { images: string[] }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const proxied = (url: string) =>
+    `/api/image-proxy?url=${encodeURIComponent(url)}`;
+
+  /** 取得して PNG の Blob にする（クリップボードは image/png が最も通る）。 */
+  async function fetchPng(url: string): Promise<Blob> {
+    const res = await fetch(proxied(url));
+    if (!res.ok) throw new Error(await res.text().catch(() => "取得失敗"));
+    const blob = await res.blob();
+    if (blob.type === "image/png") return blob;
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return blob;
+    ctx.drawImage(bitmap, 0, 0);
+    return await new Promise<Blob>((resolve) =>
+      canvas.toBlob((b) => resolve(b ?? blob), "image/png"),
+    );
+  }
+
+  async function copyImage(url: string) {
+    setErr(null);
+    setBusy(url);
+    try {
+      // WebKit 互換のため ClipboardItem に Promise<Blob> を渡す（gesture内で完結）。
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": fetchPng(url) }),
+      ]);
+      setDone(url);
+      setTimeout(() => setDone((d) => (d === url ? null : d)), 1500);
+    } catch (e) {
+      // WebView 等で画像のクリップボード書き込みが許可されない環境がある。
+      // その場合は確実な「保存」へ誘導する（原因の生エラーより親切）。
+      const denied = e instanceof Error && e.name === "NotAllowedError";
+      setErr(
+        denied
+          ? "この環境では画像のコピーが許可されていません。「保存」でファイルに落としてお使いください。"
+          : e instanceof Error
+            ? e.message
+            : "コピーに失敗しました",
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveImage(url: string) {
+    setErr(null);
+    setBusy(url);
+    try {
+      const res = await fetch(proxied(url));
+      if (!res.ok) throw new Error(await res.text().catch(() => "取得失敗"));
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      const ext = (blob.type.split("/")[1] || "img").split("+")[0];
+      const base = url.split("/").pop()?.split("?")[0] || "image";
+      a.download = /\.[a-z0-9]+$/i.test(base) ? base : `${base}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "保存に失敗しました");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-[11px] text-fg-muted hover:border-accent hover:text-accent"
+      >
+        <ImageIcon className="size-3.5" />
+        画像をコピー / 保存（{images.length}）{open ? " ▴" : " ▾"}
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {err && <p className="text-[11px] text-high">{err}</p>}
+          {images.map((url) => (
+            <div
+              key={url}
+              className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2 py-1.5"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={proxied(url)}
+                alt=""
+                className="size-10 shrink-0 rounded border border-border object-cover"
+              />
+              <span className="min-w-0 flex-1 truncate text-[11px] text-fg-subtle">
+                {url.split("/").pop()?.split("?")[0] || url}
+              </span>
+              <button
+                onClick={() => copyImage(url)}
+                disabled={busy === url}
+                className="shrink-0 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                {done === url ? "コピー済み" : busy === url ? "…" : "コピー"}
+              </button>
+              <button
+                onClick={() => saveImage(url)}
+                disabled={busy === url}
+                className="shrink-0 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                保存
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
