@@ -52,13 +52,24 @@ fn free_port() -> u16 {
         .unwrap_or(3100)
 }
 
+/// Bundled Node binary name (Windows needs the .exe extension to be executable).
+#[cfg(windows)]
+const NODE_BIN: &str = "node.exe";
+#[cfg(not(windows))]
+const NODE_BIN: &str = "node";
+/// Name of the writable copy in the app-data dir.
+#[cfg(windows)]
+const RUNTIME_NODE: &str = "runtime-node.exe";
+#[cfg(not(windows))]
+const RUNTIME_NODE: &str = "runtime-node";
+
 /// Resolve a runnable Node: the bundled binary lives in the (possibly read-only)
 /// resource dir, so copy it once into the writable app-data dir and set +x.
 /// Returns the resource copy as a fallback if no writable dir is available.
 fn ensure_node(resource_dir: &Path, data_dir: Option<&Path>) -> PathBuf {
-    let bundled = resource_dir.join("node");
+    let bundled = resource_dir.join(NODE_BIN);
     let Some(d) = data_dir else { return bundled };
-    let dest = d.join("runtime-node");
+    let dest = d.join(RUNTIME_NODE);
     // Copy when missing or a size mismatch (cheap freshness check across upgrades).
     let need_copy = match (std::fs::metadata(&dest), std::fs::metadata(&bundled)) {
         (Ok(a), Ok(b)) => a.len() != b.len(),
@@ -110,7 +121,8 @@ fn node_works(bin: &Path) -> bool {
 /// A system Node on PATH / common locations, used only if the bundled one can't
 /// run (glibc/arch mismatch). Must satisfy node:sqlite (Node ≥ 22.5).
 fn system_node() -> Option<PathBuf> {
-    let mut cands: Vec<PathBuf> = vec![PathBuf::from("node")]; // PATH lookup
+    let mut cands: Vec<PathBuf> = vec![PathBuf::from(NODE_BIN)]; // PATH lookup
+    #[cfg(not(windows))]
     for p in [
         "/usr/local/bin/node",
         "/usr/bin/node",

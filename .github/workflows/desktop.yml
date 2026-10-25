@@ -21,7 +21,11 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-22.04 # Linux: deb / rpm / AppImage（glibc 2.35）
+            args: ""
           - platform: macos-latest # macOS: dmg / app（Apple Silicon = arm64）
+            args: ""
+          - platform: windows-latest # Windows: NSIS .exe インストーラ（WiX不要）
+            args: "--bundles nsis"
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -58,19 +62,21 @@ jobs:
 
       # Bundle the Node runtime so the end user needs nothing installed.
       # We reuse the runner's Node 24 (official build from setup-node), shipped as
-      # the app resource `node` (see tauri.conf.json bundle.resources). Linux は
-      # linux-x64(glibc)、macOS は該当ランナーのアーキ(arm64)。bash は両OSで既定。
+      # the app resource (tauri.conf.json bundle.resources: "binaries/node*").
+      # Linux=linux-x64(glibc), macOS=該当アーキ(arm64), Windows=win-x64(node.exe)。
+      # process.execPath を使い OS に関係なく確実にコピーする（Windows の .exe も）。
       - name: Bundle Node runtime
+        shell: bash
         run: |
-          mkdir -p src-tauri/binaries
-          cp "$(command -v node)" src-tauri/binaries/node
-          chmod +x src-tauri/binaries/node
-          echo "bundled node: $(src-tauri/binaries/node --version) on ${{ matrix.platform }}"
-          # macOS(Apple Silicon)は署名が無いと「壊れている」と表示される。同梱 node を
-          # アドホック署名しておき、アプリ側の署名(signingIdentity:"-")と整合させる。
+          node -e "const fs=require('fs');fs.mkdirSync('src-tauri/binaries',{recursive:true});const dest=process.platform==='win32'?'node.exe':'node';fs.copyFileSync(process.execPath,'src-tauri/binaries/'+dest);console.log('bundled',process.execPath,'->',dest)"
           if [[ "${{ matrix.platform }}" == macos* ]]; then
+            chmod +x src-tauri/binaries/node
+            # macOS(Apple Silicon)は署名が無いと「壊れている」と表示される。同梱 node を
+            # アドホック署名し、アプリ側の署名(signingIdentity:"-")と整合させる。
             codesign --force --sign - src-tauri/binaries/node
             codesign -dv src-tauri/binaries/node || true
+          elif [[ "${{ matrix.platform }}" == ubuntu* ]]; then
+            chmod +x src-tauri/binaries/node
           fi
 
       # tauri build が conf の beforeBuildCommand(build:standalone)を実行し、
@@ -89,14 +95,16 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           NO_STRIP: "1"
         with:
+          # Windows は WiX(.msi) を避け NSIS(.exe) のみ。Linux/macOS は既定("")。
+          args: ${{ matrix.args }}
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('app-v0.0.0-dev-{0}', github.run_number) }}
           releaseName: "Asanagi Desktop ${{ github.ref_type == 'tag' && github.ref_name || 'dev build' }}"
           releaseBody: |
-            デスクトップビルド: Linux（AppImage / .deb / .rpm）＋ macOS（.dmg）。
+            デスクトップビルド: Linux（AppImage / .deb / .rpm）＋ macOS（.dmg）＋ Windows（.exe/NSIS）。
             Node ランタイムを同梱済みのため、実行マシンへの Node インストールは不要です。
             macOS は未署名のため初回は「開発元を確認できません」→ 右クリック→「開く」で起動してください（Apple Silicon 向け）。
-            初回は Gmail 再認証と AI キー入力が必要。
-            自動アップデートは未設定（署名鍵の設定後に有効化・docs/DESKTOP.md 参照）。
+            Windows も未署名のため「WindowsによってPCが保護されました」→「詳細情報」→「実行」で起動してください。
+            初回は Gmail 再認証と AI キー入力が必要。自動アップデート対応（mac/Windows/AppImage）。
           releaseDraft: false
           # 自動アップデートは `releases/latest` を参照する。app-v* をプレリリースに
           # すると GitHub が別系列(mcp-v*)を Latest 扱いし、更新が見つからなくなるため
