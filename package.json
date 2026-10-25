@@ -1,6 +1,6 @@
 {
   "name": "asanagi",
-  "version": "0.4.29",
+  "version": "0.5.0",
   "private": true,
   "description": "Asanagi（朝凪） — AIネイティブなメールクライアント。返信提案・会話で一箇所ずつ添削・スケジュール送信・AI重要度学習。",
   "license": "MIT",
@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:standalone": "BUILD_STANDALONE=1 next build && node scripts/copy-standalone-assets.mjs",
+    "build:standalone": "cross-env BUILD_STANDALONE=1 next build && node scripts/copy-standalone-assets.mjs",
     "start:standalone": "node .next-standalone/standalone/server.js",
     "start": "next start",
     "tauri": "tauri",
@@ -68,6 +68,7 @@
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
     "tailwindcss": "^4",
