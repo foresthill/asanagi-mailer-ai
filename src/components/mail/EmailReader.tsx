@@ -43,6 +43,7 @@ import {
   initials,
 } from "./helpers";
 import { ThreadView } from "./ThreadView";
+import { RecipientCopyMenu } from "./RecipientCopyMenu";
 import { ThreadOutlineRail } from "./ThreadOutlineRail";
 import { QuotedText, segmentReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
@@ -157,7 +158,6 @@ export function EmailReader({
   const zoomIn = () =>
     setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10));
   const [copied, setCopied] = useState(false);
-  const [addrCopied, setAddrCopied] = useState(false);
 
   // Outline rail (document-style TOC) in the LEFT gutter — show/hide toggle in
   // the toolbar (a separate axis from カード/会話), persisted. Default ON.
@@ -293,29 +293,6 @@ export function EmailReader({
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard unavailable — ignore */
-    }
-  };
-
-  // Copy the open mail's participants (From + To + CC) as a comma-separated
-  // address list — paste straight into a To/CC field or a spreadsheet.
-  // De-duped by address (case-insensitive), order preserved. BCC is excluded
-  // (it only exists on our own sent copies and is meant to stay hidden).
-  const copyRecipients = async () => {
-    const seen = new Set<string>();
-    const emails: string[] = [];
-    for (const a of [email.from, ...email.to, ...(email.cc ?? [])]) {
-      const e = a.email?.trim();
-      if (!e || seen.has(e.toLowerCase())) continue;
-      seen.add(e.toLowerCase());
-      emails.push(e);
-    }
-    if (!emails.length) return;
-    try {
-      await navigator.clipboard.writeText(emails.join(", "));
-      setAddrCopied(true);
-      setTimeout(() => setAddrCopied(false), 1500);
     } catch {
       /* clipboard unavailable — ignore */
     }
@@ -623,18 +600,10 @@ export function EmailReader({
                     </p>
                   )}
                   {(email.to.length > 0 || (email.cc?.length ?? 0) > 0) && (
-                    <button
-                      onClick={copyRecipients}
-                      title="From・To・CC のメールアドレスをカンマ区切りでコピー"
-                      className="mt-1 flex items-center gap-1 text-[11px] text-fg-subtle hover:text-accent"
-                    >
-                      {addrCopied ? (
-                        <Check className="size-3 text-accent" />
-                      ) : (
-                        <Copy className="size-3" />
-                      )}
-                      {addrCopied ? "コピーしました" : "宛先をコピー"}
-                    </button>
+                    <RecipientCopyMenu
+                      className="mt-1"
+                      people={[email.from, ...email.to, ...(email.cc ?? [])]}
+                    />
                   )}
                 </div>
                 <span className="ml-auto text-xs text-fg-subtle">
