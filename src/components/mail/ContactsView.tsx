@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Search, Users } from "lucide-react";
+import { Loader2, Search, Users, Copy, Check } from "lucide-react";
 import type { EmailAddress } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { avatarColor, relativeTime } from "./helpers";
@@ -23,6 +23,7 @@ export function ContactsView({
   const [selected, setSelected] = useState<ContactInfo | null>(null);
 
   const [warming, setWarming] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -56,6 +57,27 @@ export function ContactsView({
     (c) => !q || c.email.includes(q) || (c.name ?? "").toLowerCase().includes(q),
   );
 
+  // 表示中（検索で絞り込んだ分）のアドレスをカンマ区切りでコピー。To/CC欄や
+  // スプレッドシートにそのまま貼れる。重複はメールアドレスで除去。
+  const copyAddresses = async () => {
+    const seen = new Set<string>();
+    const emails: string[] = [];
+    for (const c of filtered) {
+      const e = c.email?.trim();
+      if (!e || seen.has(e.toLowerCase())) continue;
+      seen.add(e.toLowerCase());
+      emails.push(e);
+    }
+    if (!emails.length) return;
+    try {
+      await navigator.clipboard.writeText(emails.join(", "));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable — ignore */
+    }
+  };
+
   return (
     <>
       <div className="flex w-[384px] shrink-0 flex-col border-r border-border bg-surface">
@@ -64,6 +86,19 @@ export function ContactsView({
           <span className="ml-auto text-xs text-fg-subtle">
             {contacts ? `${filtered.length}人` : ""}
           </span>
+          <button
+            onClick={copyAddresses}
+            disabled={!filtered.length}
+            title="表示中のメールアドレスをカンマ区切りでコピー（検索で絞り込み可）"
+            className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted hover:border-accent hover:text-accent disabled:opacity-40"
+          >
+            {copied ? (
+              <Check className="size-3 text-accent" />
+            ) : (
+              <Copy className="size-3" />
+            )}
+            {copied ? "コピーしました" : "アドレスをコピー"}
+          </button>
         </header>
         <div className="px-4 pb-2">
           <div className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 py-1.5 focus-within:border-accent">

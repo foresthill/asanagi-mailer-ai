@@ -43,6 +43,7 @@ import {
   initials,
 } from "./helpers";
 import { ThreadView } from "./ThreadView";
+import { RecipientCopyMenu } from "./RecipientCopyMenu";
 import { ThreadOutlineRail } from "./ThreadOutlineRail";
 import { QuotedText, segmentReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
@@ -597,6 +598,12 @@ export function EmailReader({
                         ? `（BCC: ${email.bcc.map((a) => a.name || a.email).join("、")}）`
                         : ""}
                     </p>
+                  )}
+                  {(email.to.length > 0 || (email.cc?.length ?? 0) > 0) && (
+                    <RecipientCopyMenu
+                      className="mt-1"
+                      people={[email.from, ...email.to, ...(email.cc ?? [])]}
+                    />
                   )}
                 </div>
                 <span className="ml-auto text-xs text-fg-subtle">

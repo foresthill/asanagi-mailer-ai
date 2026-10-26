@@ -21,6 +21,7 @@ import { QuotedText } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
 import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
+import { RecipientCopyMenu } from "./RecipientCopyMenu";
 
 /**
  * Thread rendering, oldest first, with two display modes:
@@ -244,21 +245,29 @@ export function ThreadView({
 
   const digestSection = messages.length > 1 && (
     <div>
-      {!digest && (
-        <button
-          onClick={runDigest}
-          disabled={digesting}
-          title="この会話の経緯をAIが要約（本文はPIIマスクして送信）"
-          className="flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent transition hover:opacity-90 disabled:opacity-60"
-        >
-          {digesting ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="size-3.5" />
-          )}
-          {digesting ? "経緯を要約中…" : "この会話の経緯を要約"}
-        </button>
-      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {!digest && (
+          <button
+            onClick={runDigest}
+            disabled={digesting}
+            title="この会話の経緯をAIが要約（本文はPIIマスクして送信）"
+            className="flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent transition hover:opacity-90 disabled:opacity-60"
+          >
+            {digesting ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            {digesting ? "経緯を要約中…" : "この会話の経緯を要約"}
+          </button>
+        )}
+        {/* スレッド全体の参加者（全メッセージの From+To+CC の和集合・重複除去は
+            メニュー側）。1件ずつ／全員まとめて、どちらもここから取れる。 */}
+        <RecipientCopyMenu
+          people={messages.flatMap((m) => [m.from, ...m.to, ...(m.cc ?? [])])}
+          label="会話全体の宛先をコピー"
+        />
+      </div>
       {digestError && <p className="mt-1 text-xs text-high">{digestError}</p>}
       {digest && (
         <div className="rounded-xl border border-border bg-surface p-4 shadow-[var(--shadow)]">
@@ -410,6 +419,13 @@ export function ThreadView({
                           : ""}
                       </span>
                     )}
+                    {expanded &&
+                      (m.to.length > 0 || (m.cc?.length ?? 0) > 0) && (
+                        <RecipientCopyMenu
+                          className="mt-1"
+                          people={[m.from, ...m.to, ...(m.cc ?? [])]}
+                        />
+                      )}
                     {!expanded && (
                       <p className="truncate text-xs text-fg-subtle">
                         {m.snippet}
