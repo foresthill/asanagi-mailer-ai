@@ -732,7 +732,9 @@ const ja: Dict = {
     "この日付より前のメールは受信箱に表示しません（サーバからは消えません）。数万通の過去メールを遡らずに「受信箱ゼロ」に到達できます。",
 
   // Gmail connect (GmailConnectSection)
-  "gmail.title": "Gmail（OAuth）",
+  "gmail.title": "Gmail（OAuth・上級者向け）",
+  "gmail.intro":
+    "これは Google Cloud で OAuth クライアントを自分で作る上級者向けの方式です。難しい場合は上の「メール接続（アドレス＋パスワード）」で Gmail に繋げます（アプリパスワードを使用）。ここの ID/シークレットはメール利用に必須ではありません。",
   "gmail.connected": "接続済み{addr}",
   "gmail.disconnect": "切断",
   "gmail.clientId": "OAuth クライアント ID",
@@ -746,7 +748,9 @@ const ja: Dict = {
   "gmail.placeholder.changeOnly": "変更する場合のみ入力",
 
   // IMAP/SMTP connect (ImapConnectSection)
-  "imap.title": "IMAP/SMTP（会社メール等）",
+  "imap.title": "メール接続（アドレス＋パスワード）",
+  "imap.intro":
+    "メールアドレスとパスワードを入れるだけ。Gmail などはサーバ設定を自動入力します。会社メール等は「詳細設定」で手動指定できます。",
   "imap.configured": "設定済み: {user}@{host}",
   "imap.envConfigured": "env設定あり",
   "imap.clear": "クリア",
@@ -762,8 +766,11 @@ const ja: Dict = {
   "imap.set": "設定済み",
   "imap.placeholder.changeOnly": "変更する場合のみ入力",
   "imap.placeholder.appPassword": "アプリ用パスワード推奨",
+  "imap.gmail.detected":
+    "Gmail を検出：サーバ設定を自動入力しました。パスワードは Gmail の「アプリパスワード」を使ってください（通常のログインパスワードは使えません）。",
+  "imap.gmail.appPwLink": "アプリパスワードの作り方",
   "imap.advanced":
-    "高度な設定（SMTP・フォルダ名 — 空欄はIMAPの値/既定値を使用）",
+    "詳細設定（サーバ・ポート・SMTP・フォルダ名 — 空欄はIMAPの値/既定値を使用）",
   "imap.smtpHost": "SMTP ホスト",
   "imap.smtpPort": "SMTP ポート",
   "imap.smtpUser": "SMTP ユーザー",
@@ -1503,7 +1510,9 @@ const en: Dict = {
     "Emails before this date won't appear in the inbox (they aren't deleted from the server). You can reach \"inbox zero\" without wading through tens of thousands of old emails.",
 
   // Gmail connect (GmailConnectSection)
-  "gmail.title": "Gmail (OAuth)",
+  "gmail.title": "Gmail (OAuth, advanced)",
+  "gmail.intro":
+    "This is the advanced path where you create your own OAuth client in Google Cloud. If that's too much, use “Email connect (address + password)” above to connect Gmail with an app password. The ID/secret here are not required for using email.",
   "gmail.connected": "Connected{addr}",
   "gmail.disconnect": "Disconnect",
   "gmail.clientId": "OAuth client ID",
@@ -1517,7 +1526,9 @@ const en: Dict = {
   "gmail.placeholder.changeOnly": "Enter only to change",
 
   // IMAP/SMTP connect (ImapConnectSection)
-  "imap.title": "IMAP/SMTP (company mail, etc.)",
+  "imap.title": "Email connect (address + password)",
+  "imap.intro":
+    "Just enter your email address and password. For Gmail and others the server settings are filled in automatically. Company mail can be set manually under “Advanced settings”.",
   "imap.configured": "Configured: {user}@{host}",
   "imap.envConfigured": "Configured via env",
   "imap.clear": "Clear",
@@ -1532,8 +1543,11 @@ const en: Dict = {
   "imap.set": "Set",
   "imap.placeholder.changeOnly": "Enter only to change",
   "imap.placeholder.appPassword": "App password recommended",
+  "imap.gmail.detected":
+    "Gmail detected: server settings filled in automatically. Use a Gmail “App password” for the password (your normal login password will not work).",
+  "imap.gmail.appPwLink": "How to create an app password",
   "imap.advanced":
-    "Advanced settings (SMTP & folder names — blank uses the IMAP value / default)",
+    "Advanced settings (server, port, SMTP & folder names — blank uses the IMAP value / default)",
   "imap.smtpHost": "SMTP host",
   "imap.smtpPort": "SMTP port",
   "imap.smtpUser": "SMTP user",

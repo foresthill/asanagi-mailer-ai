@@ -32,6 +32,19 @@ interface TestResult {
 const inputCls =
   "rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent";
 
+const GMAIL_DOMAINS = ["gmail.com", "googlemail.com"];
+/**
+ * Gmail addresses use fixed IMAP/SMTP hosts, so the user never needs to know
+ * them — detect the domain and we fill host/smtpHost for them (ports/secure
+ * already default to 993/465/TLS server-side). Returns null for other domains.
+ */
+function gmailPreset(email: string): { host: string; smtpHost: string } | null {
+  const dom = email.split("@")[1]?.trim().toLowerCase();
+  return dom && GMAIL_DOMAINS.includes(dom)
+    ? { host: "imap.gmail.com", smtpHost: "smtp.gmail.com" }
+    : null;
+}
+
 /**
  * Generic IMAP/SMTP connect (e.g. company mail). Credentials are saved
  * locally (.data); blank SMTP fields fall back to the IMAP values.
@@ -57,6 +70,21 @@ export function ImapConnectSection({
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // Typing a Gmail address fills the servers so the user only supplies address
+  // + app password. Don't clobber a host the user set to something non-Gmail.
+  const onUserChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const user = e.target.value;
+    setForm((f) => {
+      const preset = gmailPreset(user);
+      const autofill =
+        preset && (!f.host || f.host === "imap.gmail.com")
+          ? { host: preset.host, smtpHost: preset.smtpHost }
+          : {};
+      return { ...f, user, ...autofill };
+    });
+  };
+  const isGmail = Boolean(gmailPreset(form.user));
 
   const configured = Boolean(imap.host && imap.user && imap.passwordSet);
 
@@ -183,45 +211,9 @@ export function ImapConnectSection({
         )}
       </div>
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-fg-muted">
-          {t("imap.fromName")}
-        </span>
-        <input
-          value={form.fromName}
-          onChange={set("fromName")}
-          placeholder={t("imap.fromName.placeholder")}
-          className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
-        />
-        <span className="text-[11px] text-fg-subtle">
-          {t("imap.fromName.note")}
-        </span>
-      </label>
-
-      <div className="grid grid-cols-3 gap-2">
-        <label className="col-span-2 flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-fg-muted">
-            {t("imap.host")}
-          </span>
-          <input
-            value={form.host}
-            onChange={set("host")}
-            placeholder="imap.example.com"
-            className={inputCls}
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-fg-muted">
-            {t("imap.port")}
-          </span>
-          <input
-            value={form.port}
-            onChange={set("port")}
-            placeholder="993"
-            className={inputCls}
-          />
-        </label>
-      </div>
+      <p className="text-[11px] leading-relaxed text-fg-subtle">
+        {t("imap.intro")}
+      </p>
 
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-fg-muted">
@@ -229,7 +221,7 @@ export function ImapConnectSection({
         </span>
         <input
           value={form.user}
-          onChange={set("user")}
+          onChange={onUserChange}
           placeholder="you@example.com"
           autoComplete="off"
           className={inputCls}
@@ -259,11 +251,64 @@ export function ImapConnectSection({
         />
       </label>
 
+      {isGmail && (
+        <p className="rounded-lg bg-accent-soft px-3 py-2 text-[11px] leading-relaxed text-fg-muted">
+          {t("imap.gmail.detected")}{" "}
+          <a
+            href="https://support.google.com/accounts/answer/185833"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-accent"
+          >
+            {t("imap.gmail.appPwLink")}
+          </a>
+        </p>
+      )}
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-fg-muted">
+          {t("imap.fromName")}
+        </span>
+        <input
+          value={form.fromName}
+          onChange={set("fromName")}
+          placeholder={t("imap.fromName.placeholder")}
+          className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+        <span className="text-[11px] text-fg-subtle">
+          {t("imap.fromName.note")}
+        </span>
+      </label>
+
       <details className="rounded-lg bg-surface-2 px-3 py-2">
         <summary className="cursor-pointer text-[11px] text-fg-muted">
           {t("imap.advanced")}
         </summary>
         <div className="mt-3 flex flex-col gap-2">
+          <div className="grid grid-cols-3 gap-2">
+            <label className="col-span-2 flex flex-col gap-1">
+              <span className="text-[11px] text-fg-muted">
+                {t("imap.host")}
+              </span>
+              <input
+                value={form.host}
+                onChange={set("host")}
+                placeholder="imap.example.com"
+                className={inputCls}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-fg-muted">
+                {t("imap.port")}
+              </span>
+              <input
+                value={form.port}
+                onChange={set("port")}
+                placeholder="993"
+                className={inputCls}
+              />
+            </label>
+          </div>
           <div className="grid grid-cols-3 gap-2">
             <label className="col-span-2 flex flex-col gap-1">
               <span className="text-[11px] text-fg-muted">

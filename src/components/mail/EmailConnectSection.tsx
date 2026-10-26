@@ -196,14 +196,16 @@ export function EmailConnectSection() {
       </div>
 
       {/* 選んだ接続方式のフォームだけ出す（両方同時に出さない＝どこを押すか明確に）。
-          「おまかせ」のときだけ両方見せる。デモ(mock)は接続フォーム不要。 */}
-      {(view.choice === "gmail" || view.choice === "auto") && (
-        <GmailConnectSection gmail={view.gmail} onRefresh={refresh} />
+          「おまかせ」のときだけ両方見せる。デモ(mock)は接続フォーム不要。
+          一般利用者向けの「アドレス＋パスワード(IMAP)」を先に、Google Cloud設定が要る
+          Gmail OAuth(=キーに見えて誤解を招く)は後ろに置く。 */}
+      {(view.choice === "imap" || view.choice === "auto") && (
+        <ImapConnectSection imap={view.imap} onRefresh={refresh} />
       )}
 
-      {(view.choice === "imap" || view.choice === "auto") && (
+      {(view.choice === "gmail" || view.choice === "auto") && (
         <div className={view.choice === "auto" ? "border-t border-border pt-4" : ""}>
-          <ImapConnectSection imap={view.imap} onRefresh={refresh} />
+          <GmailConnectSection gmail={view.gmail} onRefresh={refresh} />
         </div>
       )}
     </div>
