@@ -66,7 +66,9 @@ export const DraftEditor = forwardRef<
       LineBreak,
       History,
       SuggestionNode,
-      Placeholder.configure({ placeholder: placeholder ?? "本文" }),
+      Placeholder.configure({
+        placeholder: placeholder ?? "ここに本文を入力…",
+      }),
     ],
     content: "",
     editorProps: {
