@@ -80,6 +80,12 @@ export function GmailConnectSection({
         {t("gmail.title")}
       </h4>
 
+      {!g.connected && (
+        <p className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] leading-relaxed text-fg-subtle">
+          {t("gmail.intro")}
+        </p>
+      )}
+
       {g.connected ? (
         <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600">
           <span className="size-1.5 rounded-full bg-emerald-500" />
