@@ -803,7 +803,9 @@ export function ReplyComposer({
             </div>
           )}
 
-          <div className="relative mt-3 flex-1 overflow-y-auto">
+          {/* 本文は枠線＋フォーカスリングで「編集できる入力欄」と分かるように
+              （枠が無いとプレビューに見えて編集できると気づかれない）。 */}
+          <div className="relative mt-3 flex-1 overflow-y-auto rounded-lg border border-border px-3 py-2 transition-colors focus-within:border-accent">
             {richMode ? (
               <RichEditor
                 ref={richEditorRef}
