@@ -419,13 +419,6 @@ export function ThreadView({
                           : ""}
                       </span>
                     )}
-                    {expanded &&
-                      (m.to.length > 0 || (m.cc?.length ?? 0) > 0) && (
-                        <RecipientCopyMenu
-                          className="mt-1"
-                          people={[m.from, ...m.to, ...(m.cc ?? [])]}
-                        />
-                      )}
                     {!expanded && (
                       <p className="truncate text-xs text-fg-subtle">
                         {m.snippet}
@@ -463,6 +456,15 @@ export function ThreadView({
               </div>
               {expanded && (
                 <div className="rounded-b-xl border-t border-border bg-surface px-4 py-4">
+                  {/* 宛先コピー（この1通の From+To+CC）。カードのヘッダは <button>
+                      なので、ボタン内 <button> を避けるため展開ボディ側に置く。 */}
+                  {(m.to.length > 0 || (m.cc?.length ?? 0) > 0) && (
+                    <div className="mb-3">
+                      <RecipientCopyMenu
+                        people={[m.from, ...m.to, ...(m.cc ?? [])]}
+                      />
+                    </div>
+                  )}
                   {/* Per-message actions: same split buttons as the reader bar
                     (返信/AIで返信＋メニューに 全員に返信/AIで全員に返信/転送) so
                     it's clear which mail you're answering — no scrolling up. */}
