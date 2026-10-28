@@ -253,6 +253,10 @@ export function HtmlMailView({
           )}
         </div>
       )}
+      {/* 画像のコピー/保存を本文の“上”（バナー直下）に出す。本文の下に置くと、
+          長いメール（メルマガ等）ではスクロールしないと辿り着けず「どこ？」に
+          なるため、「画像を表示」を押した直後にここで操作できるようにする。 */}
+      {showImages && images.length > 0 && <MailImageActions images={images} />}
       <iframe
         ref={iframeRef}
         srcDoc={srcDoc}
@@ -273,9 +277,6 @@ export function HtmlMailView({
           {showQuote ? "引用（過去のやりとり）を隠す ▴" : "引用（過去のやりとり）を表示 ▾"}
         </button>
       )}
-      {/* 画像のコピー/保存。右クリックやクロスオリジンに頼らず、アプリが画像の
-          実体を取得してクリップボード/ファイルへ。画像を表示した後のみ出す。 */}
-      {showImages && images.length > 0 && <MailImageActions images={images} />}
     </div>
   );
 }

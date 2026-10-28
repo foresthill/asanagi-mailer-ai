@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::Manager;
 
 /// Open a file or folder with the OS default handler (file manager / text
@@ -285,8 +285,92 @@ const ERROR_PAGE_JS: &str = r#"(function(){
   };
 })();"#;
 
+/// Show a transient toast in the loaded web UI. Used by the manual "check for
+/// update" flow so the user gets feedback (checking / up-to-date / downloaded)
+/// without adding a dialog-plugin dependency. The message is injected via
+/// textContent (serde-escaped), so it can't break out into HTML/JS.
+fn notify_web(handle: &tauri::AppHandle, msg: &str) {
+    let Some(win) = handle.get_webview_window("main") else {
+        return;
+    };
+    let txt = serde_json::to_string(msg).unwrap_or_else(|_| "\"\"".into());
+    let js = TOAST_JS.replace("__MSG__", &txt);
+    let _ = win.eval(&js);
+}
+
+/// Toast element injected by `notify_web`. Reuses a single element so repeated
+/// calls (checking → downloading → done) replace the text rather than stack.
+const TOAST_JS: &str = r#"(function(){
+  var msg = __MSG__;
+  var id = 'asanagi-toast';
+  var el = document.getElementById(id);
+  if(!el){
+    el = document.createElement('div');
+    el.id = id;
+    el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;max-width:90vw;padding:.7rem 1.1rem;border-radius:.6rem;background:rgba(20,20,20,.92);color:#fff;font:14px/1.5 system-ui,-apple-system,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.3);white-space:pre-wrap;word-break:break-word';
+    (document.body||document.documentElement).appendChild(el);
+  }
+  el.textContent = msg;
+  if(el._t) clearTimeout(el._t);
+  el._t = setTimeout(function(){ if(el&&el.parentNode) el.parentNode.removeChild(el); }, 9000);
+})();"#;
+
+/// Manual update check from the Help menu. Reports progress via `notify_web`.
+/// Unlike the silent startup check, this always tells the user the result —
+/// including "already up to date" — because they explicitly asked.
+async fn check_update_interactive(handle: tauri::AppHandle) {
+    use tauri_plugin_updater::UpdaterExt;
+    notify_web(&handle, "アップデートを確認しています…");
+    let updater = match handle.updater() {
+        Ok(u) => u,
+        Err(e) => {
+            log::warn!("updater unavailable: {e}");
+            notify_web(&handle, "アップデート機能を利用できません。");
+            return;
+        }
+    };
+    match updater.check().await {
+        Ok(Some(update)) => {
+            let v = update.version.clone();
+            log::info!("manual check: update {} -> {v}", update.current_version);
+            notify_web(
+                &handle,
+                &format!("新しいバージョン {v} をダウンロードしています…"),
+            );
+            match update.download_and_install(|_chunk, _total| {}, || {}).await {
+                Ok(_) => {
+                    log::info!("manual update installed; applies on next launch");
+                    notify_web(
+                        &handle,
+                        &format!(
+                            "バージョン {v} をダウンロードしました。\n「終了する」で一度閉じて開き直すと適用されます。"
+                        ),
+                    );
+                }
+                Err(e) => {
+                    log::warn!("manual update install failed: {e}");
+                    notify_web(&handle, "更新のダウンロードに失敗しました。時間をおいて再度お試しください。");
+                }
+            }
+        }
+        Ok(None) => {
+            let cur = handle.package_info().version.to_string();
+            log::info!("manual check: up to date (v{cur})");
+            notify_web(&handle, &format!("最新版です（v{cur}）。"));
+        }
+        Err(e) => {
+            log::warn!("manual update check failed: {e}");
+            notify_web(
+                &handle,
+                "更新を確認できませんでした（オフラインの可能性があります）。",
+            );
+        }
+    }
+}
+
 /// Native Help menu → open the log folder / individual log files with the OS
-/// default app. Native so it works even when the web UI failed to load.
+/// default app, plus manual update-check and quit. Native so it works even when
+/// the web UI failed to load (update-check feedback needs the UI, though).
 fn install_menu(app: &tauri::App) {
     let build = || -> tauri::Result<()> {
         let open_dir = MenuItemBuilder::with_id("open_log_dir", "ログフォルダを開く").build(app)?;
@@ -294,8 +378,21 @@ fn install_menu(app: &tauri::App) {
             MenuItemBuilder::with_id("open_app_log", "アプリログを表示 (asanagi.log)").build(app)?;
         let open_server_log =
             MenuItemBuilder::with_id("open_server_log", "サーバログを表示 (server.log)").build(app)?;
+        let check_update =
+            MenuItemBuilder::with_id("check_update", "アップデートを確認").build(app)?;
+        let quit = MenuItemBuilder::with_id("quit", "終了する").build(app)?;
+        let sep1 = PredefinedMenuItem::separator(app)?;
+        let sep2 = PredefinedMenuItem::separator(app)?;
         let help = SubmenuBuilder::new(app, "ヘルプ")
-            .items(&[&open_dir, &open_app_log, &open_server_log])
+            .items(&[
+                &open_dir,
+                &open_app_log,
+                &open_server_log,
+                &sep1,
+                &check_update,
+                &sep2,
+                &quit,
+            ])
             .build()?;
         let menu = MenuBuilder::new(app).items(&[&help]).build()?;
         app.set_menu(menu)?;
@@ -324,6 +421,12 @@ fn install_menu(app: &tauri::App) {
                 if let Some(d) = data_dir {
                     open_in_os(&d.join("server.log"));
                 }
+            }
+            "check_update" => {
+                tauri::async_runtime::spawn(check_update_interactive(app.clone()));
+            }
+            "quit" => {
+                app.exit(0);
             }
             _ => {}
         }
