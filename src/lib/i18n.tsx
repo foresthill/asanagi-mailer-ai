@@ -315,6 +315,7 @@ const ja: Dict = {
   "settings.title": "メール・AIの接続設定",
   "settings.aiConnected": "接続設定",
   "settings.aiNotSet": "接続設定（AI未設定）",
+  "settings.emailNotSet": "接続設定（メール未設定）",
   "conn.provider.openrouter.hint": "1キーで多モデル（推奨）",
   "conn.provider.anthropic.hint": "Claude を直接",
   "conn.provider.openai.hint": "GPT 系",
@@ -746,6 +747,8 @@ const ja: Dict = {
     "を登録してください（手順は README）。権限は gmail.modify のみ＝完全削除は不可。トークンはこの端末のローカル（.data）にのみ保存されます。",
   "gmail.authBtn": "Google で認証して接続",
   "gmail.placeholder.changeOnly": "変更する場合のみ入力",
+  "gmail.oauthAdvanced":
+    "詳細：OAuth クライアントID/シークレットで接続（上級者向け・通常は不要）",
 
   // IMAP/SMTP connect (ImapConnectSection)
   "imap.title": "メール接続（アドレス＋パスワード）",
@@ -1091,6 +1094,7 @@ const en: Dict = {
   "settings.title": "Mail & AI connection settings",
   "settings.aiConnected": "Connection settings",
   "settings.aiNotSet": "Connection settings (AI not set)",
+  "settings.emailNotSet": "Connection settings (email not set)",
   "conn.provider.openrouter.hint": "Many models with one key (recommended)",
   "conn.provider.anthropic.hint": "Claude directly",
   "conn.provider.openai.hint": "GPT family",
@@ -1524,6 +1528,8 @@ const en: Dict = {
     "(see the README for steps). The scope is gmail.modify only — permanent deletion is not possible. The token is stored only on this device locally (.data).",
   "gmail.authBtn": "Authenticate with Google and connect",
   "gmail.placeholder.changeOnly": "Enter only to change",
+  "gmail.oauthAdvanced":
+    "Advanced: connect with an OAuth client ID/secret (rarely needed)",
 
   // IMAP/SMTP connect (ImapConnectSection)
   "imap.title": "Email connect (address + password)",

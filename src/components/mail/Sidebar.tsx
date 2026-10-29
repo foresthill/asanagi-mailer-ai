@@ -50,7 +50,7 @@ export function Sidebar({
   scheduledCount,
   draftsCount,
   todosCount,
-  aiConfigured,
+  emailConfigured,
   accounts,
   account,
   storage,
@@ -72,7 +72,8 @@ export function Sidebar({
   draftsCount: number;
   /** 未完了 TODO 件数（サイドバーのバッジ）。 */
   todosCount: number;
-  aiConfigured: boolean;
+  /** メール接続済みか（最初に必要な必須設定）。AIはあくまで任意の二次設定。 */
+  emailConfigured: boolean;
   accounts: AccountInfo[];
   account: string; // "all" or an account key
   storage: StorageInfo | null;
@@ -404,12 +405,15 @@ export function Sidebar({
       <div className="mt-auto flex flex-col gap-1">
         <StorageMeter storage={storage} />
         <div className="px-2">
+          {/* 最初に必要なのはメール接続。ここが未設定のときだけ警告色で促す。
+              AI(BYOK)は任意の二次設定なので、未設定でも警告は出さない
+              （以前は AI未設定を主ブロッカーのように見せて誤解を招いていた）。 */}
           <button
             onClick={onOpenSettings}
             title={t("settings.title")}
             className={cn(
               "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors",
-              aiConfigured
+              emailConfigured
                 ? "text-fg-subtle hover:bg-surface hover:text-fg"
                 : "bg-high-soft text-high hover:opacity-90",
             )}
@@ -417,13 +421,13 @@ export function Sidebar({
             <span
               className={cn(
                 "size-1.5 rounded-full",
-                aiConfigured ? "bg-emerald-500" : "bg-high",
+                emailConfigured ? "bg-emerald-500" : "bg-high",
               )}
             />
             <span className="flex-1 text-left">
-              {aiConfigured
+              {emailConfigured
                 ? t("settings.aiConnected")
-                : t("settings.aiNotSet")}
+                : t("settings.emailNotSet")}
             </span>
             <Settings className="size-3.5" />
           </button>

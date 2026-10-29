@@ -380,9 +380,12 @@ fn install_menu(app: &tauri::App) {
             MenuItemBuilder::with_id("open_server_log", "サーバログを表示 (server.log)").build(app)?;
         let check_update =
             MenuItemBuilder::with_id("check_update", "アップデートを確認").build(app)?;
-        let quit = MenuItemBuilder::with_id("quit", "終了する").build(app)?;
+        // Quit lives in the ファイル (File) menu, per the usual desktop convention
+        // (not buried in ヘルプ). Predefined so it gets the native ⌘Q accelerator
+        // and correct per-OS label; it exits on its own (no on_menu_event arm).
+        let quit = PredefinedMenuItem::quit(app, Some("終了する"))?;
+        let file = SubmenuBuilder::new(app, "ファイル").items(&[&quit]).build()?;
         let sep1 = PredefinedMenuItem::separator(app)?;
-        let sep2 = PredefinedMenuItem::separator(app)?;
         let help = SubmenuBuilder::new(app, "ヘルプ")
             .items(&[
                 &open_dir,
@@ -390,11 +393,9 @@ fn install_menu(app: &tauri::App) {
                 &open_server_log,
                 &sep1,
                 &check_update,
-                &sep2,
-                &quit,
             ])
             .build()?;
-        let menu = MenuBuilder::new(app).items(&[&help]).build()?;
+        let menu = MenuBuilder::new(app).items(&[&file, &help]).build()?;
         app.set_menu(menu)?;
         Ok(())
     };
@@ -424,9 +425,6 @@ fn install_menu(app: &tauri::App) {
             }
             "check_update" => {
                 tauri::async_runtime::spawn(check_update_interactive(app.clone()));
-            }
-            "quit" => {
-                app.exit(0);
             }
             _ => {}
         }
