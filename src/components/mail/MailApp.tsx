@@ -97,7 +97,13 @@ function loadLayout(): Layout {
   return localStorage.getItem(LAYOUT_KEY) === "geek" ? "geek" : "classic";
 }
 
-export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
+export function MailApp({
+  aiConfigured,
+  emailConfigured,
+}: {
+  aiConfigured: boolean;
+  emailConfigured: boolean;
+}) {
   // Current UI language — sent to AI routes so user-facing output (importance
   // reasons, digests, project summaries) is written in the user's language.
   const { locale, t } = useI18n();
@@ -144,9 +150,12 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     "loading" | "error" | SearchDigest | null
   >(null);
   // Gmail-style flat conversation rows (docs/04 §1.6); off = 1 mail = 1 row.
-  const [grouping, setGrouping] = useState(loadGroupingPref);
-  // Section grouping axis (none / by account / by sender domain).
-  const [groupAxis, setGroupAxis] = useState<GroupAxis>(loadGroupAxis);
+  // SSR-safe default; persisted value applied after mount (see effect below) —
+  // reading localStorage during init causes a hydration mismatch.
+  const [grouping, setGrouping] = useState(true);
+  // Section grouping axis (none / by account / by sender domain). Same SSR-safe
+  // pattern: default here, persisted value applied post-hydration.
+  const [groupAxis, setGroupAxis] = useState<GroupAxis>("none");
   // Bulk selection — keyed by row representative id; actions apply to every
   // mail of each checked conversation row.
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -163,6 +172,8 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
     setLayout(loadLayout());
     setListWidth(loadListWidth());
     setListHeight(loadListHeight());
+    setGrouping(loadGroupingPref());
+    setGroupAxis(loadGroupAxis());
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
   const resizeList = useCallback((deltaX: number) => {
@@ -2116,7 +2127,7 @@ export function MailApp({ aiConfigured }: { aiConfigured: boolean }) {
         scheduledCount={scheduledCount}
         draftsCount={draftsCount}
         todosCount={openTodoCount}
-        aiConfigured={aiOk}
+        emailConfigured={emailConfigured}
         accounts={accounts}
         account={account}
         storage={storage}

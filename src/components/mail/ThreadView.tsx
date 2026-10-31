@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
+  Check,
   ChevronDown,
+  Copy,
   Loader2,
   MessageCircle,
   Paperclip,
@@ -14,10 +16,16 @@ import type { Email, Attachment } from "@/lib/types";
 import type { ComposeAI, ComposeKind } from "./compose";
 import { ReplyButton, AiReplyButton } from "./ReplyButtons";
 import { cn } from "@/lib/utils";
-import { avatarColor, displayName, fullTime, initials } from "./helpers";
+import {
+  avatarColor,
+  displayName,
+  fullTime,
+  htmlToText,
+  initials,
+} from "./helpers";
 import { useI18n } from "@/lib/i18n";
 import { ConversationBubbles } from "./ConversationBubbles";
-import { QuotedText } from "./QuotedText";
+import { QuotedText, segmentReply } from "./QuotedText";
 import { SelectableText } from "./SelectableText";
 import { AttachmentList } from "./AttachmentList";
 import { HtmlMailView } from "./HtmlMailView";
@@ -110,6 +118,9 @@ export function ThreadView({
     Record<string, { html?: string; attachments: Attachment[] }>
   >({});
   const [loading, setLoading] = useState<Set<string>>(new Set());
+  // Per-message "copied" flash (keyed by message id, so only the card you
+  // copied shows the ✓ — not every card at once).
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const fetchedRef = useRef<Set<string>>(new Set());
   const loadFull = useCallback((id: string) => {
     if (fetchedRef.current.has(id)) return;
@@ -140,6 +151,31 @@ export function ThreadView({
   useEffect(() => {
     for (const m of messages) if (open.has(m.id)) loadFull(m.id);
   }, [open, messages, loadFull]);
+  // Copy this one message's body — new text only (quoted history dropped),
+  // HTML flattened to plain text, blank runs collapsed. Same rules as the
+  // single-mail reader's 本文コピー, applied per card.
+  const copyMessage = useCallback(async (m: Email, html?: string) => {
+    const plain =
+      html || /<\/?[a-z][^>]*>/i.test(m.body)
+        ? htmlToText(html || m.body)
+        : m.body;
+    const head = segmentReply(plain)
+      .filter((s) => s.kind === "text")
+      .map((s) => s.body)
+      .join("\n\n");
+    const text = (head.trim() || plain)
+      .replace(/\r\n?/g, "\n")
+      .replace(/[ \t　]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(m.id);
+      setTimeout(() => setCopiedId((c) => (c === m.id ? null : c)), 1500);
+    } catch {
+      /* clipboard unavailable — ignore */
+    }
+  }, []);
   // Long threads (10–20 messages) make the opened message (amber) require a lot
   // of scrolling. On open, scroll that message into view automatically.
   const currentRef = useRef<HTMLDivElement>(null);
@@ -467,35 +503,53 @@ export function ThreadView({
                   )}
                   {/* Per-message actions: same split buttons as the reader bar
                     (返信/AIで返信＋メニューに 全員に返信/AIで全員に返信/転送) so
-                    it's clear which mail you're answering — no scrolling up. */}
-                  {(onReplyMessage || (onOpen && m.id !== selectedId)) && (
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      {onReplyMessage && (
-                        <>
-                          <ReplyButton
-                            onReply={(kind, mode) =>
-                              onReplyMessage(m.id, kind, mode)
-                            }
-                          />
-                          <AiReplyButton
-                            onReply={(kind, mode) =>
-                              onReplyMessage(m.id, kind, mode)
-                            }
-                          />
-                        </>
-                      )}
+                    it's clear which mail you're answering — no scrolling up.
+                    本文コピーは常時表示（この1通だけをスクロールせずコピー）。 */}
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    {onReplyMessage && (
+                      <>
+                        <ReplyButton
+                          onReply={(kind, mode) =>
+                            onReplyMessage(m.id, kind, mode)
+                          }
+                        />
+                        <AiReplyButton
+                          onReply={(kind, mode) =>
+                            onReplyMessage(m.id, kind, mode)
+                          }
+                        />
+                      </>
+                    )}
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        onClick={() => copyMessage(m, full?.html)}
+                        title="本文をコピー（引用部分は除く）"
+                        className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                      >
+                        {copiedId === m.id ? (
+                          <>
+                            <Check className="size-3" />
+                            コピーしました
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="size-3" />
+                            コピー
+                          </>
+                        )}
+                      </button>
                       {onOpen && m.id !== selectedId && (
                         <button
                           onClick={() => onOpen(m.id)}
                           title="このメールをリーダーで開く（重要学習などに使えます）"
-                          className="ml-auto flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
                         >
                           このメールを開く
                           <ArrowUpRight className="size-3" />
                         </button>
                       )}
                     </div>
-                  )}
+                  </div>
                   {/* Each message's attachments render inline in its own card —
                     including the anchor — so the whole thread is consistent.
                     Gate on the actually-fetched list, not the cached
