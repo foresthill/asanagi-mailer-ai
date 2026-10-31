@@ -1,0 +1,12 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" rx="230" fill="#0E4F5C"/>
+  <!-- ripples radiate from the envelope's center, overlaid behind it (semi-transparent) -->
+  <g fill="none" stroke="#5FD0C2" stroke-linecap="round">
+    <circle cx="512" cy="512" r="250" stroke-width="24" stroke-opacity="0.55"/>
+    <circle cx="512" cy="512" r="350" stroke-width="20" stroke-opacity="0.34"/>
+    <circle cx="512" cy="512" r="452" stroke-width="16" stroke-opacity="0.2"/>
+  </g>
+  <!-- envelope sits on top, centered, filled with the bg so it stays crisp at small sizes -->
+  <rect x="300" y="372" width="424" height="280" rx="40" fill="#0E4F5C" stroke="#EAF6F2" stroke-width="26"/>
+  <path d="M300 404 Q512 580 724 404" fill="none" stroke="#EAF6F2" stroke-width="26" stroke-linecap="round"/>
+</svg>
