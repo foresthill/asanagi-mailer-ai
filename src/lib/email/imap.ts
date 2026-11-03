@@ -6,6 +6,7 @@ import type { Attachment, Email, EmailAddress, MailboxState, OutgoingMessage } f
 import type { EmailProvider } from "./provider";
 import { decodeEntities, repairMojibake } from "./encoding";
 import { detectJoinUrl, parseIcs } from "./ics";
+import { recordLog, errMsg } from "@/lib/logbuf";
 
 /**
  * Generic IMAP (read) + SMTP (send) adapter. Credentials come from the
@@ -138,7 +139,7 @@ export class ImapProvider implements EmailProvider {
   }
 
   private connection(): ImapFlow {
-    return new ImapFlow({
+    const c = new ImapFlow({
       host: this.creds.host,
       port: this.creds.port,
       secure: this.creds.secure,
@@ -152,6 +153,16 @@ export class ImapProvider implements EmailProvider {
       greetingTimeout: 10_000,
       socketTimeout: 30_000,
     });
+    // ImapFlow is an EventEmitter. A socket-level error (e.g. the socketTimeout
+    // above firing on a flaky network → ETIMEOUT "Socket timeout") is emitted
+    // as an 'error' event; with NO listener, Node rethrows it as an
+    // uncaughtException and can take down the whole server process. Handle it
+    // here so it is only logged — the in-flight operation's await rejects on
+    // its own and the API route's try/catch surfaces a friendly message.
+    c.on("error", (err) => {
+      recordLog("warn", "imap", `IMAP接続エラー: ${errMsg(err)}`);
+    });
+    return c;
   }
 
   /**
