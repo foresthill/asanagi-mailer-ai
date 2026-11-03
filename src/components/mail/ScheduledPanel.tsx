@@ -162,11 +162,18 @@ export function ScheduledPanel({
                       >
                         {fmt(s.sendAt)}
                       </span>
-                      {s.status === "scheduled" && (
+                      {/* scheduled=これから送る→取消 / failed=送れなかった→「消す」で
+                          未送信アラートから外す（残り続けないように）。どちらも
+                          DELETE で canceled にする。 */}
+                      {(s.status === "scheduled" || s.status === "failed") && (
                         <button
                           onClick={() => cancel(s.id)}
                           disabled={busyId === s.id}
-                          title={t("sched.cancel.title")}
+                          title={
+                            s.status === "failed"
+                              ? t("sched.clearFailed")
+                              : t("sched.cancel.title")
+                          }
                           className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-high hover:text-high disabled:opacity-50"
                         >
                           {busyId === s.id ? (
@@ -174,7 +181,9 @@ export function ScheduledPanel({
                           ) : (
                             <Ban className="size-3" />
                           )}
-                          {t("sched.cancel")}
+                          {s.status === "failed"
+                            ? t("sched.clearFailed")
+                            : t("sched.cancel")}
                         </button>
                       )}
                     </div>

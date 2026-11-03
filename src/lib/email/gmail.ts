@@ -541,10 +541,15 @@ export class GmailProvider implements EmailProvider {
     // Gmail threads a reply only when the request carries the threadId in
     // addition to In-Reply-To/References + matching subject.
     // https://developers.google.com/workspace/gmail/api/guides/threads
-    const res = await this.gmail.users.messages.send({
-      userId: "me",
-      requestBody: { raw, threadId: message.threadId },
-    });
+    const res = await this.gmail.users.messages.send(
+      {
+        userId: "me",
+        requestBody: { raw, threadId: message.threadId },
+      },
+      // Bound the request so a stalled network fails fast (clear error to the
+      // composer) instead of hanging until the route's maxDuration. (ms)
+      { timeout: 20_000 },
+    );
     return { messageId: res.data.id ?? undefined };
   }
 }

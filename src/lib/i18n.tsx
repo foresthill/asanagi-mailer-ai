@@ -665,6 +665,10 @@ const ja: Dict = {
   "composer.toast.sendFailedNet":
     "送信に失敗しました（ネットワークを確認してください）",
   "composer.toast.scheduleFailed": "予約に失敗しました",
+  "composer.sendFailed.retained": "内容は「未送信」に退避しました。再送できます。",
+  "sidebar.unsent": "未送信",
+  "sidebar.unsent.title": "送信に失敗したメール。タップで確認・再送できます。",
+  "sched.clearFailed": "消す",
   "composer.toast.scheduleFailedNet":
     "予約に失敗しました（ネットワークを確認してください）",
   "composer.attachOverCap.pre": "添付の合計が上限(",
@@ -1445,6 +1449,11 @@ const en: Dict = {
   "composer.toast.sendFailed": "Send failed",
   "composer.toast.sendFailedNet": "Send failed (check your network)",
   "composer.toast.scheduleFailed": "Scheduling failed",
+  "composer.sendFailed.retained":
+    "Your message was kept in “Unsent” so nothing is lost — you can resend.",
+  "sidebar.unsent": "Unsent",
+  "sidebar.unsent.title": "Mail that failed to send. Tap to review and resend.",
+  "sched.clearFailed": "Dismiss",
   "composer.toast.scheduleFailedNet": "Scheduling failed (check your network)",
   "composer.attachOverCap.pre": "Attachments exceed the limit (",
   "composer.attachOverCap.post": ")",
@@ -2250,6 +2259,12 @@ const fr: Dict = {
   "composer.toast.sendFailed": "Échec de l'envoi",
   "composer.toast.sendFailedNet": "Échec de l'envoi (vérifiez le réseau)",
   "composer.toast.scheduleFailed": "Échec de la programmation",
+  "composer.sendFailed.retained":
+    "Votre message a été conservé dans « Non envoyés » — vous pouvez le renvoyer.",
+  "sidebar.unsent": "Non envoyés",
+  "sidebar.unsent.title":
+    "Courriers dont l’envoi a échoué. Touchez pour vérifier et renvoyer.",
+  "sched.clearFailed": "Supprimer",
   "composer.toast.scheduleFailedNet":
     "Échec de la programmation (vérifiez le réseau)",
   "composer.attachOverCap.pre": "Les pièces jointes dépassent la limite (",
@@ -2988,6 +3003,10 @@ const zh: Dict = {
   "composer.toast.sendFailed": "发送失败",
   "composer.toast.sendFailedNet": "发送失败（请检查网络）",
   "composer.toast.scheduleFailed": "排程失败",
+  "composer.sendFailed.retained": "内容已保存到“未发送”，不会丢失，可重新发送。",
+  "sidebar.unsent": "未发送",
+  "sidebar.unsent.title": "发送失败的邮件。点按可查看并重新发送。",
+  "sched.clearFailed": "清除",
   "composer.toast.scheduleFailedNet": "排程失败（请检查网络）",
   "composer.attachOverCap.pre": "附件超出上限（",
   "composer.attachOverCap.post": "）",

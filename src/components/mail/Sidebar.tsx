@@ -25,6 +25,7 @@ import {
   FolderKanban,
   Blocks,
   Activity,
+  TriangleAlert,
 } from "lucide-react";
 import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,8 @@ export function Sidebar({
   counts,
   scheduledCount,
   draftsCount,
+  failedDraftsCount,
+  failedScheduledCount,
   todosCount,
   emailConfigured,
   accounts,
@@ -70,6 +73,9 @@ export function Sidebar({
   counts: Partial<Record<FolderView, number>>;
   scheduledCount: number;
   draftsCount: number;
+  /** 送信/予約に失敗して「未送信」になっている件数（事故防止の警告バッジ）。 */
+  failedDraftsCount: number;
+  failedScheduledCount: number;
   /** 未完了 TODO 件数（サイドバーのバッジ）。 */
   todosCount: number;
   /** メール接続済みか（最初に必要な必須設定）。AIはあくまで任意の二次設定。 */
@@ -131,6 +137,9 @@ export function Sidebar({
       return next;
     });
 
+  // 送信/予約に失敗して相手に届いていないメールの合計。0 のときは何も出さない。
+  const unsentTotal = failedDraftsCount + failedScheduledCount;
+
   return (
     <aside className="flex w-56 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border bg-surface-2 px-3 py-4">
       <div className="mb-4 flex items-center gap-2 px-2">
@@ -151,6 +160,23 @@ export function Sidebar({
         <SquarePen className="size-4" />
         {t("sidebar.compose")}
       </button>
+
+      {/* 送信に失敗した（＝相手に届いていない）メールは、どのフォルダを見ていても
+          目に入るよう、作成ボタン直下に常時この警告を出す。ログは見に行かせない。
+          クリックで該当の下書き（なければ予約送信）へ飛ぶ。 */}
+      {unsentTotal > 0 && (
+        <button
+          onClick={failedDraftsCount > 0 ? onOpenDrafts : onOpenScheduled}
+          title={t("sidebar.unsent.title")}
+          className="mb-2 flex items-center gap-2 rounded-xl border border-high/50 bg-high-soft px-3 py-2 text-sm font-medium text-high transition-colors hover:bg-high/20"
+        >
+          <TriangleAlert className="size-4 shrink-0" />
+          <span className="flex-1 text-left">{t("sidebar.unsent")}</span>
+          <span className="rounded-full bg-high px-1.5 text-xs font-semibold tabular-nums text-white">
+            {unsentTotal}
+          </span>
+        </button>
+      )}
 
       <nav className="flex flex-col gap-0.5">
         {accounts.length > 1
@@ -381,6 +407,14 @@ export function Sidebar({
         >
           <FileText className="size-4" />
           <span className="flex-1 text-left">{t("nav.drafts")}</span>
+          {failedDraftsCount ? (
+            <span
+              title={t("sidebar.unsent.title")}
+              className="rounded-full bg-high px-1.5 text-xs font-semibold tabular-nums text-white"
+            >
+              {failedDraftsCount}
+            </span>
+          ) : null}
           {draftsCount ? (
             <span className="rounded-full bg-accent-soft px-1.5 text-xs tabular-nums text-accent">
               {draftsCount}
@@ -394,6 +428,14 @@ export function Sidebar({
         >
           <Clock className="size-4" />
           <span className="flex-1 text-left">{t("nav.scheduled")}</span>
+          {failedScheduledCount ? (
+            <span
+              title={t("sidebar.unsent.title")}
+              className="rounded-full bg-high px-1.5 text-xs font-semibold tabular-nums text-white"
+            >
+              {failedScheduledCount}
+            </span>
+          ) : null}
           {scheduledCount ? (
             <span className="rounded-full bg-accent-soft px-1.5 text-xs tabular-nums text-accent">
               {scheduledCount}

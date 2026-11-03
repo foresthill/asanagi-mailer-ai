@@ -230,6 +230,10 @@ export function MailApp({
   const [counts, setCounts] = useState<Partial<Record<FolderView, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
   const [draftsCount, setDraftsCount] = useState(0);
+  // 送信/予約に失敗して「未送信」になっているメールの件数（サイドバーの警告）。
+  // 送信失敗は絶対に取りこぼさないための主たる可視化（ログは見に行かせない）。
+  const [failedDraftsCount, setFailedDraftsCount] = useState(0);
+  const [failedScheduledCount, setFailedScheduledCount] = useState(0);
   // Unsent drafts left untouched for 3+ days — inbox aged-draft reminder.
   const [agedDraftCount, setAgedDraftCount] = useState(0);
   // 実際の下書き一覧（メールから「続きを書く」で呼び出す・一覧に📝を出すため）。
@@ -272,6 +276,7 @@ export function MailApp({
       const data = await res.json();
       const list = (data.drafts ?? []) as SavedDraft[];
       setDraftsCount(list.length);
+      setFailedDraftsCount(list.filter((d) => d.failedSend).length);
       setDrafts(list);
       const agedBefore = Date.now() - 3 * 24 * 60 * 60 * 1000;
       setAgedDraftCount(
@@ -1208,11 +1213,13 @@ export function MailApp({
       try {
         const res = await fetch("/api/schedule");
         const data = await res.json();
+        const items = (data.items ?? []) as { status: string }[];
         setScheduledCount(
-          (data.items ?? []).filter(
-            (s: { status: string }) => s.status === "scheduled",
-          ).length,
+          items.filter((s) => s.status === "scheduled").length,
         );
+        // 予約送信の失敗はユーザーが見ていない間に起きる＝最も事故りやすい。
+        // 未送信として必ず表に出す。
+        setFailedScheduledCount(items.filter((s) => s.status === "failed").length);
         if (data.flushed > 0 && folder !== "inbox") loadList(folder, account);
       } catch {
         /* ignore */
@@ -2126,6 +2133,8 @@ export function MailApp({
         counts={counts}
         scheduledCount={scheduledCount}
         draftsCount={draftsCount}
+        failedDraftsCount={failedDraftsCount}
+        failedScheduledCount={failedScheduledCount}
         todosCount={openTodoCount}
         emailConfigured={emailConfigured}
         accounts={accounts}
@@ -2233,6 +2242,7 @@ export function MailApp({
           onClose={() => setCompose(null)}
           onNeedsReauth={() => setShowSettings(true)}
           onSavedDraft={onSavedDraft}
+          onRetainedFailed={loadDraftsCount}
           minimized={composeMinimized}
           onMinimize={() => setComposeMinimized(true)}
           onRestore={() => setComposeMinimized(false)}

@@ -173,6 +173,17 @@ export interface SavedDraft extends OutgoingMessage {
   id: string;
   /** ISO 8601 last-updated time. */
   updatedAt: string;
+  /**
+   * Set when a send ATTEMPT failed and the composed message was auto-retained
+   * here so it is never lost. Drives the sidebar「未送信」alert. Absent for an
+   * ordinary draft; cleared by deleting the draft on a successful resend.
+   */
+  failedSend?: {
+    /** Human-readable failure reason (already localized server→client). */
+    error: string;
+    /** ISO 8601 time of the failed attempt. */
+    at: string;
+  };
 }
 
 /**
