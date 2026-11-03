@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { FileText, Loader2, X, Trash2, Pencil } from "lucide-react";
+import { FileText, Loader2, X, Trash2, Pencil, TriangleAlert } from "lucide-react";
 import type { SavedDraft } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 
@@ -95,7 +95,11 @@ export function DraftsPanel({
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                     title={t("drafts.open.title")}
                   >
-                    <Pencil className="size-3.5 shrink-0 text-fg-subtle" />
+                    {d.failedSend ? (
+                      <TriangleAlert className="size-3.5 shrink-0 text-high" />
+                    ) : (
+                      <Pencil className="size-3.5 shrink-0 text-fg-subtle" />
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
                         {d.subject || t("drafts.noSubject")}
@@ -108,6 +112,12 @@ export function DraftsPanel({
                           ? `・${d.body.trim().replace(/\s+/g, " ").slice(0, 40)}`
                           : ""}
                       </p>
+                      {d.failedSend && (
+                        <p className="mt-0.5 flex items-center gap-1 truncate text-xs font-medium text-high">
+                          <TriangleAlert className="size-3 shrink-0" />
+                          {t("sidebar.unsent")}：{d.failedSend.error}
+                        </p>
+                      )}
                     </div>
                   </button>
                   <span

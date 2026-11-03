@@ -34,6 +34,10 @@ export async function POST(req: Request) {
     inReplyTo: body.inReplyTo,
     threadId: body.threadId,
     account: body.account,
+    // Carry the failed-send marker through so a mail auto-retained after a
+    // send failure shows up in the sidebar「未送信」alert (and loses the mark
+    // only when the draft is deleted on a successful resend).
+    failedSend: body.failedSend,
     updatedAt: new Date().toISOString(),
   };
   await saveDraft(draft);

@@ -74,6 +74,7 @@ export function ReplyComposer({
   onClose,
   onNeedsReauth,
   onSavedDraft,
+  onRetainedFailed,
   minimized,
   onMinimize,
   onRestore,
@@ -89,6 +90,12 @@ export function ReplyComposer({
   onNeedsReauth: () => void;
   /** Draft saved locally → parent closes the composer and refreshes the count. */
   onSavedDraft: () => void;
+  /**
+   * A send/schedule attempt FAILED and the message was auto-retained as a
+   * 未送信 draft. Parent refreshes the sidebar alert — WITHOUT closing the
+   * composer, so the user can read the error and retry immediately.
+   */
+  onRetainedFailed?: () => void;
   /** Minimized to a bottom-right dock (kept mounted so the draft is preserved). */
   minimized?: boolean;
   onMinimize?: () => void;
@@ -150,6 +157,10 @@ export function ReplyComposer({
   const editorRef = useRef<DraftEditorHandle>(null);
   // In-flight AI request — 中止 button aborts it (initial draft / suggest).
   const abortRef = useRef<AbortController | null>(null);
+  // Tracks the draft id this composer owns (from reopening a saved draft, or
+  // assigned when we auto-retain after a send failure). Reused so a failed
+  // retry updates the SAME 未送信 draft instead of piling up duplicates.
+  const retainedIdRef = useRef<string | undefined>(init.draftId);
   // 指示入力の送信キー（Enter送信 ⇄ Shift+Enter送信）。端末に保存。
   const [enterToSend, setEnterToSend] = useState(loadEnterSend);
   const toggleEnterSend = () =>
@@ -514,11 +525,16 @@ export function ReplyComposer({
   const removeAttachment = (i: number) =>
     setAttachments((prev) => prev.filter((_, idx) => idx !== i));
 
-  /** Remove the saved draft once it's been sent/scheduled (best-effort). */
+  /**
+   * Remove the draft once it's been sent/scheduled (best-effort). Uses the
+   * tracked id so a 未送信 draft auto-created on an earlier failed attempt is
+   * cleaned up too (not just one opened from 下書き).
+   */
   async function discardSavedDraft() {
-    if (!init.draftId) return;
+    const id = retainedIdRef.current;
+    if (!id) return;
     try {
-      await fetch(`/api/drafts/${encodeURIComponent(init.draftId)}`, { method: "DELETE" });
+      await fetch(`/api/drafts/${encodeURIComponent(id)}`, { method: "DELETE" });
     } catch {
       /* leftover draft is harmless; user can delete it manually */
     }
@@ -532,17 +548,44 @@ export function ReplyComposer({
       const res = await fetch("/api/drafts", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: init.draftId, ...outgoing() }),
+        body: JSON.stringify({ id: retainedIdRef.current, ...outgoing() }),
       });
       if (!res.ok) {
         setSendError(t("composer.toast.draftSaveFailed"));
         setSavingDraft(false);
         return;
       }
+      const data = await res.json().catch(() => ({}));
+      if (data?.draft?.id) retainedIdRef.current = data.draft.id;
       onSavedDraft();
     } catch {
       setSendError(t("composer.toast.draftSaveFailed"));
       setSavingDraft(false);
+    }
+  }
+
+  /**
+   * A send/schedule attempt FAILED → auto-retain the message as a「未送信」
+   * draft so it is NEVER lost, and refresh the sidebar alert. The composer
+   * stays open (the caller keeps the red banner) so the user can retry at once.
+   * Reuses the tracked id so repeated failures update one draft, not many.
+   */
+  async function retainFailedDraft(error: string) {
+    try {
+      const res = await fetch("/api/drafts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: retainedIdRef.current,
+          ...outgoing(),
+          failedSend: { error, at: new Date().toISOString() },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data?.draft?.id) retainedIdRef.current = data.draft.id;
+      onRetainedFailed?.();
+    } catch {
+      /* retain itself failed — content still on screen (composer stays open) */
     }
   }
 
@@ -582,8 +625,11 @@ export function ReplyComposer({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // 送信失敗は下書きを残したまま赤バナーで明示（消えるalertにしない）。
-        setSendError(data.error ?? t("composer.toast.sendFailed"));
+        // 送信失敗は絶対に取りこぼさない: 本文を「未送信」へ自動退避し、
+        // 赤バナー（消えるalertにしない）＋サイドバーの未送信アラートで知らせる。
+        const err = data.error ?? t("composer.toast.sendFailed");
+        await retainFailedDraft(err);
+        setSendError(`${err}\n${t("composer.sendFailed.retained")}`);
         if (data.needsReauth) onNeedsReauth(); // 接続設定を開いて再認証へ
         setSending(false);
         return;
@@ -593,7 +639,11 @@ export function ReplyComposer({
       await discardSavedDraft(); // 送れたら下書きは消す
       onSent("sent");
     } catch {
-      setSendError(t("composer.toast.sendFailedNet"));
+      // ネットワーク断等で送れたか不明 → 本文を失わないよう未送信へ退避。
+      await retainFailedDraft(t("composer.toast.sendFailedNet"));
+      setSendError(
+        `${t("composer.toast.sendFailedNet")}\n${t("composer.sendFailed.retained")}`,
+      );
       setSending(false);
     }
   }
@@ -610,7 +660,9 @@ export function ReplyComposer({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setSendError(data.error ?? t("composer.toast.scheduleFailed"));
+        const err = data.error ?? t("composer.toast.scheduleFailed");
+        await retainFailedDraft(err);
+        setSendError(`${err}\n${t("composer.sendFailed.retained")}`);
         if (data.needsReauth) onNeedsReauth();
         setSending(false);
         return;
@@ -618,7 +670,10 @@ export function ReplyComposer({
       await discardSavedDraft(); // 予約できたら下書きは消す
       onSent("scheduled");
     } catch {
-      setSendError(t("composer.toast.scheduleFailedNet"));
+      await retainFailedDraft(t("composer.toast.scheduleFailedNet"));
+      setSendError(
+        `${t("composer.toast.scheduleFailedNet")}\n${t("composer.sendFailed.retained")}`,
+      );
       setSending(false);
     }
   }
@@ -852,7 +907,9 @@ export function ReplyComposer({
 
         {sendError && (
           <div className="flex items-start gap-2 border-t border-red-500/30 bg-red-500/10 px-6 py-2 text-xs text-red-700 dark:text-red-400">
-            <span className="flex-1">{t("composer.sendErrorPrefix")} {sendError}</span>
+            <span className="flex-1 whitespace-pre-line">
+              {t("composer.sendErrorPrefix")} {sendError}
+            </span>
             <button
               onClick={() => setSendError(null)}
               className="shrink-0 rounded px-1.5 underline-offset-2 hover:underline"

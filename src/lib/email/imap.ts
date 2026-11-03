@@ -144,6 +144,13 @@ export class ImapProvider implements EmailProvider {
       secure: this.creds.secure,
       auth: { user: this.creds.user, pass: this.creds.password },
       logger: false,
+      // Bound every stall so a slow/unreachable IMAP server surfaces a clear
+      // error within the route's maxDuration instead of hanging (the Sent-copy
+      // append also uses this connection). Values are generous enough for
+      // normal reads; they only fire on a genuine stall. (ms)
+      connectionTimeout: 15_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
     });
   }
 
@@ -696,6 +703,13 @@ export class ImapProvider implements EmailProvider {
       port: this.creds.smtp.port,
       secure: this.creds.smtp.secure,
       auth: { user: this.creds.smtp.user, pass: this.creds.smtp.password },
+      // Without these, a slow/unreachable SMTP server waits on nodemailer's
+      // long defaults (socketTimeout = 1h) and the send appears to hang until
+      // the route's maxDuration kills it. Bound them so failure is fast and
+      // clear, well within maxDuration. (ms)
+      connectionTimeout: 15_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
     const info = await transport.sendMail({
       envelope: {
