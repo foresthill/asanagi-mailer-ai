@@ -21,6 +21,8 @@ import { EmailList } from "./EmailList";
 import { EmailReader } from "./EmailReader";
 import { ResizeHandle } from "./ResizeHandle";
 import { ReplyComposer } from "./ReplyComposer";
+import { WorkTabStrip } from "./WorkTabStrip";
+import { useWorkTabs, type WorkTab } from "./useWorkTabs";
 import { ConnectionsSettings } from "./ConnectionsSettings";
 import { IntegrationsView } from "./IntegrationsView";
 import { ScheduledPanel } from "./ScheduledPanel";
@@ -36,6 +38,7 @@ import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
 import {
   buildCompose,
+  composeTitle,
   greetTargetOf,
   type ComposeAI,
   type ComposeInit,
@@ -95,6 +98,16 @@ type Layout = "classic" | "geek";
 function loadLayout(): Layout {
   if (typeof window === "undefined") return "classic";
   return localStorage.getItem(LAYOUT_KEY) === "geek" ? "geek" : "classic";
+}
+
+/** Tab label for a composer: its subject if any, else the kind label. */
+function tabTitleForCompose(init: ComposeInit): string {
+  return init.subject?.trim() || composeTitle(init);
+}
+
+/** Tab label for an opened email: subject, else sender, else a fallback. */
+function tabTitleForEmail(e: Email): string {
+  return e.subject?.trim() || e.from?.name || e.from?.email || "メール";
 }
 
 export function MailApp({
@@ -214,18 +227,31 @@ export function MailApp({
   const [selected, setSelected] = useState<Email | null>(null);
   const [thread, setThread] = useState<Email[] | null>(null);
   const threadToken = useRef(0);
-  // null = not composing; otherwise the prepared compose state.
-  const [compose, setCompose] = useState<ComposeInit | null>(null);
-  // Minimized-to-dock: keeps the composer mounted (draft preserved) while the
-  // reader shows behind, so you can read a mail while composing.
-  const [composeMinimized, setComposeMinimized] = useState(false);
-  const replying = compose !== null;
-  // Open a composer full (never inherit a stale minimized dock). All open paths
-  // go through this so the reset lives in one place.
-  const startCompose = (init: ComposeInit) => {
-    setComposeMinimized(false);
-    setCompose(init);
-  };
+  // Open work surfaces (opened mail + in-progress drafts) live as tabs. A
+  // compose tab stays mounted while hidden so its draft is never lost, and a
+  // sent/half-written message is always one click away in the strip.
+  const {
+    tabs,
+    activeId,
+    activeTab,
+    openReader,
+    renameReader,
+    openCompose: openComposeTab,
+    closeTab,
+    activate: activateTab,
+    clearActive,
+    goBack: tabsGoBack,
+  } = useWorkTabs();
+  // The compose tabs (all mounted so their drafts survive tab/view switches).
+  const composeTabs = tabs.filter(
+    (tb): tb is Extract<WorkTab, { kind: "compose" }> => tb.kind === "compose",
+  );
+  // True while a composer occupies the work area (replaces the old `replying`
+  // + `!composeMinimized` guards). A reader tab or no tab → false.
+  const composerActive = activeTab?.kind === "compose";
+  const replying = composerActive;
+  const startCompose = (init: ComposeInit) =>
+    openComposeTab(init, tabTitleForCompose(init));
   const [classifying, setClassifying] = useState(false);
   const [counts, setCounts] = useState<Partial<Record<FolderView, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -1027,7 +1053,7 @@ export function MailApp({
     if (
       view !== "mail" ||
       folder !== "inbox" ||
-      compose ||
+      composerActive ||
       searchResults !== null
     )
       return;
@@ -1052,7 +1078,7 @@ export function MailApp({
         setShowSweep(true); // 取得失敗時は従来どおり開く
       }
     })();
-  }, [emails, view, folder, compose, searchResults, showSweep]);
+  }, [emails, view, folder, composerActive, searchResults, showSweep]);
 
   // On-demand full-history search (#40): cache results come instantly via
   // the debounce below; this widens to the providers' server search.
@@ -1071,12 +1097,11 @@ export function MailApp({
   const suppressPop = useRef(false);
   useEffect(() => {
     const open =
-      compose !== null ||
+      activeId !== null ||
       showSettings ||
       showScheduled ||
       showDrafts ||
-      showSweep ||
-      selectedId !== null;
+      showSweep;
     if (open && !backArmed.current) {
       backArmed.current = true;
       history.pushState({ asanagiOverlay: true }, "");
@@ -1086,7 +1111,7 @@ export function MailApp({
       suppressPop.current = true;
       history.back();
     }
-  }, [compose, showSettings, showScheduled, showDrafts, showSweep, selectedId]);
+  }, [activeId, showSettings, showScheduled, showDrafts, showSweep]);
 
   useEffect(() => {
     const onPop = () => {
@@ -1097,21 +1122,14 @@ export function MailApp({
       }
       backArmed.current = false;
       // 最前面のレイヤーを1枚だけ閉じる（残りは上のeffectが再度積み直す）。
-      // 作成/返信はリーダーを覆い隠すので、戻るで一段＝一覧まで戻す（裏の
-      // リーダーへ中途半端に戻らない）。返信の元メールの選択も解除する。
-      if (compose !== null) {
-        setCompose(null);
-        setSelectedId(null);
-        setSelected(null);
-        setThread(null);
-      } else if (showSweep) setShowSweep(false);
+      if (showSweep) setShowSweep(false);
       else if (showDrafts) setShowDrafts(false);
       else if (showScheduled) setShowScheduled(false);
       else if (showSettings) setShowSettings(false);
-      else if (selectedId !== null) {
-        setSelectedId(null);
-        setSelected(null);
-        setThread(null);
+      else if (activeId !== null) {
+        // タブが開いている → 戻るで直前のタブへ。無ければ一覧に戻す（開いている
+        // タブはストリップに残るので、進む＝タブをクリックで戻れる）。
+        if (!tabsGoBack()) clearActive();
       } else if (folderStack.current.length > 0) {
         // No overlay open → 戻るで前のフォルダへ。
         const prev = folderStack.current.pop()!;
@@ -1123,7 +1141,15 @@ export function MailApp({
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [compose, showSweep, showDrafts, showScheduled, showSettings, selectedId]);
+  }, [
+    activeId,
+    tabsGoBack,
+    clearActive,
+    showSweep,
+    showDrafts,
+    showScheduled,
+    showSettings,
+  ]);
 
   // Debounced cache search; clearing the box returns to the folder view.
   useEffect(() => {
@@ -1152,33 +1178,35 @@ export function MailApp({
     return () => clearTimeout(t);
   }, [searchQuery]);
 
-  // Never destroy an in-progress draft silently (実害が大きい). Any action
-  // that would close the composer asks first.
-  // A minimized composer stays docked across navigation, so browsing away never
-  // loses the draft — no discard prompt, and don't close the composer.
-  const confirmDiscard = () =>
-    compose === null ||
-    composeMinimized ||
-    window.confirm("作成中のメールを破棄しますか？（まだ送信されていません）");
-  const closeComposeUnlessDocked = () => {
-    if (!composeMinimized) setCompose(null);
+  // Navigating folders/views no longer destroys a draft: a composer lives in
+  // its own tab and stays in the strip while you browse. Closing a compose tab
+  // is the only discard, and that prompts in handleCloseTab.
+  const closeComposeTab = (id: string) => {
+    const tb = tabs.find((t) => t.id === id);
+    if (
+      tb?.kind === "compose" &&
+      !window.confirm("作成中のメールを破棄しますか？（まだ送信されていません）")
+    )
+      return false;
+    closeTab(id);
+    return true;
   };
 
   const changeFolder = (f: FolderView) => {
-    if (!confirmDiscard()) return;
-    // Record a history entry so ブラウザの戻る returns to the current folder.
-    // A minimized (docked) composer doesn't count as an overlay here.
-    const overlayOpen =
-      (compose !== null && !composeMinimized) ||
+    // Clicking a folder returns to the list; any open tab (reader/compose) stays
+    // in the strip, one click away. Only a plain list→list switch records folder
+    // history (戻る returns to the previous folder) — tab history covers the rest.
+    const hadOverlay =
+      activeId !== null ||
       showSettings ||
       showScheduled ||
       showDrafts ||
-      showSweep ||
-      selectedId !== null;
-    if (!overlayOpen && view === "mail" && f !== folder) {
+      showSweep;
+    if (!hadOverlay && view === "mail" && f !== folder) {
       folderStack.current.push(folder);
       history.pushState({ asanagiFolder: true }, "");
     }
+    if (activeId !== null) clearActive();
     setView("mail");
     setFolder(f);
     // Folder clicks must visibly switch even while showing search results.
@@ -1187,14 +1215,13 @@ export function MailApp({
     setSelectedId(null);
     setSelected(null);
     setThread(null);
-    closeComposeUnlessDocked();
     setChecked(new Set());
   };
 
   // Sidebar: pick an account AND folder together (folders nested per account).
   // Both state updates are batched → the [folder, account] effect loads once.
   const changeAccountFolder = (key: string, f: FolderView) => {
-    if (!confirmDiscard()) return;
+    if (activeId !== null) clearActive();
     setView("mail");
     setAccount(key);
     setFolder(f);
@@ -1203,7 +1230,6 @@ export function MailApp({
     setSelectedId(null);
     setSelected(null);
     setThread(null);
-    closeComposeUnlessDocked();
     setChecked(new Set());
   };
 
@@ -1383,20 +1409,13 @@ export function MailApp({
     [],
   );
 
+  // Paint the reader pane for an email. Independent of tabs: `openEmail` owns
+  // the tab, this owns the fetch. Re-running on tab re-focus is cheap (cache
+  // paints in ~20ms, classify no-ops once classified) so it's safe to call on
+  // every reader-tab activation.
   const selectEmail = useCallback(
     async (id: string) => {
-      // A docked (minimized) composer stays open while you read other mail;
-      // otherwise opening a mail would close the composer, so ask first.
-      if (
-        compose !== null &&
-        !composeMinimized &&
-        !window.confirm(
-          "作成中のメールを破棄しますか？（まだ送信されていません）",
-        )
-      )
-        return;
       setSelectedId(id);
-      if (!composeMinimized) setCompose(null);
       setEmails((list) =>
         list.map((e) => (e.id === id ? { ...e, read: true } : e)),
       );
@@ -1432,6 +1451,7 @@ export function MailApp({
 
       if (data.email) {
         setSelected(data.email);
+        renameReader(id, tabTitleForEmail(data.email));
         classify(data.email);
         loadThread(data.email);
         // 一覧を追従: 開いたメールが今の一覧に無く（例: スレッドの「このメールを
@@ -1456,14 +1476,39 @@ export function MailApp({
     [
       classify,
       loadThread,
-      compose,
-      composeMinimized,
+      renameReader,
       searchResults,
       folder,
       loadList,
       account,
     ],
   );
+
+  // Open an email as a reader tab (focus it if already open), then paint it.
+  // The sync effect below drives selectEmail when the active tab is a reader —
+  // covering both this path and re-focusing an existing tab from the strip.
+  const openEmail = useCallback(
+    (id: string) => {
+      setView("mail");
+      const e = emailsRef.current.find((x) => x.id === id);
+      openReader(id, e ? tabTitleForEmail(e) : "メール");
+    },
+    [openReader],
+  );
+
+  // Active tab → reader pane. A reader tab paints its email; deactivation
+  // empties the pane. A compose tab leaves the (hidden) reader state untouched.
+  useEffect(() => {
+    if (activeTab?.kind === "reader") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- focus a reader tab → paint it
+      if (selectedId !== activeTab.emailId) void selectEmail(activeTab.emailId);
+    } else if (activeId === null) {
+      setSelectedId(null);
+      setSelected(null);
+      setThread(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- key off the active tab only
+  }, [activeId]);
 
   // Thread-unit by default: a conversation row carries every member id, so
   // archiving a row clears the whole conversation (docs/04 §1.4).
@@ -1488,10 +1533,11 @@ export function MailApp({
         return next.size === prev.size ? prev : next;
       });
       if (selectedId && set.has(selectedId)) {
+        // The open mail was archived/trashed → drop its reader tab and pane.
+        closeTab(`r:${selectedId}`);
         setSelectedId(null);
         setSelected(null);
         setThread(null);
-        setCompose(null);
       }
       // 即時フィードバック（一覧は上で除去済み）。サーバ反映は待たず背後で行い、
       // 90通でもUIが固まらない。失敗時だけ通知して実状態に取り直す。
@@ -1545,7 +1591,7 @@ export function MailApp({
         loadList(folder, account); // 楽観的除去を取り消し、実状態に同期
       })();
     },
-    [selectedId, folder, account, loadList],
+    [selectedId, folder, account, loadList, closeTab],
   );
 
   const archive = (ids: string[]) =>
@@ -1831,15 +1877,8 @@ export function MailApp({
     async (kind: ComposeKind, mode: ComposeAI, target?: Email) => {
       const src = target ?? selected;
       if (kind !== "new" && !src) return;
-      // Starting a new compose while one is open would replace the draft.
-      // (confirm stays synchronous — before any await — to keep the intent clear.)
-      if (
-        compose !== null &&
-        !window.confirm(
-          "作成中のメールを破棄しますか？（まだ送信されていません）",
-        )
-      )
-        return;
+      // Each compose opens its own tab — several drafts can live at once, so
+      // starting a new one never replaces an in-progress one (no prompt).
       const selfAddresses = accounts
         .map((a) => a.address)
         .filter((s): s is string => !!s);
@@ -1878,7 +1917,8 @@ export function MailApp({
       if (kind !== "new" && thread && thread.length > 1) init.history = thread;
       startCompose(init);
     },
-    [selected, accounts, account, thread, compose],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startCompose stable
+    [selected, accounts, account, thread],
   );
 
   /** Reply/forward to a specific thread message (per-message action buttons). */
@@ -1892,14 +1932,19 @@ export function MailApp({
     [thread, selected, openCompose],
   );
 
-  const onSent = (kind: "sent" | "scheduled") => {
-    const wasReply = compose?.kind === "reply" || compose?.kind === "replyAll";
-    const fromDraft = compose?.draftId != null;
-    setCompose(null);
-    if (wasReply && selected && folder === "inbox") {
+  const onSent = (
+    kind: "sent" | "scheduled",
+    tab: Extract<WorkTab, { kind: "compose" }>,
+  ) => {
+    const init = tab.init;
+    const wasReply = init.kind === "reply" || init.kind === "replyAll";
+    const fromDraft = init.draftId != null;
+    const src = init.source;
+    closeTab(tab.id);
+    if (wasReply && src && src.state === "inbox") {
       // Send & archive — keep the inbox clean (replies only; not forward/new).
       mutateState(
-        [selected.id],
+        [src.id],
         "archived",
         kind === "sent"
           ? "送信してアーカイブしました"
@@ -1911,9 +1956,9 @@ export function MailApp({
     if (fromDraft) loadDraftsCount(); // sent draft was deleted server-side
   };
 
-  // Draft saved from the composer → close it, confirm, refresh the badge.
-  const onSavedDraft = () => {
-    setCompose(null);
+  // Draft saved from the composer → close its tab, confirm, refresh the badge.
+  const onSavedDraft = (tabId: string) => {
+    closeTab(tabId);
     showToast("下書きを保存しました");
     loadDraftsCount();
   };
@@ -1958,13 +2003,13 @@ export function MailApp({
       const rowIds = idx >= 0 ? rows[idx].ids : selectedId ? [selectedId] : [];
       if (e.key === "j") {
         e.preventDefault();
-        selectEmail(
+        openEmail(
           rows[Math.min(rows.length - 1, idx + 1)]?.email.id ??
             rows[0].email.id,
         );
       } else if (e.key === "k") {
         e.preventDefault();
-        selectEmail(rows[Math.max(0, idx - 1)]?.email.id ?? rows[0].email.id);
+        openEmail(rows[Math.max(0, idx - 1)]?.email.id ?? rows[0].email.id);
       } else if (e.key === "s" && selectedId) {
         e.preventDefault();
         toggleStar(selectedId);
@@ -2003,7 +2048,7 @@ export function MailApp({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedId, selected, folder, replying, view, openCompose]);
+  }, [rows, selectedId, selected, folder, replying, view, openCompose, openEmail]);
 
   // Defined once, placed differently per layout: classic = 一覧(左)｜本文(右)、
   // geek = 一覧(上)｜本文(下)。EmailList adapts via horizontal/width/height.
@@ -2060,7 +2105,7 @@ export function MailApp({
       onServerSearch={searchServer}
       onSearchChange={setSearchQuery}
       onToggleGrouping={toggleGrouping}
-      onSelect={selectEmail}
+      onSelect={openEmail}
       onLoadThreadMembers={loadThreadMembers}
       onArchive={archive}
       onTrash={trash}
@@ -2114,7 +2159,7 @@ export function MailApp({
       issueTargets={emailIssueTargets}
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
-      onOpenMessage={selectEmail}
+      onOpenMessage={openEmail}
       draft={matchingDraft}
       onResumeDraft={openDraft}
       horizontal={layout === "geek"}
@@ -2142,9 +2187,10 @@ export function MailApp({
         storage={storage}
         onSelect={changeFolder}
         onSelectView={(v) => {
-          if (!confirmDiscard()) return;
+          // Views live alongside the tabs; switching away keeps every tab (and
+          // its draft) mounted in the strip, reachable when you return to mail.
+          if (activeId !== null) clearActive();
           setView(v);
-          setCompose(null);
         }}
         onSelectAccountFolder={changeAccountFolder}
         onOpenSettings={() => setShowSettings(true)}
@@ -2155,7 +2201,20 @@ export function MailApp({
         layout={layout}
         onSetLayout={setLayoutMode}
       />
-      {view === "contacts" && (!compose || composeMinimized) && (
+      {/* Work column: the tab strip sits atop the list/reader/composer area.
+          Composer visibility is gated by view==="mail", so views no longer need
+          a composer guard. min-h-0 keeps the column inside the viewport so its
+          scrollable children (list/reader) scroll internally, not the page. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {view === "mail" && tabs.length > 0 && (
+        <WorkTabStrip
+          tabs={tabs}
+          activeId={activeId}
+          onActivate={activateTab}
+          onClose={closeComposeTab}
+        />
+      )}
+      {view === "contacts" && (
         <ContactsView
           onComposeTo={(to: EmailAddress) =>
             startCompose({
@@ -2170,27 +2229,19 @@ export function MailApp({
           }
         />
       )}
-      {view === "triage" && (!compose || composeMinimized) && <TriageView />}
-      {view === "ailog" && (!compose || composeMinimized) && <AiLogView />}
-      {view === "logs" && (!compose || composeMinimized) && <LogView />}
-      {view === "integrations" && (!compose || composeMinimized) && (
+      {view === "triage" && <TriageView />}
+      {view === "ailog" && <AiLogView />}
+      {view === "logs" && <LogView />}
+      {view === "integrations" && (
         <IntegrationsView onOpenSettings={() => setShowSettings(true)} />
       )}
-      {view === "projects" && (!compose || composeMinimized) && (
-        <ProjectsView
-          onOpenEmail={(id) => {
-            setView("mail");
-            void selectEmail(id);
-          }}
-        />
+      {view === "projects" && (
+        <ProjectsView onOpenEmail={(id) => openEmail(id)} />
       )}
-      {view === "todo" && (!compose || composeMinimized) && (
+      {view === "todo" && (
         <TodoView
           todos={todos}
-          onOpenEmail={(id) => {
-            setView("mail");
-            void selectEmail(id);
-          }}
+          onOpenEmail={(id) => openEmail(id)}
           onSetDue={setTodoDue}
           onSetNote={setTodoNote}
           onToggleDone={setTodoDone}
@@ -2205,49 +2256,48 @@ export function MailApp({
           calendarTargets={calendarTargets}
         />
       )}
-      {/* classic: 一覧(左)｜本文(右)・幅ドラッグ可変 */}
-      {view === "mail" && layout === "classic" && (
-        <>
-          {(!replying || composeMinimized) && emailListEl}
-          {(!replying || composeMinimized) &&
-            (!compose || composeMinimized) && (
-              <ResizeHandle onResize={resizeList} />
-            )}
-          {(!compose || composeMinimized) && readerEl}
-        </>
+      {/* classic: 一覧(左)｜本文(右)・幅ドラッグ可変。作成タブが前面の時は本文段を
+          退避し composer が受け持つ。 */}
+      {view === "mail" && !composerActive && layout === "classic" && (
+        <div className="flex min-h-0 min-w-0 flex-1">
+          {emailListEl}
+          <ResizeHandle onResize={resizeList} />
+          {readerEl}
+        </div>
       )}
-      {/* geek: 一覧(上・件名がずらり)｜本文(下)・高さドラッグ可変。返信中(占有)は
-          この段を退避し composer が受け持つ（v1）。 */}
-      {view === "mail" &&
-        layout === "geek" &&
-        (!replying || composeMinimized) && (
-          <div className="flex min-w-0 flex-1 flex-col">
-            {emailListEl}
-            <ResizeHandle
-              orientation="horizontal"
-              onResize={resizeListHeight}
-            />
-            {(!compose || composeMinimized) && readerEl}
-          </div>
-        )}
-      {/* Composer: stays mounted while minimized so the draft is preserved. */}
-      {compose && (
-        <ReplyComposer
-          // Restart the composer whenever the kind/mode/source changes.
-          key={`${compose.kind}-${compose.mode}-${compose.source?.id ?? "new"}-${compose.to[0]?.email ?? ""}`}
-          init={compose}
-          accounts={accounts}
-          aiConfigured={aiOk}
-          onSent={onSent}
-          onClose={() => setCompose(null)}
-          onNeedsReauth={() => setShowSettings(true)}
-          onSavedDraft={onSavedDraft}
-          onRetainedFailed={loadDraftsCount}
-          minimized={composeMinimized}
-          onMinimize={() => setComposeMinimized(true)}
-          onRestore={() => setComposeMinimized(false)}
-        />
+      {/* geek: 一覧(上・件名がずらり)｜本文(下)・高さドラッグ可変。 */}
+      {view === "mail" && !composerActive && layout === "geek" && (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {emailListEl}
+          <ResizeHandle orientation="horizontal" onResize={resizeListHeight} />
+          {readerEl}
+        </div>
       )}
+      {/* Composers: every compose tab stays mounted so its draft is never lost;
+          only the active one (in mail view) is visible. */}
+      {composeTabs.map((ct) => (
+        <div
+          key={ct.id}
+          className={
+            view === "mail" && activeId === ct.id
+              ? "flex min-h-0 min-w-0 flex-1 overflow-hidden"
+              : "hidden"
+          }
+        >
+          <ReplyComposer
+            init={ct.init}
+            accounts={accounts}
+            aiConfigured={aiOk}
+            onSent={(k) => onSent(k, ct)}
+            onClose={() => closeComposeTab(ct.id)}
+            onNeedsReauth={() => setShowSettings(true)}
+            onSavedDraft={() => onSavedDraft(ct.id)}
+            onRetainedFailed={loadDraftsCount}
+            minimized={false}
+          />
+        </div>
+      ))}
+      </div>
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 animate-slide-up rounded-full bg-fg px-4 py-2 text-sm text-bg shadow-[var(--shadow)]">
