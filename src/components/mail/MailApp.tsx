@@ -275,6 +275,11 @@ export function MailApp({
   // OpenProject から pull した自分の未完了タスク（読み取り専用・TODO画面に表示）。
   const [opTasks, setOpTasks] = useState<OpWorkPackage[]>([]);
   const [opTasksLoading, setOpTasksLoading] = useState(false);
+  // 開いているメール/スレッドに紐づく WP（起票先の“今の状態”を本文に出す＝双方向）。
+  const [opLink, setOpLink] = useState<OpWorkPackage | null>(null);
+  const opLinkToken = useRef(0);
+  // 起票直後に本文チップを引き直すためのトリガ（カウンタを増やすと effect が再実行）。
+  const [opLinkRefresh, setOpLinkRefresh] = useState(0);
   // devlog 連携（MCP経由）。OpenProject と同型。
   const [devlogEnabled, setDevlogEnabled] = useState(false);
   const [devlogTasks, setDevlogTasks] = useState<DevlogIssue[]>([]);
@@ -557,13 +562,14 @@ export function MailApp({
     subject: string,
     description: string,
     todoId?: string,
+    linkKey?: string,
   ): Promise<boolean> => {
     showToast(t("op.sending"));
     try {
       const res = await fetch("/api/integrations/openproject/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ subject, description, todoId }),
+        body: JSON.stringify({ subject, description, todoId, linkKey }),
       });
       const d = (await res.json()) as {
         ok: boolean;
@@ -597,7 +603,16 @@ export function MailApp({
       "",
       `_${t("op.desc.footer")}_`,
     ].join("\n");
-    await sendToOpenProject(email.subject || t("drafts.noSubject"), desc);
+    // スレッド優先でキーを付け、本文に状態チップが出るよう紐付ける。
+    const linkKey = emailThreadTodoId(email) ?? email.id;
+    const ok = await sendToOpenProject(
+      email.subject || t("drafts.noSubject"),
+      desc,
+      undefined,
+      linkKey,
+    );
+    // 起票直後に「このメールのタスク」チップを引き直す（即・双方向を体感）。
+    if (ok) setOpLinkRefresh((n) => n + 1);
   };
 
   // TODO から起票。既に紐付け済みなら既存の work package を開くだけ。
@@ -641,6 +656,42 @@ export function MailApp({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (view === "todo" && opEnabled) loadOpTasks();
   }, [view, opEnabled, loadOpTasks]);
+
+  // 開いているメールに紐づく WP の“今の状態”を取りに行く（本文チップ用）。
+  // キーは TODO と同じ（スレッド優先、無ければメールID）。読み取り専用。
+  const loadOpLink = useCallback(
+    async (email: Email | null) => {
+      const token = ++opLinkToken.current;
+      if (!opEnabled || !email) {
+        setOpLink(null);
+        return;
+      }
+      const keys = [emailThreadTodoId(email), email.id].filter(
+        (k): k is string => !!k,
+      );
+      try {
+        const res = await fetch(
+          `/api/integrations/openproject/links?keys=${encodeURIComponent(keys.join(","))}`,
+        );
+        const d = (await res.json()) as {
+          links?: Record<string, OpWorkPackage>;
+        };
+        if (token !== opLinkToken.current) return; // superseded by a newer open
+        // スレッドキー優先（会話に1つ）。無ければメールID。
+        const hit = keys.map((k) => d.links?.[k]).find(Boolean) ?? null;
+        setOpLink(hit);
+      } catch {
+        if (token === opLinkToken.current) setOpLink(null);
+      }
+    },
+    [opEnabled],
+  );
+  // 選択メールが変わるたび／起票直後に引き直す（opEnabled の切替時も）。
+  useEffect(() => {
+    // async loader — setState only after the fetch resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadOpLink(selected);
+  }, [selected, loadOpLink, opLinkRefresh]);
 
   // ── devlog 連携（MCP経由）──────────────────────────────────────────
   const loadDevlogStatus = useCallback(async () => {
@@ -2157,6 +2208,7 @@ export function MailApp({
           : undefined
       }
       issueTargets={emailIssueTargets}
+      openProjectLink={opLink}
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
       onOpenMessage={openEmail}
