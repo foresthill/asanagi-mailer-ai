@@ -681,6 +681,9 @@ const ja: Dict = {
     "予約に失敗しました（ネットワークを確認してください）",
   "composer.attachOverCap.pre": "添付の合計が上限(",
   "composer.attachOverCap.post": ")を超えます",
+  "composer.fwdAttaching": "元の添付を取得中…",
+  "composer.fwdAttachSome":
+    "一部の添付を引き継げませんでした（サイズ上限超過または取得失敗）。",
   "composer.restore": "元に戻す",
   "composer.discardClose": "破棄して閉じる",
   "composer.from": "送信元:",
@@ -1479,6 +1482,9 @@ const en: Dict = {
   "composer.toast.scheduleFailedNet": "Scheduling failed (check your network)",
   "composer.attachOverCap.pre": "Attachments exceed the limit (",
   "composer.attachOverCap.post": ")",
+  "composer.fwdAttaching": "Fetching the original attachments…",
+  "composer.fwdAttachSome":
+    "Some attachments couldn't be carried over (over the size limit or failed to fetch).",
   "composer.restore": "Restore",
   "composer.discardClose": "Discard & close",
   "composer.from": "From:",
@@ -2305,6 +2311,9 @@ const fr: Dict = {
     "Échec de la programmation (vérifiez le réseau)",
   "composer.attachOverCap.pre": "Les pièces jointes dépassent la limite (",
   "composer.attachOverCap.post": ")",
+  "composer.fwdAttaching": "Récupération des pièces jointes d'origine…",
+  "composer.fwdAttachSome":
+    "Certaines pièces jointes n'ont pas pu être transférées (taille dépassée ou échec de récupération).",
   "composer.restore": "Restaurer",
   "composer.discardClose": "Abandonner et fermer",
   "composer.from": "De :",
@@ -3059,6 +3068,8 @@ const zh: Dict = {
   "composer.toast.scheduleFailedNet": "排程失败（请检查网络）",
   "composer.attachOverCap.pre": "附件超出上限（",
   "composer.attachOverCap.post": "）",
+  "composer.fwdAttaching": "正在获取原始附件…",
+  "composer.fwdAttachSome": "部分附件未能转发（超出大小上限或获取失败）。",
   "composer.restore": "还原",
   "composer.discardClose": "丢弃并关闭",
   "composer.from": "发件人：",
