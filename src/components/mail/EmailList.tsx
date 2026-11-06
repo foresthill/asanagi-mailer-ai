@@ -944,6 +944,19 @@ export function EmailList({
             )}
           </div>
         )}
+        {/* 受信中フッタ: stale-while-revalidate で古い行が見えている間、一覧の
+            末尾でも「取りに行っている」ことを示す。右上の小さなバッジは
+            スクロールで隠れ、「回っているのに新しくならない＝止まった？」に
+            見えるため、行の下端に出して進行を可視化する（新着が来れば消える）。 */}
+        {refreshing && !searching && !loading && rows.length > 0 && (
+          <div
+            className="flex items-center justify-center gap-1.5 py-3 text-[11px] text-fg-subtle"
+            aria-live="polite"
+          >
+            <Loader2 className="size-3.5 animate-spin" />
+            {t("list.refreshing")}
+          </div>
+        )}
       </div>
     </div>
   );

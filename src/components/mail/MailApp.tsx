@@ -100,6 +100,13 @@ function loadLayout(): Layout {
   return localStorage.getItem(LAYOUT_KEY) === "geek" ? "geek" : "classic";
 }
 
+/** 作業タブ機能の ON/OFF（既定 ON）。OFF は「作業タブ常に1枚」＝従来のシングルペイン挙動。 */
+const TABS_KEY = "asanagi:tabs-enabled";
+function loadTabsEnabled(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(TABS_KEY) !== "off";
+}
+
 /** Tab label for a composer: its subject if any, else the kind label. */
 function tabTitleForCompose(init: ComposeInit): string {
   return init.subject?.trim() || composeTitle(init);
@@ -177,12 +184,15 @@ export function MailApp({
   // the server HTML and first client render disagree (hydration mismatch).
   // classic = 一覧(左)｜本文(右)・幅可変 / geek = 一覧(上)｜本文(下)・高さ可変。
   const [layout, setLayout] = useState<Layout>("classic");
+  // 作業タブ機能の ON/OFF（既定 ON）。OFF は作業タブ常に1枚＝従来のシングルペイン。
+  const [tabsEnabled, setTabsEnabled] = useState(true);
   const [listWidth, setListWidth] = useState<number>(DEFAULT_LIST_WIDTH); // classic: 一覧の幅
   const [listHeight, setListHeight] = useState<number>(DEFAULT_LIST_HEIGHT); // geek: 一覧の高さ
   useEffect(() => {
     // Apply persisted prefs on the client only (post-hydration).
     /* eslint-disable react-hooks/set-state-in-effect */
     setLayout(loadLayout());
+    setTabsEnabled(loadTabsEnabled());
     setListWidth(loadListWidth());
     setListHeight(loadListHeight());
     setGrouping(loadGroupingPref());
@@ -219,6 +229,16 @@ export function MailApp({
       /* private mode — preference just won't stick */
     }
   }, []);
+  const setTabsMode = useCallback((next: boolean) => {
+    setTabsEnabled(next);
+    try {
+      localStorage.setItem(TABS_KEY, next ? "on" : "off");
+    } catch {
+      /* private mode — preference just won't stick */
+    }
+    // OFF にしても既存タブは閉じない（下書き保全）。ストリップは隠れ、次に開く時に
+    // makeRoomIfSingle が1枚へ畳む（作成中があれば破棄確認）。
+  }, []);
   const [loading, setLoading] = useState(true);
   /** Live revalidation in flight — drives the "更新中…" indicator even after the
    *  cache has painted (stale-while-revalidate), so 更新 gives visible feedback. */
@@ -238,6 +258,7 @@ export function MailApp({
     renameReader,
     openCompose: openComposeTab,
     closeTab,
+    closeAll: closeAllTabs,
     activate: activateTab,
     clearActive,
     goBack: tabsGoBack,
@@ -250,8 +271,31 @@ export function MailApp({
   // + `!composeMinimized` guards). A reader tab or no tab → false.
   const composerActive = activeTab?.kind === "compose";
   const replying = composerActive;
-  const startCompose = (init: ComposeInit) =>
+  // 単一モード（タブOFF）: 新しい作業面を開く前に既存を1枚も残さず閉じる＝常に1枚。
+  // 作成中（未送信）があれば従来どおり破棄確認し、キャンセルなら開かない。stable な
+  // コールバックにするため、OFFか/作成中かは ref 経由で読む（開く経路の再生成を防ぐ）。
+  const singleModeRef = useRef({ off: false, hasCompose: false });
+  const makeRoomIfSingle = useCallback((): boolean => {
+    const { off, hasCompose } = singleModeRef.current;
+    if (!off) return true;
+    if (
+      hasCompose &&
+      !window.confirm("作成中のメールを破棄しますか？（まだ送信されていません）")
+    )
+      return false;
+    closeAllTabs();
+    return true;
+  }, [closeAllTabs]);
+  const startCompose = (init: ComposeInit) => {
+    if (!makeRoomIfSingle()) return;
     openComposeTab(init, tabTitleForCompose(init));
+  };
+  useEffect(() => {
+    singleModeRef.current = {
+      off: !tabsEnabled,
+      hasCompose: composeTabs.length > 0,
+    };
+  });
   const [classifying, setClassifying] = useState(false);
   const [counts, setCounts] = useState<Partial<Record<FolderView, number>>>({});
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -275,6 +319,11 @@ export function MailApp({
   // OpenProject から pull した自分の未完了タスク（読み取り専用・TODO画面に表示）。
   const [opTasks, setOpTasks] = useState<OpWorkPackage[]>([]);
   const [opTasksLoading, setOpTasksLoading] = useState(false);
+  // 開いているメール/スレッドに紐づく WP（起票先の“今の状態”を本文に出す＝双方向）。
+  const [opLink, setOpLink] = useState<OpWorkPackage | null>(null);
+  const opLinkToken = useRef(0);
+  // 起票直後に本文チップを引き直すためのトリガ（カウンタを増やすと effect が再実行）。
+  const [opLinkRefresh, setOpLinkRefresh] = useState(0);
   // devlog 連携（MCP経由）。OpenProject と同型。
   const [devlogEnabled, setDevlogEnabled] = useState(false);
   const [devlogTasks, setDevlogTasks] = useState<DevlogIssue[]>([]);
@@ -557,13 +606,14 @@ export function MailApp({
     subject: string,
     description: string,
     todoId?: string,
+    linkKey?: string,
   ): Promise<boolean> => {
     showToast(t("op.sending"));
     try {
       const res = await fetch("/api/integrations/openproject/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ subject, description, todoId }),
+        body: JSON.stringify({ subject, description, todoId, linkKey }),
       });
       const d = (await res.json()) as {
         ok: boolean;
@@ -597,7 +647,16 @@ export function MailApp({
       "",
       `_${t("op.desc.footer")}_`,
     ].join("\n");
-    await sendToOpenProject(email.subject || t("drafts.noSubject"), desc);
+    // スレッド優先でキーを付け、本文に状態チップが出るよう紐付ける。
+    const linkKey = emailThreadTodoId(email) ?? email.id;
+    const ok = await sendToOpenProject(
+      email.subject || t("drafts.noSubject"),
+      desc,
+      undefined,
+      linkKey,
+    );
+    // 起票直後に「このメールのタスク」チップを引き直す（即・双方向を体感）。
+    if (ok) setOpLinkRefresh((n) => n + 1);
   };
 
   // TODO から起票。既に紐付け済みなら既存の work package を開くだけ。
@@ -641,6 +700,42 @@ export function MailApp({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (view === "todo" && opEnabled) loadOpTasks();
   }, [view, opEnabled, loadOpTasks]);
+
+  // 開いているメールに紐づく WP の“今の状態”を取りに行く（本文チップ用）。
+  // キーは TODO と同じ（スレッド優先、無ければメールID）。読み取り専用。
+  const loadOpLink = useCallback(
+    async (email: Email | null) => {
+      const token = ++opLinkToken.current;
+      if (!opEnabled || !email) {
+        setOpLink(null);
+        return;
+      }
+      const keys = [emailThreadTodoId(email), email.id].filter(
+        (k): k is string => !!k,
+      );
+      try {
+        const res = await fetch(
+          `/api/integrations/openproject/links?keys=${encodeURIComponent(keys.join(","))}`,
+        );
+        const d = (await res.json()) as {
+          links?: Record<string, OpWorkPackage>;
+        };
+        if (token !== opLinkToken.current) return; // superseded by a newer open
+        // スレッドキー優先（会話に1つ）。無ければメールID。
+        const hit = keys.map((k) => d.links?.[k]).find(Boolean) ?? null;
+        setOpLink(hit);
+      } catch {
+        if (token === opLinkToken.current) setOpLink(null);
+      }
+    },
+    [opEnabled],
+  );
+  // 選択メールが変わるたび／起票直後に引き直す（opEnabled の切替時も）。
+  useEffect(() => {
+    // async loader — setState only after the fetch resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadOpLink(selected);
+  }, [selected, loadOpLink, opLinkRefresh]);
 
   // ── devlog 連携（MCP経由）──────────────────────────────────────────
   const loadDevlogStatus = useCallback(async () => {
@@ -1489,11 +1584,12 @@ export function MailApp({
   // covering both this path and re-focusing an existing tab from the strip.
   const openEmail = useCallback(
     (id: string) => {
+      if (!makeRoomIfSingle()) return;
       setView("mail");
       const e = emailsRef.current.find((x) => x.id === id);
       openReader(id, e ? tabTitleForEmail(e) : "メール");
     },
-    [openReader],
+    [openReader, makeRoomIfSingle],
   );
 
   // Active tab → reader pane. A reader tab paints its email; deactivation
@@ -2157,6 +2253,7 @@ export function MailApp({
           : undefined
       }
       issueTargets={emailIssueTargets}
+      openProjectLink={opLink}
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}
       onOpenMessage={openEmail}
@@ -2200,13 +2297,15 @@ export function MailApp({
         onCompose={() => openCompose("new", "plain")}
         layout={layout}
         onSetLayout={setLayoutMode}
+        tabsEnabled={tabsEnabled}
+        onSetTabsEnabled={setTabsMode}
       />
       {/* Work column: the tab strip sits atop the list/reader/composer area.
           Composer visibility is gated by view==="mail", so views no longer need
           a composer guard. min-h-0 keeps the column inside the viewport so its
           scrollable children (list/reader) scroll internally, not the page. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {view === "mail" && tabs.length > 0 && (
+      {view === "mail" && tabsEnabled && tabs.length > 0 && (
         <WorkTabStrip
           tabs={tabs}
           activeId={activeId}

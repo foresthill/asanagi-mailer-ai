@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import {
   Archive,
   Trash2,
@@ -24,12 +25,14 @@ import {
   ChevronDown,
   MessagesSquare,
   Sparkles,
+  FolderKanban,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type {
   Email,
   FolderView,
   Importance,
+  OpWorkPackage,
   SavedDraft,
   ContactLabel,
 } from "@/lib/types";
@@ -78,6 +81,7 @@ export function EmailReader({
   isMessageTodo,
   onToggleMessageTodo,
   issueTargets,
+  openProjectLink,
   onNoteSaved,
   onOpenMessage,
   highlight,
@@ -126,6 +130,9 @@ export function EmailReader({
     icon?: LucideIcon;
     onSend: (email: Email) => void;
   }[];
+  /** このメール/スレッドに紐づく OpenProject の WP（起票先の“今の状態”）。あれば
+   *  本文ヘッダに「OpenProject #123 · 進行中 · 期限 11/10」チップを出す（双方向）。 */
+  openProjectLink?: OpWorkPackage | null;
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
   onNoteSaved?: () => void;
   /** Re-anchor the reader to a thread message (open it as the current email). */
@@ -267,19 +274,15 @@ export function EmailReader({
     onReply(kind, mode);
   };
 
-  // Copy the new body text only — the quoted reply history is excluded, any
-  // leftover CSS/style block is dropped, and long blank runs collapse to one
-  // blank line (HTML mail otherwise pastes with big gaps).
+  // 全文コピー: HTMLメールは「画像・書式込み」で（text/html）、貼り付け先が
+  // リッチなら画像つきで入る。プレーン貼り付け用に text/plain も同梱（本文テキスト。
+  // 引用履歴は除き、余分な空行は畳む）。HTMLが無いメールはテキストのみ。
   const copyBody = async () => {
-    // Copy plain text, never markup. HTML mail (or a body that itself carries
-    // HTML tags — some senders put HTML in the text/plain part) is converted
-    // to text first; a normal plain-text body is used as-is.
+    // --- text/plain フォールバック（従来どおり：本文テキスト・引用除外・整形）---
     const plain =
       email.html || /<\/?[a-z][^>]*>/i.test(email.body)
         ? htmlToText(email.html || email.body)
         : email.body;
-    // Copy the new text only — all non-quote segments (keeps inline replies,
-    // drops quoted history), joined.
     const head = segmentReply(plain)
       .filter((s) => s.kind === "text")
       .map((s) => s.body)
@@ -289,12 +292,40 @@ export function EmailReader({
       .replace(/[ \t 　]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
+    // --- text/html（画像込みの全文）---。リモート画像の src は残す（貼り付け先が
+    // 読み込む＝画像つきで入る）。script/フォーム等は DOMPurify で除去。
+    const richHtml = email.html
+      ? DOMPurify.sanitize(email.html, {
+          USE_PROFILES: { html: true },
+          FORBID_TAGS: ["form", "input", "button"],
+        })
+      : null;
+    const canRich =
+      !!richHtml &&
+      typeof ClipboardItem !== "undefined" &&
+      typeof navigator.clipboard?.write === "function";
     try {
-      await navigator.clipboard.writeText(text);
+      if (canRich) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([richHtml!], { type: "text/html" }),
+            "text/plain": new Blob([text], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* clipboard unavailable — ignore */
+      // リッチ書き込みが拒否された等 → テキストだけでも必ず試す。
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {
+        /* clipboard unavailable — ignore */
+      }
     }
   };
 
@@ -514,9 +545,43 @@ export function EmailReader({
         </div>
       )}
 
+      {/* OpenProject 紐付け: このメールから起票した WP の“今の状態”を表示（双方向の
+          読み戻し）。クリックで WP を別タブで開く（外部URLなので _blank 可）。
+          本文＋AIパネルの flex 行の上に、全幅の帯として置く。 */}
+      {openProjectLink && (
+        <a
+          href={openProjectLink.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 border-b border-border bg-surface px-5 py-2 text-xs text-fg-muted transition-colors hover:bg-surface-2"
+          title={openProjectLink.subject || undefined}
+        >
+          <FolderKanban className="size-4 shrink-0 text-accent" />
+          <span className="shrink-0 font-medium text-fg">
+            OpenProject #{openProjectLink.id}
+          </span>
+          {openProjectLink.status && (
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5">
+              {openProjectLink.status}
+            </span>
+          )}
+          {openProjectLink.dueDate && (
+            <span className="shrink-0">
+              {t("op.linked.due")} {openProjectLink.dueDate}
+            </span>
+          )}
+          {openProjectLink.subject && (
+            <span className="min-w-0 flex-1 truncate text-fg-subtle">
+              {openProjectLink.subject}
+            </span>
+          )}
+        </a>
+      )}
+
       {/* 本文（左・スクロール）＋ 読むAIパネル（右・全高の列）。以前は本文スクロール内の
           小箱（狭いと本文の上に回り、スクロールで消える＝見づらい）だったのを、安定した
-          全高の右カラムにして常時見えるようにした。 */}
+          全高の右カラムにして常時見えるようにした。本文側は min-w-0 で、左の
+          ThreadOutlineRail と並んでも幅が潰れないようにする。 */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <div ref={scrollerRef} className="min-w-0 flex-1 overflow-y-auto px-6 pb-7">
         {/* Top spacing on the inner row (not the scroller) so the thread's
