@@ -14,6 +14,7 @@ import type {
   ContactMeta,
   TodoItem,
   OpWorkPackage,
+  OpProjectProgress,
   DevlogIssue,
 } from "@/lib/types";
 import { Sidebar } from "./Sidebar";
@@ -275,6 +276,9 @@ export function MailApp({
   // OpenProject から pull した自分の未完了タスク（読み取り専用・TODO画面に表示）。
   const [opTasks, setOpTasks] = useState<OpWorkPackage[]>([]);
   const [opTasksLoading, setOpTasksLoading] = useState(false);
+  // プロジェクト進捗サマリ（読み取り専用・TODO画面下部）。
+  const [opProgress, setOpProgress] = useState<OpProjectProgress | null>(null);
+  const [opProgressLoading, setOpProgressLoading] = useState(false);
   // devlog 連携（MCP経由）。OpenProject と同型。
   const [devlogEnabled, setDevlogEnabled] = useState(false);
   const [devlogTasks, setDevlogTasks] = useState<DevlogIssue[]>([]);
@@ -635,12 +639,30 @@ export function MailApp({
       setOpTasksLoading(false);
     }
   }, [opEnabled]);
-  // TODO画面を開いたとき（連携有効なら）自分のタスクを取り込む。
+  // プロジェクト進捗（読み取り専用・オンデマンド）。毎朝 TODO 画面で“今どこ”を見る。
+  const loadOpProgress = useCallback(async () => {
+    if (!opEnabled) return;
+    setOpProgressLoading(true);
+    try {
+      const res = await fetch("/api/integrations/openproject/progress");
+      const d = (await res.json()) as { progress?: OpProjectProgress | null };
+      setOpProgress(d.progress ?? null);
+    } catch {
+      /* 連携は任意機能 */
+    } finally {
+      setOpProgressLoading(false);
+    }
+  }, [opEnabled]);
+  // TODO画面を開いたとき（連携有効なら）自分のタスクと進捗を取り込む。
   useEffect(() => {
-    // async loader — setState only after the fetch resolves.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (view === "todo" && opEnabled) loadOpTasks();
-  }, [view, opEnabled, loadOpTasks]);
+    if (view === "todo" && opEnabled) {
+      // async loaders — setState only after the fetch resolves.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadOpTasks();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadOpProgress();
+    }
+  }, [view, opEnabled, loadOpTasks, loadOpProgress]);
 
   // ── devlog 連携（MCP経由）──────────────────────────────────────────
   const loadDevlogStatus = useCallback(async () => {
@@ -2250,6 +2272,9 @@ export function MailApp({
           openProjectTasks={opEnabled ? opTasks : undefined}
           openProjectLoading={opTasksLoading}
           onRefreshOpenProject={opEnabled ? loadOpTasks : undefined}
+          openProjectProgress={opEnabled ? opProgress : undefined}
+          openProjectProgressLoading={opProgressLoading}
+          onRefreshProgress={opEnabled ? loadOpProgress : undefined}
           devlogTasks={devlogEnabled ? devlogTasks : undefined}
           devlogLoading={devlogTasksLoading}
           onRefreshDevlog={devlogEnabled ? loadDevlogTasks : undefined}
