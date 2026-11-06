@@ -158,6 +158,10 @@ export function MailApp({
   useEffect(() => {
     emailsRef.current = emails;
   }, [emails]);
+  // Mirror of the loaded conversation, so selectEmail can repaint instantly from
+  // an already-loaded thread member (same-thread tab switch) without waiting for
+  // a cache round-trip (otherwise the previous mail — the 検索結果 — lingers).
+  const threadRef = useRef<Email[] | null>(null);
   // Cache-wide search (all accounts & folders); null = not searching.
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Email[] | null>(null);
@@ -247,7 +251,13 @@ export function MailApp({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Email | null>(null);
   const [thread, setThread] = useState<Email[] | null>(null);
+  useEffect(() => {
+    threadRef.current = thread;
+  }, [thread]);
   const threadToken = useRef(0);
+  // 現在ロード済みの会話キー（{account}/{threadId}）。同じスレッド内の別メールへ
+  // タブ切替したとき、会話を一旦 null に落として再取得する churn を避ける判定に使う。
+  const loadedThreadKey = useRef<string | null>(null);
   // Open work surfaces (opened mail + in-progress drafts) live as tabs. A
   // compose tab stays mounted while hidden so its draft is never lost, and a
   // sent/half-written message is always one click away in the strip.
@@ -1482,9 +1492,21 @@ export function MailApp({
   // whole conversation (rail + cards) from appearing. stale-while-revalidate.
   const loadThread = useCallback(async (email: Email) => {
     const token = ++threadToken.current;
-    setThread(null);
-    if (!email.account || !email.threadId) return;
-    const key = encodeURIComponent(`${email.account}/${email.threadId}`);
+    if (!email.account || !email.threadId) {
+      setThread(null);
+      loadedThreadKey.current = null;
+      return;
+    }
+    const keyStr = `${email.account}/${email.threadId}`;
+    // 同じ会話内の別メッセージへ切替えたときは、会話を null に落とさない
+    // （ThreadView を unmount させず、開いたメッセージへ即アンカーさせる＝
+    // 「タブを押したのに検索結果の最新が出る」競合を断つ）。別スレッドに移った
+    // ときだけ一旦クリアして取り直す。
+    if (loadedThreadKey.current !== keyStr) {
+      setThread(null);
+      loadedThreadKey.current = keyStr;
+    }
+    const key = encodeURIComponent(keyStr);
     // 1) Cache-first paint — the conversation shows immediately.
     try {
       const cdata = await fetch(`/api/threads/${key}?cached=1`).then((r) =>
@@ -1533,6 +1555,12 @@ export function MailApp({
   const selectEmail = useCallback(
     async (id: string) => {
       setSelectedId(id);
+      // 同じ会話内の別メッセージへ切替えたときは、取得を待たずロード済みの会話から
+      // 即座に本文を差し替える（キャッシュ往復の数百ms〜数秒、前のメール＝検索結果が
+      // 出たままになる「タブを押しても検索結果が上にくる」事象を断つ）。full fetch は
+      // このあと走り、より新しい状態・HTML で置き換える。
+      const inThread = threadRef.current?.find((m) => m.id === id);
+      if (inThread) setSelected(inThread);
       setEmails((list) =>
         list.map((e) => (e.id === id ? { ...e, read: true } : e)),
       );
