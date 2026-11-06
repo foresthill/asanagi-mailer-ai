@@ -114,6 +114,13 @@ export function useWorkTabs() {
     setActiveId(null);
   }, []);
 
+  /** Close every tab at once (used by single-tab mode before opening a new one). */
+  const closeAll = useCallback(() => {
+    backStack.current = [];
+    setTabs([]);
+    setActiveId(null);
+  }, []);
+
   /** ブラウザ戻る: focus the previously-active still-open tab. */
   const goBack = useCallback((): boolean => {
     while (backStack.current.length) {
@@ -136,6 +143,7 @@ export function useWorkTabs() {
     renameReader,
     openCompose,
     closeTab,
+    closeAll,
     activate,
     clearActive,
     goBack,
