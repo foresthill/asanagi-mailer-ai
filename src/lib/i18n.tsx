@@ -342,6 +342,13 @@ const ja: Dict = {
   "conn.endpoint.placeholder": "例: http://localhost:11434/v1（Ollama）",
   "conn.endpoint.note":
     "空欄なら OpenAI 本家。社内 Ollama 等の OpenAI 互換サーバに向けると本文が社外に出ません。トークンで保護する場合は上の「APIキー」に入れると Bearer として送られます。",
+  "conn.endpoint.fetch": "モデル取得・接続確認",
+  "conn.endpoint.fetching": "確認中…",
+  "conn.endpoint.ok": "接続OK（{n}件）。下の一覧から選べます。",
+  "conn.endpoint.fail": "未接続。SSHトンネル等の接続を確認してください。",
+  "conn.endpoint.empty":
+    "接続OK。ただしモデル未取得です（サーバ側で ollama pull してください）。",
+  "conn.endpoint.pick": "一覧から選択",
   "conn.judge": "判定用モデル ID（朝の一凪・重要度判定／任意）",
   "conn.judge.placeholder.cheap": "安価な例: {model}",
   "conn.judge.placeholder.same": "空欄ならメインと同じ",
@@ -1132,6 +1139,13 @@ const en: Dict = {
   "conn.endpoint.placeholder": "e.g. http://localhost:11434/v1 (Ollama)",
   "conn.endpoint.note":
     "Empty means OpenAI itself. Point it at an OpenAI-compatible server such as an in-house Ollama and message bodies never leave your network. To protect it with a token, put the token in the API key field above and it is sent as a Bearer token.",
+  "conn.endpoint.fetch": "Fetch models / test connection",
+  "conn.endpoint.fetching": "Checking…",
+  "conn.endpoint.ok": "Connected ({n}). Pick one from the list below.",
+  "conn.endpoint.fail": "Not connected. Check the SSH tunnel / endpoint.",
+  "conn.endpoint.empty":
+    "Connected, but no models yet (run `ollama pull` on the server).",
+  "conn.endpoint.pick": "Pick from list",
   "conn.judge": "Judgment model ID (Morning Sweep / importance / optional)",
   "conn.judge.placeholder.cheap": "Cheap example: {model}",
   "conn.judge.placeholder.same": "Empty = same as main",
@@ -1938,6 +1952,13 @@ const fr: Dict = {
   "conn.endpoint.placeholder": "ex. : http://localhost:11434/v1 (Ollama)",
   "conn.endpoint.note":
     "Vide = OpenAI officiel. Pointez-le vers un serveur compatible OpenAI comme un Ollama interne et le corps des messages ne quitte pas votre réseau. Pour le protéger par un jeton, mettez le jeton dans le champ « Clé API » ci-dessus : il est envoyé comme jeton Bearer.",
+  "conn.endpoint.fetch": "Récupérer les modèles / tester",
+  "conn.endpoint.fetching": "Vérification…",
+  "conn.endpoint.ok": "Connecté ({n}). Choisissez dans la liste ci-dessous.",
+  "conn.endpoint.fail": "Non connecté. Vérifiez le tunnel SSH / le point de terminaison.",
+  "conn.endpoint.empty":
+    "Connecté, mais aucun modèle (lancez « ollama pull » sur le serveur).",
+  "conn.endpoint.pick": "Choisir dans la liste",
   "conn.judge":
     "ID du modèle de tri (Accalmie du matin / importance / facultatif)",
   "conn.judge.placeholder.cheap": "Exemple économique : {model}",
@@ -2723,6 +2744,12 @@ const zh: Dict = {
   "conn.endpoint.placeholder": "例如：http://localhost:11434/v1（Ollama）",
   "conn.endpoint.note":
     "留空即为 OpenAI 官方。指向内部 Ollama 等兼容 OpenAI 的服务器时，正文不会离开你的网络。如需用令牌保护，请填入上方「API 密钥」，会作为 Bearer 令牌发送。",
+  "conn.endpoint.fetch": "获取模型・测试连接",
+  "conn.endpoint.fetching": "检查中…",
+  "conn.endpoint.ok": "已连接（{n} 个）。可从下方列表选择。",
+  "conn.endpoint.fail": "未连接。请检查 SSH 隧道／端点。",
+  "conn.endpoint.empty": "已连接，但尚无模型（请在服务器执行 ollama pull）。",
+  "conn.endpoint.pick": "从列表选择",
   "conn.judge": "判定用模型 ID（晨间一凪・重要度判定／可选）",
   "conn.judge.placeholder.cheap": "便宜示例：{model}",
   "conn.judge.placeholder.same": "留空＝与主模型相同",
