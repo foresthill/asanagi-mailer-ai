@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import {
   Archive,
   Trash2,
@@ -273,19 +274,15 @@ export function EmailReader({
     onReply(kind, mode);
   };
 
-  // Copy the new body text only — the quoted reply history is excluded, any
-  // leftover CSS/style block is dropped, and long blank runs collapse to one
-  // blank line (HTML mail otherwise pastes with big gaps).
+  // 全文コピー: HTMLメールは「画像・書式込み」で（text/html）、貼り付け先が
+  // リッチなら画像つきで入る。プレーン貼り付け用に text/plain も同梱（本文テキスト。
+  // 引用履歴は除き、余分な空行は畳む）。HTMLが無いメールはテキストのみ。
   const copyBody = async () => {
-    // Copy plain text, never markup. HTML mail (or a body that itself carries
-    // HTML tags — some senders put HTML in the text/plain part) is converted
-    // to text first; a normal plain-text body is used as-is.
+    // --- text/plain フォールバック（従来どおり：本文テキスト・引用除外・整形）---
     const plain =
       email.html || /<\/?[a-z][^>]*>/i.test(email.body)
         ? htmlToText(email.html || email.body)
         : email.body;
-    // Copy the new text only — all non-quote segments (keeps inline replies,
-    // drops quoted history), joined.
     const head = segmentReply(plain)
       .filter((s) => s.kind === "text")
       .map((s) => s.body)
@@ -295,12 +292,40 @@ export function EmailReader({
       .replace(/[ \t 　]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
+    // --- text/html（画像込みの全文）---。リモート画像の src は残す（貼り付け先が
+    // 読み込む＝画像つきで入る）。script/フォーム等は DOMPurify で除去。
+    const richHtml = email.html
+      ? DOMPurify.sanitize(email.html, {
+          USE_PROFILES: { html: true },
+          FORBID_TAGS: ["form", "input", "button"],
+        })
+      : null;
+    const canRich =
+      !!richHtml &&
+      typeof ClipboardItem !== "undefined" &&
+      typeof navigator.clipboard?.write === "function";
     try {
-      await navigator.clipboard.writeText(text);
+      if (canRich) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([richHtml!], { type: "text/html" }),
+            "text/plain": new Blob([text], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* clipboard unavailable — ignore */
+      // リッチ書き込みが拒否された等 → テキストだけでも必ず試す。
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {
+        /* clipboard unavailable — ignore */
+      }
     }
   };
 
