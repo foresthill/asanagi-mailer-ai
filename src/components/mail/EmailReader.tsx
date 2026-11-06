@@ -514,9 +514,11 @@ export function EmailReader({
         </div>
       )}
 
-      {/* Body — a left outline rail (thread only, toggle in toolbar) beside the
-          content column, so the mail body keeps its width. */}
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-6 pb-7">
+      {/* 本文（左・スクロール）＋ 読むAIパネル（右・全高の列）。以前は本文スクロール内の
+          小箱（狭いと本文の上に回り、スクロールで消える＝見づらい）だったのを、安定した
+          全高の右カラムにして常時見えるようにした。 */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div ref={scrollerRef} className="min-w-0 flex-1 overflow-y-auto px-6 pb-7">
         {/* Top spacing on the inner row (not the scroller) so the thread's
             sticky カード/会話 bar pins flush to the top — a py on the scroll
             container leaves a gap above sticky top-0 that cards show through. */}
@@ -531,18 +533,11 @@ export function EmailReader({
           <div className="min-w-0 flex-1">
             <div
               className={cn(
-                "mx-auto animate-in @container",
-                // AIパネルを開いたら2カラムに収まるよう広げる。コンテナ幅が
-                // 760px以上あれば本文左／AI右、足りなければAIは下に回る。
-                aiOpen ? "max-w-6xl" : fullscreen ? "max-w-5xl" : "max-w-2xl",
+                "mx-auto animate-in",
+                fullscreen ? "max-w-5xl" : "max-w-2xl",
               )}
             >
-              <div
-                className={cn(
-                  "flex flex-col gap-5",
-                  aiOpen && "@[760px]:flex-row @[760px]:items-start",
-                )}
-              >
+              <div className="flex flex-col gap-5">
                 <div className="min-w-0 flex-1">
               <h2 className="text-xl font-semibold leading-snug tracking-tight">
                 {email.subject}
@@ -679,28 +674,23 @@ export function EmailReader({
                 </>
               )}
                 </div>
-
-                {/* AI出力（訳文・要約）を本文の右に（広い時）／下に（狭い時）。
-                    sticky で本文スクロール中も見えるように。 */}
-                {aiOpen && (
-                  // 狭い時はパネルを本文の上に（order-first）＝本文を全部スクロール
-                  // しなくても届く。パネル自身もスクロール可能に（要約が長くても見切れ
-                  // ない）。広い時は右カラム（sticky）。
-                  <aside className="order-first max-h-[75vh] shrink-0 overflow-y-auto @[760px]:order-none @[760px]:max-h-[calc(100vh-7rem)] @[760px]:w-[348px] @[760px]:sticky @[760px]:top-2 @[760px]:self-start">
-                    <ReaderAiPanel
-                      key={email.id}
-                      email={email}
-                      thread={
-                        thread && thread.length > 1 ? thread : undefined
-                      }
-                      onClose={() => setAiOpen(false)}
-                    />
-                  </aside>
-                )}
               </div>
             </div>
           </div>
         </div>
+      </div>
+      {/* 読むAIパネル: 本文スクロールの外に出した全高の右カラム（独自スクロール）。
+          狭い本文幅でも“上に回って消える”ことがなく、常に見える。 */}
+      {aiOpen && (
+        <aside className="flex w-[340px] max-w-[50%] shrink-0 flex-col overflow-y-auto border-l border-border bg-bg p-3">
+          <ReaderAiPanel
+            key={email.id}
+            email={email}
+            thread={thread && thread.length > 1 ? thread : undefined}
+            onClose={() => setAiOpen(false)}
+          />
+        </aside>
+      )}
       </div>
     </div>
   );
