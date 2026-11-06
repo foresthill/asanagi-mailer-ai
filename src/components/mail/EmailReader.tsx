@@ -24,12 +24,14 @@ import {
   ChevronDown,
   MessagesSquare,
   Sparkles,
+  FolderKanban,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type {
   Email,
   FolderView,
   Importance,
+  OpWorkPackage,
   SavedDraft,
   ContactLabel,
 } from "@/lib/types";
@@ -78,6 +80,7 @@ export function EmailReader({
   isMessageTodo,
   onToggleMessageTodo,
   issueTargets,
+  openProjectLink,
   onNoteSaved,
   onOpenMessage,
   highlight,
@@ -126,6 +129,9 @@ export function EmailReader({
     icon?: LucideIcon;
     onSend: (email: Email) => void;
   }[];
+  /** このメール/スレッドに紐づく OpenProject の WP（起票先の“今の状態”）。あれば
+   *  本文ヘッダに「OpenProject #123 · 進行中 · 期限 11/10」チップを出す（双方向）。 */
+  openProjectLink?: OpWorkPackage | null;
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
   onNoteSaved?: () => void;
   /** Re-anchor the reader to a thread message (open it as the current email). */
@@ -512,6 +518,38 @@ export function EmailReader({
             )}
           </span>
         </div>
+      )}
+
+      {/* OpenProject 紐付け: このメールから起票した WP の“今の状態”を表示（双方向の
+          読み戻し）。クリックで WP を別タブで開く（外部URLなので _blank 可）。 */}
+      {openProjectLink && (
+        <a
+          href={openProjectLink.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 border-b border-border bg-surface px-5 py-2 text-xs text-fg-muted transition-colors hover:bg-surface-2"
+          title={openProjectLink.subject || undefined}
+        >
+          <FolderKanban className="size-4 shrink-0 text-accent" />
+          <span className="shrink-0 font-medium text-fg">
+            OpenProject #{openProjectLink.id}
+          </span>
+          {openProjectLink.status && (
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5">
+              {openProjectLink.status}
+            </span>
+          )}
+          {openProjectLink.dueDate && (
+            <span className="shrink-0">
+              {t("op.linked.due")} {openProjectLink.dueDate}
+            </span>
+          )}
+          {openProjectLink.subject && (
+            <span className="min-w-0 flex-1 truncate text-fg-subtle">
+              {openProjectLink.subject}
+            </span>
+          )}
+        </a>
       )}
 
       {/* Body — a left outline rail (thread only, toggle in toolbar) beside the
