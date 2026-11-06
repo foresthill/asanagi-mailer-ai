@@ -1,4 +1,8 @@
-import type { OpenProjectSettings, OpWorkPackage } from "@/lib/types";
+import type {
+  OpenProjectSettings,
+  OpProjectProgress,
+  OpWorkPackage,
+} from "@/lib/types";
 
 /**
  * OpenProject REST API v3 client (Community Edition compatible).
@@ -251,6 +255,70 @@ export async function listMyOpenWorkPackages(
       url: `${baseUrl}/work_packages/${id}`,
     };
   });
+}
+
+/**
+ * Read-only project progress summary ("毎日の進捗の吸い上げ"). Pulls the default
+ * project's work packages (all statuses, newest-updated first), counts them by
+ * status, and keeps the most-recently-updated few. On-demand only — nothing is
+ * written or scheduled. For a large project the per-status counts are of the
+ * fetched window (`counted`); `total` is the project's true total from the API.
+ */
+export async function getProjectProgress(
+  settings: OpenProjectSettings,
+): Promise<OpProjectProgress> {
+  const baseUrl = normalizeBaseUrl(settings.baseUrl);
+  const apiKey = settings.apiKey?.trim();
+  const projectId = settings.projectId?.trim();
+  if (!baseUrl || !apiKey) throw new OpError("OpenProject が未設定です。");
+  if (!projectId) throw new OpError("送り先プロジェクトが未設定です。");
+
+  const qs = new URLSearchParams({
+    pageSize: "200",
+    sortBy: JSON.stringify([["updatedAt", "desc"]]),
+  });
+  const data = (await opFetch(
+    baseUrl,
+    apiKey,
+    `/api/v3/projects/${encodeURIComponent(projectId)}/work_packages?${qs.toString()}`,
+  )) as {
+    total?: number;
+    _embedded?: { elements?: Array<Record<string, unknown>> };
+  };
+  const els = data?._embedded?.elements ?? [];
+  const map = (e: Record<string, unknown>): OpWorkPackage => {
+    const links = (e._links ?? {}) as Record<
+      string,
+      { title?: string } | undefined
+    >;
+    const id = Number(e.id);
+    return {
+      id,
+      subject: String(e.subject ?? ""),
+      status: links.status?.title,
+      type: links.type?.title,
+      dueDate: typeof e.dueDate === "string" ? e.dueDate : undefined,
+      url: `${baseUrl}/work_packages/${id}`,
+    };
+  };
+  const wps = els.map(map);
+
+  const counts = new Map<string, number>();
+  for (const w of wps) {
+    const s = w.status ?? "—";
+    counts.set(s, (counts.get(s) ?? 0) + 1);
+  }
+  const byStatus = [...counts.entries()]
+    .map(([status, count]) => ({ status, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    projectName: settings.projectName,
+    total: typeof data.total === "number" ? data.total : wps.length,
+    counted: wps.length,
+    byStatus,
+    recent: wps.slice(0, 8),
+  };
 }
 
 /**

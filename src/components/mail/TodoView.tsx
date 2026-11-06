@@ -17,7 +17,12 @@ import {
   Mail,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { TodoItem, OpWorkPackage, DevlogIssue } from "@/lib/types";
+import type {
+  TodoItem,
+  OpWorkPackage,
+  OpProjectProgress,
+  DevlogIssue,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { TargetMenu } from "./TargetMenu";
@@ -73,6 +78,9 @@ export function TodoView({
   openProjectTasks,
   openProjectLoading,
   onRefreshOpenProject,
+  openProjectProgress,
+  openProjectProgressLoading,
+  onRefreshProgress,
   devlogTasks,
   devlogLoading,
   onRefreshDevlog,
@@ -99,6 +107,10 @@ export function TodoView({
   openProjectTasks?: OpWorkPackage[];
   openProjectLoading?: boolean;
   onRefreshOpenProject?: () => void;
+  /** プロジェクト進捗サマリ（読み取り専用・連携有効時のみ）。毎朝の「吸い上げ」。 */
+  openProjectProgress?: OpProjectProgress | null;
+  openProjectProgressLoading?: boolean;
+  onRefreshProgress?: () => void;
   /** devlog から pull した未完了 issue（読み取り専用・連携有効時のみ）。 */
   devlogTasks?: DevlogIssue[];
   devlogLoading?: boolean;
@@ -390,6 +402,103 @@ export function TodoView({
                     </li>
                   ))}
                 </ul>
+              )}
+            </section>
+          )}
+
+          {/* プロジェクト進捗（読み取り専用・オンデマンド）: 既定プロジェクトの
+              ステータス別件数＋最近更新。毎朝ここで“今どこ”を見る。書き込みはしない。 */}
+          {onRefreshProgress && (
+            <section className="mt-6">
+              <div className="mb-2 flex items-center gap-2">
+                <FolderKanban className="size-4 text-accent" />
+                <h2 className="text-xs font-semibold">
+                  {t("op.progress.title")}
+                </h2>
+                {openProjectProgress?.projectName && (
+                  <span className="truncate text-[11px] text-fg-subtle">
+                    {openProjectProgress.projectName}
+                  </span>
+                )}
+                <button
+                  onClick={onRefreshProgress}
+                  title={t("op.progress.refresh")}
+                  className="ml-auto grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
+                >
+                  <RefreshCw
+                    className={cn(
+                      "size-3.5",
+                      openProjectProgressLoading && "animate-spin",
+                    )}
+                  />
+                </button>
+              </div>
+              {!openProjectProgress ? (
+                <p className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-subtle">
+                  {openProjectProgressLoading
+                    ? t("op.progress.loading")
+                    : t("op.progress.empty")}
+                </p>
+              ) : (
+                <div className="rounded-xl border border-border bg-surface px-3.5 py-3">
+                  {/* 合計＋ステータス別の件数チップ */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-md bg-accent-soft px-2 py-1 text-[11px] font-medium text-accent">
+                      {t("op.progress.total")}: {openProjectProgress.total}
+                    </span>
+                    {openProjectProgress.byStatus.map((s) => (
+                      <span
+                        key={s.status}
+                        className="rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted"
+                      >
+                        {s.status} {s.count}
+                      </span>
+                    ))}
+                  </div>
+                  {openProjectProgress.counted <
+                    openProjectProgress.total && (
+                    <p className="mt-1.5 text-[10px] text-fg-subtle">
+                      {t("op.progress.countedNote")}（{openProjectProgress.counted}
+                      ）
+                    </p>
+                  )}
+                  {/* 最近更新 */}
+                  {openProjectProgress.recent.length > 0 && (
+                    <>
+                      <p className="mb-1.5 mt-3 text-[11px] font-medium text-fg-subtle">
+                        {t("op.progress.recent")}
+                      </p>
+                      <ul className="flex flex-col gap-1.5">
+                        {openProjectProgress.recent.map((wp) => (
+                          <li key={wp.id}>
+                            <a
+                              href={wp.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2"
+                            >
+                              <span className="flex min-w-0 flex-1 flex-col">
+                                <span className="flex items-center gap-1.5 truncate text-[13px]">
+                                  <span className="truncate">{wp.subject}</span>
+                                  <ArrowUpRight className="size-3 shrink-0 text-fg-subtle" />
+                                </span>
+                                <span className="truncate text-[10px] text-fg-subtle">
+                                  #{wp.id}
+                                  {wp.dueDate ? ` · ${wp.dueDate}` : ""}
+                                </span>
+                              </span>
+                              {wp.status && (
+                                <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-fg-muted">
+                                  {wp.status}
+                                </span>
+                              )}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
               )}
             </section>
           )}

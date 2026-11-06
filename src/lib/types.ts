@@ -503,6 +503,20 @@ export interface OpWorkPackage {
   url: string;
 }
 
+/** プロジェクト進捗の読み取り専用サマリ（毎日の「吸い上げ」用・オンデマンド pull）。 */
+export interface OpProjectProgress {
+  /** 既定プロジェクトの表示名（あれば）。 */
+  projectName?: string;
+  /** プロジェクト全体の WP 総数（API の total）。 */
+  total: number;
+  /** 実際に集計できた件数（取得上限により total より少ないことがある）。 */
+  counted: number;
+  /** ステータス別の件数（取得分からの集計・多い順）。 */
+  byStatus: { status: string; count: number }[];
+  /** 最近更新された WP（先頭数件・クリックで開く）。 */
+  recent: OpWorkPackage[];
+}
+
 // ---------------------------------------------------------------------------
 // devlog 連携（インテグレーション） — TODO / メールを devlog の issue として起票。
 // devlog には外部REST APIが無く、トークン認証の入口は MCP エンドポイント

@@ -43,6 +43,14 @@ TODO 画面に読み取り表示する。
 **使い方**: TODO 行／メール本文ツールバーの起票ボタン → work package 作成 → 別タブで
 開く。TODO には id/URL が紐づき、二重起票を防ぐ。TODO 画面下部に「自分の未完了 WP」。
 
+### プロジェクト進捗（毎日の“吸い上げ”・読み取り専用）
+
+TODO 画面下部に「プロジェクト進捗」セクション。既定プロジェクトの WP を pull し、
+**ステータス別の件数＋合計＋最近更新**を表示する（毎朝ここで“今どこ”を見る）。
+**オンデマンド pull のみ**（開いた時＋更新ボタン）で、常駐スケジューラや自動生成・
+日次スナップショットの保存はしない（溜まる系を避ける方針）。大きなプロジェクトでは
+ステータス件数は取得ウィンドウ（直近 200 件）での集計、`total` は API の真の総数。
+
 ### 双方向（起票先の“今の状態”を本文に戻す）
 
 起票して終わり（行き）だけでなく、**作った WP の現在の状態をメール本文に表示**する。
@@ -60,8 +68,10 @@ TODO 画面に読み取り表示する。
 
 **実装**: `lib/integrations/openproject.ts`（Basic 認証 `apikey:token`・
 `GET /api/v3/projects`・`POST /api/v3/projects/{id}/work_packages`・type は
-project の types から自動選択・`getWorkPackages` by id）、`lib/store.ts`（`openproject-links.json`：
-`getOpLinks`/`setOpLink`）、`/api/integrations/openproject{,/projects,/send,/pull,/links}`。
+project の types から自動選択・`getWorkPackages` by id・`getProjectProgress`＝
+`GET /api/v3/projects/{id}/work_packages?pageSize=200&sortBy=updatedAt`）、`lib/store.ts`
+（`openproject-links.json`：`getOpLinks`/`setOpLink`）、
+`/api/integrations/openproject{,/projects,/send,/pull,/links,/progress}`。
 
 ---
 
