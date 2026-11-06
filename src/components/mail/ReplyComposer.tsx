@@ -21,7 +21,12 @@ import {
 import { ScheduleDialog } from "./ScheduleDialog";
 import { SendConfirmDialog } from "./SendConfirmDialog";
 import DOMPurify from "dompurify";
-import { AttachmentButton, AttachmentChips, fileToOutgoingAttachment } from "./AttachmentBar";
+import {
+  AttachmentButton,
+  AttachmentChips,
+  fetchAttachmentAsOutgoing,
+  fileToOutgoingAttachment,
+} from "./AttachmentBar";
 import { ATTACHMENT_TOTAL_CAP, totalAttachmentBytes } from "@/lib/attachments";
 import { plainTextToHtml, wrapHtmlBody, quoteBlock, extractInlineImages } from "@/lib/html-mail";
 import { formatBytes } from "./StorageMeter";
@@ -143,6 +148,8 @@ export function ReplyComposer({
   const [note, setNote] = useState<string | null>(null);
   const [selectionText, setSelectionText] = useState("");
   const [attachments, setAttachments] = useState<OutgoingAttachment[]>(init.attachments ?? []);
+  // True while a forward is pulling the original's attachment bytes.
+  const [attaching, setAttaching] = useState(false);
   const [dragging, setDragging] = useState(false);
   // HTML送信: default on when replying to an HTML mail or reopening an HTML draft.
   const [htmlSend, setHtmlSend] = useState<boolean>(Boolean(init.html || init.source?.html));
@@ -282,6 +289,56 @@ export function ReplyComposer({
     return () => {
       active = false;
       ctrl.abort(); // leaving the composer cancels the request too
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Forwarding carries the original's attachments. The quote block only
+  // reproduces text, so without this the attachments silently vanish on a
+  // forward. Fetch each one's bytes on demand and add them (respecting the
+  // shared size cap). Reopened drafts already carry their attachments
+  // (init.attachments), so this only runs for a fresh forward.
+  useEffect(() => {
+    const source = init.source;
+    const atts = source?.attachments;
+    if (
+      init.kind !== "forward" ||
+      !source ||
+      !atts?.length ||
+      (init.attachments?.length ?? 0) > 0
+    )
+      return;
+    let active = true;
+    const ctrl = new AbortController();
+    (async () => {
+      setAttaching(true);
+      try {
+        const fetched: OutgoingAttachment[] = [];
+        for (const a of atts) {
+          try {
+            fetched.push(await fetchAttachmentAsOutgoing(source.id, a, ctrl.signal));
+          } catch {
+            /* one failed/aborted attachment shouldn't drop the rest */
+          }
+        }
+        if (!active) return;
+        // Keep as many as fit under the cap; warn if any were dropped (failed
+        // fetch or over the limit). A fresh forward starts with no attachments.
+        const kept: OutgoingAttachment[] = [];
+        let dropped = atts.length - fetched.length;
+        for (const f of fetched) {
+          if (totalAttachmentBytes([...kept, f]) <= ATTACHMENT_TOTAL_CAP) kept.push(f);
+          else dropped++;
+        }
+        if (kept.length) setAttachments(kept);
+        if (dropped > 0) setNote(t("composer.fwdAttachSome"));
+      } finally {
+        if (active) setAttaching(false);
+      }
+    })();
+    return () => {
+      active = false;
+      ctrl.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -943,9 +1000,15 @@ export function ReplyComposer({
           </div>
         ) : (
           <div className="border-t border-border bg-surface">
-            {(attachments.length > 0 || richMode) && (
+            {(attachments.length > 0 || richMode || attaching) && (
               <div className="flex flex-wrap items-center gap-2 px-6 pt-2.5">
                 <AttachmentChips items={attachments} onRemove={removeAttachment} disabled={sending} />
+                {attaching && (
+                  <span className="flex items-center gap-1.5 text-[11px] text-fg-subtle">
+                    <Loader2 className="size-3 animate-spin" />
+                    {t("composer.fwdAttaching")}
+                  </span>
+                )}
                 {richMode && (
                   <span className="text-[11px] text-fg-subtle">
                     {t("composer.richModeHint")}

@@ -19,7 +19,7 @@ TODO やメールを外部のプロジェクト管理・カレンダーへ橋渡
 
 | 連携 | 種別 | できること | 認証 |
 |---|---|---|---|
-| OpenProject | REST v3 | TODO/メール→work package 起票、自分の未完了WPを一覧(pull) | API トークン |
+| OpenProject | REST v3 | TODO/メール→work package 起票、起票先の状態を本文に表示（双方向）、自分の未完了WPを一覧(pull) | API トークン |
 | devlog | MCP | TODO/メール→issue 起票、未完了issueを一覧(pull) | MCP トークン(`dvlg_`) |
 | Nextcloud | CalDAV | TODOの期限→カレンダー予定 | ユーザー名＋アプリパスワード |
 | Google カレンダー | Google API | TODOの期限→カレンダー予定 | 既存の Gmail OAuth を再利用 |
@@ -50,13 +50,28 @@ TODO 画面下部に「プロジェクト進捗」セクション。既定プロ
 **オンデマンド pull のみ**（開いた時＋更新ボタン）で、常駐スケジューラや自動生成・
 日次スナップショットの保存はしない（溜まる系を避ける方針）。大きなプロジェクトでは
 ステータス件数は取得ウィンドウ（直近 200 件）での集計、`total` は API の真の総数。
-実装: `getProjectProgress`（`GET /api/v3/projects/{id}/work_packages?pageSize=200&sortBy=updatedAt`）、
-`/api/integrations/openproject/progress`。
+
+### 双方向（起票先の“今の状態”を本文に戻す）
+
+起票して終わり（行き）だけでなく、**作った WP の現在の状態をメール本文に表示**する。
+開いているメール/スレッドに紐づく WP があれば、リーダー上部に
+「📁 OpenProject #123 ・ ステータス ・ 期限」チップを出し、クリックで WP を別タブで開く。
+
+- 紐付けの保存：本文からの起票は `openproject-links.json`（キー＝TODO と同じ名前空間：
+  スレッド `{account}/thread:{threadId}` 優先、無ければメールID）に `{wpId,url}` を記録。
+  TODO からの起票は従来どおり `TodoItem.opWorkPackageId` に紐づく。表示時は**両方**を見る。
+- 状態の取得：`GET /api/integrations/openproject/links?keys=…` が、紐付いた WP を id で引いて
+  ステータス／期限／件名を返す（`getWorkPackages`＝`GET /api/v3/work_packages/{id}` を id 毎に、
+  削除・権限外は黙ってスキップ）。**読み取り専用**で、同期や書き戻しはしない。
+- 起票直後に本文チップを引き直す（即リンクを体感）。オフライン／認証切れ時は保存済みの
+  id/URL だけでチップを出す（状態は空）。
 
 **実装**: `lib/integrations/openproject.ts`（Basic 認証 `apikey:token`・
 `GET /api/v3/projects`・`POST /api/v3/projects/{id}/work_packages`・type は
-project の types から自動選択）、
-`/api/integrations/openproject{,/projects,/send,/pull,/progress}`。
+project の types から自動選択・`getWorkPackages` by id・`getProjectProgress`＝
+`GET /api/v3/projects/{id}/work_packages?pageSize=200&sortBy=updatedAt`）、`lib/store.ts`
+（`openproject-links.json`：`getOpLinks`/`setOpLink`）、
+`/api/integrations/openproject{,/projects,/send,/pull,/links,/progress}`。
 
 ---
 

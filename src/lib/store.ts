@@ -793,6 +793,35 @@ export async function setTodoOpLink(
   return rows;
 }
 
+// ── OpenProject: メール/スレッド ↔ WP リンク ──────────────────────────
+// 本文に「このメールのタスク（状態・期限）」チップを出すための紐付け。キーは
+// TODO と同じ名前空間（スレッド= `{account}/thread:{threadId}` / メール= メールID）。
+// 起票（reader の「起票」や TODO からの送信）時に記録し、表示時に状態を取りに行く。
+const OPENPROJECT_LINKS = "openproject-links.json";
+export type OpLink = { wpId: number; url: string; at: string };
+type OpLinkMap = Record<string, OpLink>;
+
+/** 指定キー群に紐づく WP リンクだけを返す（無いキーは含めない）。 */
+export async function getOpLinks(
+  keys: string[],
+): Promise<Record<string, OpLink>> {
+  const all = await readJson<OpLinkMap>(OPENPROJECT_LINKS, {});
+  const out: Record<string, OpLink> = {};
+  for (const k of keys) if (all[k]) out[k] = all[k];
+  return out;
+}
+
+/** メール/スレッドキー → WP の紐付けを記録（起票成功時）。 */
+export async function setOpLink(
+  key: string,
+  wpId: number,
+  url: string,
+): Promise<void> {
+  const all = await readJson<OpLinkMap>(OPENPROJECT_LINKS, {});
+  all[key] = { wpId, url, at: new Date().toISOString() };
+  await writeJson(OPENPROJECT_LINKS, all);
+}
+
 // ── OpenProject 連携設定 ─────────────────────────────────────────────
 // 接続情報（URL・APIキー・既定プロジェクト）。APIキーは端末外に出さない。
 const OPENPROJECT_SETTINGS = "openproject-settings.json";

@@ -68,6 +68,8 @@ export function Sidebar({
   onSelectView,
   layout,
   onSetLayout,
+  tabsEnabled,
+  onSetTabsEnabled,
 }: {
   folder: FolderView;
   counts: Partial<Record<FolderView, number>>;
@@ -114,6 +116,9 @@ export function Sidebar({
   /** 画面レイアウト: classic=左右(一覧|本文) / geek=上下(件名上・本文下)。 */
   layout: "classic" | "geek";
   onSetLayout: (l: "classic" | "geek") => void;
+  /** 作業タブ機能の ON/OFF（OFF=作業タブ常に1枚＝従来のシングルペイン）。 */
+  tabsEnabled: boolean;
+  onSetTabsEnabled: (on: boolean) => void;
 }) {
   const { t } = useI18n();
   // Account groups: "すべて（統合）" + each account. Folders hang under each.
@@ -506,6 +511,40 @@ export function Sidebar({
               >
                 <PanelTop className="size-3" />
                 {t("view.geek")}
+              </button>
+            </div>
+          </div>
+          {/* 作業タブ ON/OFF: OFF は「作業タブ常に1枚」＝従来のシングルペイン。 */}
+          <div className="mt-1 flex items-center gap-1.5 px-0.5">
+            <span className="shrink-0 text-[10px] text-fg-subtle">
+              {t("tabs.label")}
+            </span>
+            <div className="flex flex-1 rounded-lg border border-border p-0.5">
+              <button
+                onClick={() => onSetTabsEnabled(true)}
+                aria-pressed={tabsEnabled}
+                title={t("tabs.on.title")}
+                className={cn(
+                  "flex flex-1 items-center justify-center rounded-md px-1.5 py-1 text-[11px] transition-colors",
+                  tabsEnabled
+                    ? "bg-accent-soft font-medium text-accent"
+                    : "text-fg-subtle hover:text-fg",
+                )}
+              >
+                {t("tabs.on")}
+              </button>
+              <button
+                onClick={() => onSetTabsEnabled(false)}
+                aria-pressed={!tabsEnabled}
+                title={t("tabs.off.title")}
+                className={cn(
+                  "flex flex-1 items-center justify-center rounded-md px-1.5 py-1 text-[11px] transition-colors",
+                  !tabsEnabled
+                    ? "bg-accent-soft font-medium text-accent"
+                    : "text-fg-subtle hover:text-fg",
+                )}
+              >
+                {t("tabs.off")}
               </button>
             </div>
           </div>

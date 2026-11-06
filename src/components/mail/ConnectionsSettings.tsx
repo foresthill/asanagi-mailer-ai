@@ -144,6 +144,15 @@ export function ConnectionsSettings({
   // Jev (TypeSafe) key typed this session; undefined = untouched, "" = clear.
   const [jevKeyInput, setJevKeyInput] = useState<string | undefined>(undefined);
   const [test, setTest] = useState<{ ok: boolean; msg: string } | null>(null);
+  // On-prem endpoint (Ollama /v1): model discovery + connection check. The
+  // picker removes hand-typed-model 404s; the status line makes a dead tunnel
+  // obvious ("未接続") instead of a cryptic fetch error later.
+  const [endpointModels, setEndpointModels] = useState<string[] | null>(null);
+  const [endpointStatus, setEndpointStatus] = useState<{
+    ok: boolean;
+    msg: string;
+  } | null>(null);
+  const [fetchingModels, setFetchingModels] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -251,6 +260,50 @@ export function ConnectionsSettings({
       setTest({ ok: false, msg: t("conn.test.fail") });
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function fetchEndpointModels() {
+    setFetchingModels(true);
+    setEndpointStatus(null);
+    try {
+      const res = await fetch("/api/settings/ai/models", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        // keyInputs.openai is undefined unless typed this session → the server
+        // falls back to the stored (masked) key, or none for a bare Ollama.
+        body: JSON.stringify({ baseUrl, apiKey: keyInputs.openai }),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        models?: string[];
+        error?: string;
+      };
+      if (data.ok) {
+        const models = data.models ?? [];
+        setEndpointModels(models);
+        setEndpointStatus({
+          ok: true,
+          msg:
+            models.length > 0
+              ? t("conn.endpoint.ok").replace("{n}", String(models.length))
+              : t("conn.endpoint.empty"),
+        });
+        // Suggest the first model only when the field is empty — never silently
+        // override a model id the user typed on purpose.
+        if (models.length > 0 && !model.trim()) setModel(models[0]);
+      } else {
+        setEndpointModels(null);
+        setEndpointStatus({
+          ok: false,
+          msg: `${t("conn.endpoint.fail")}${data.error ? `（${data.error}）` : ""}`,
+        });
+      }
+    } catch {
+      setEndpointModels(null);
+      setEndpointStatus({ ok: false, msg: t("conn.endpoint.fail") });
+    } finally {
+      setFetchingModels(false);
     }
   }
 
@@ -397,20 +450,64 @@ export function ConnectionsSettings({
             {/* Custom endpoint (OpenAI-compatible) — e.g. on-prem Ollama /v1.
                 Only meaningful for the openai provider. */}
             {provider === "openai" && (
-              <label className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-fg-muted">
                   {t("conn.endpoint")}
                 </span>
                 <input
                   value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
+                  onChange={(e) => {
+                    setBaseUrl(e.target.value);
+                    // The typed endpoint changed → prior check/list is stale.
+                    setEndpointStatus(null);
+                    setEndpointModels(null);
+                  }}
                   placeholder={t("conn.endpoint.placeholder")}
                   className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
                 />
+                {/* モデル取得＝接続確認（①②）。落ちてると「未接続」で分かる。 */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!baseUrl.trim() || fetchingModels}
+                    onClick={fetchEndpointModels}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
+                  >
+                    {fetchingModels && (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    )}
+                    {fetchingModels
+                      ? t("conn.endpoint.fetching")
+                      : t("conn.endpoint.fetch")}
+                  </button>
+                  {endpointStatus && (
+                    <span
+                      className={`text-[11px] ${endpointStatus.ok ? "text-emerald-600" : "text-rose-600"}`}
+                      aria-live="polite"
+                    >
+                      {endpointStatus.ok ? "✅ " : "⚠️ "}
+                      {endpointStatus.msg}
+                    </span>
+                  )}
+                </div>
+                {endpointModels && endpointModels.length > 0 && (
+                  <select
+                    value={endpointModels.includes(model) ? model : ""}
+                    onChange={(e) => e.target.value && setModel(e.target.value)}
+                    className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+                  >
+                    <option value="">{t("conn.endpoint.pick")}</option>
+                    {endpointModels.map((id) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <span className="text-[11px] text-fg-subtle">
                   {t("conn.endpoint.note")}
                 </span>
-              </label>
+              </div>
             )}
 
             {/* Judgment model — cheap model for 朝の一凪 / 重要度判定 */}

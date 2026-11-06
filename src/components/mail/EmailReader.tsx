@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import {
   Archive,
   Trash2,
@@ -24,12 +25,14 @@ import {
   ChevronDown,
   MessagesSquare,
   Sparkles,
+  FolderKanban,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type {
   Email,
   FolderView,
   Importance,
+  OpWorkPackage,
   SavedDraft,
   ContactLabel,
 } from "@/lib/types";
@@ -78,6 +81,7 @@ export function EmailReader({
   isMessageTodo,
   onToggleMessageTodo,
   issueTargets,
+  openProjectLink,
   onNoteSaved,
   onOpenMessage,
   highlight,
@@ -126,6 +130,9 @@ export function EmailReader({
     icon?: LucideIcon;
     onSend: (email: Email) => void;
   }[];
+  /** このメール/スレッドに紐づく OpenProject の WP（起票先の“今の状態”）。あれば
+   *  本文ヘッダに「OpenProject #123 · 進行中 · 期限 11/10」チップを出す（双方向）。 */
+  openProjectLink?: OpWorkPackage | null;
   /** A private note was saved/cleared → refresh the list 📝 indicator. */
   onNoteSaved?: () => void;
   /** Re-anchor the reader to a thread message (open it as the current email). */
@@ -267,19 +274,15 @@ export function EmailReader({
     onReply(kind, mode);
   };
 
-  // Copy the new body text only — the quoted reply history is excluded, any
-  // leftover CSS/style block is dropped, and long blank runs collapse to one
-  // blank line (HTML mail otherwise pastes with big gaps).
+  // 全文コピー: HTMLメールは「画像・書式込み」で（text/html）、貼り付け先が
+  // リッチなら画像つきで入る。プレーン貼り付け用に text/plain も同梱（本文テキスト。
+  // 引用履歴は除き、余分な空行は畳む）。HTMLが無いメールはテキストのみ。
   const copyBody = async () => {
-    // Copy plain text, never markup. HTML mail (or a body that itself carries
-    // HTML tags — some senders put HTML in the text/plain part) is converted
-    // to text first; a normal plain-text body is used as-is.
+    // --- text/plain フォールバック（従来どおり：本文テキスト・引用除外・整形）---
     const plain =
       email.html || /<\/?[a-z][^>]*>/i.test(email.body)
         ? htmlToText(email.html || email.body)
         : email.body;
-    // Copy the new text only — all non-quote segments (keeps inline replies,
-    // drops quoted history), joined.
     const head = segmentReply(plain)
       .filter((s) => s.kind === "text")
       .map((s) => s.body)
@@ -289,12 +292,40 @@ export function EmailReader({
       .replace(/[ \t 　]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
+    // --- text/html（画像込みの全文）---。リモート画像の src は残す（貼り付け先が
+    // 読み込む＝画像つきで入る）。script/フォーム等は DOMPurify で除去。
+    const richHtml = email.html
+      ? DOMPurify.sanitize(email.html, {
+          USE_PROFILES: { html: true },
+          FORBID_TAGS: ["form", "input", "button"],
+        })
+      : null;
+    const canRich =
+      !!richHtml &&
+      typeof ClipboardItem !== "undefined" &&
+      typeof navigator.clipboard?.write === "function";
     try {
-      await navigator.clipboard.writeText(text);
+      if (canRich) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([richHtml!], { type: "text/html" }),
+            "text/plain": new Blob([text], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* clipboard unavailable — ignore */
+      // リッチ書き込みが拒否された等 → テキストだけでも必ず試す。
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {
+        /* clipboard unavailable — ignore */
+      }
     }
   };
 
@@ -514,9 +545,45 @@ export function EmailReader({
         </div>
       )}
 
-      {/* Body — a left outline rail (thread only, toggle in toolbar) beside the
-          content column, so the mail body keeps its width. */}
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-6 pb-7">
+      {/* OpenProject 紐付け: このメールから起票した WP の“今の状態”を表示（双方向の
+          読み戻し）。クリックで WP を別タブで開く（外部URLなので _blank 可）。
+          本文＋AIパネルの flex 行の上に、全幅の帯として置く。 */}
+      {openProjectLink && (
+        <a
+          href={openProjectLink.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 border-b border-border bg-surface px-5 py-2 text-xs text-fg-muted transition-colors hover:bg-surface-2"
+          title={openProjectLink.subject || undefined}
+        >
+          <FolderKanban className="size-4 shrink-0 text-accent" />
+          <span className="shrink-0 font-medium text-fg">
+            OpenProject #{openProjectLink.id}
+          </span>
+          {openProjectLink.status && (
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5">
+              {openProjectLink.status}
+            </span>
+          )}
+          {openProjectLink.dueDate && (
+            <span className="shrink-0">
+              {t("op.linked.due")} {openProjectLink.dueDate}
+            </span>
+          )}
+          {openProjectLink.subject && (
+            <span className="min-w-0 flex-1 truncate text-fg-subtle">
+              {openProjectLink.subject}
+            </span>
+          )}
+        </a>
+      )}
+
+      {/* 本文（左・スクロール）＋ 読むAIパネル（右・全高の列）。以前は本文スクロール内の
+          小箱（狭いと本文の上に回り、スクロールで消える＝見づらい）だったのを、安定した
+          全高の右カラムにして常時見えるようにした。本文側は min-w-0 で、左の
+          ThreadOutlineRail と並んでも幅が潰れないようにする。 */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div ref={scrollerRef} className="min-w-0 flex-1 overflow-y-auto px-6 pb-7">
         {/* Top spacing on the inner row (not the scroller) so the thread's
             sticky カード/会話 bar pins flush to the top — a py on the scroll
             container leaves a gap above sticky top-0 that cards show through. */}
@@ -531,18 +598,11 @@ export function EmailReader({
           <div className="min-w-0 flex-1">
             <div
               className={cn(
-                "mx-auto animate-in @container",
-                // AIパネルを開いたら2カラムに収まるよう広げる。コンテナ幅が
-                // 760px以上あれば本文左／AI右、足りなければAIは下に回る。
-                aiOpen ? "max-w-6xl" : fullscreen ? "max-w-5xl" : "max-w-2xl",
+                "mx-auto animate-in",
+                fullscreen ? "max-w-5xl" : "max-w-2xl",
               )}
             >
-              <div
-                className={cn(
-                  "flex flex-col gap-5",
-                  aiOpen && "@[760px]:flex-row @[760px]:items-start",
-                )}
-              >
+              <div className="flex flex-col gap-5">
                 <div className="min-w-0 flex-1">
               <h2 className="text-xl font-semibold leading-snug tracking-tight">
                 {email.subject}
@@ -679,28 +739,23 @@ export function EmailReader({
                 </>
               )}
                 </div>
-
-                {/* AI出力（訳文・要約）を本文の右に（広い時）／下に（狭い時）。
-                    sticky で本文スクロール中も見えるように。 */}
-                {aiOpen && (
-                  // 狭い時はパネルを本文の上に（order-first）＝本文を全部スクロール
-                  // しなくても届く。パネル自身もスクロール可能に（要約が長くても見切れ
-                  // ない）。広い時は右カラム（sticky）。
-                  <aside className="order-first max-h-[75vh] shrink-0 overflow-y-auto @[760px]:order-none @[760px]:max-h-[calc(100vh-7rem)] @[760px]:w-[348px] @[760px]:sticky @[760px]:top-2 @[760px]:self-start">
-                    <ReaderAiPanel
-                      key={email.id}
-                      email={email}
-                      thread={
-                        thread && thread.length > 1 ? thread : undefined
-                      }
-                      onClose={() => setAiOpen(false)}
-                    />
-                  </aside>
-                )}
               </div>
             </div>
           </div>
         </div>
+      </div>
+      {/* 読むAIパネル: 本文スクロールの外に出した全高の右カラム（独自スクロール）。
+          狭い本文幅でも“上に回って消える”ことがなく、常に見える。 */}
+      {aiOpen && (
+        <aside className="flex w-[340px] max-w-[50%] shrink-0 flex-col overflow-y-auto border-l border-border bg-bg p-3">
+          <ReaderAiPanel
+            key={email.id}
+            email={email}
+            thread={thread && thread.length > 1 ? thread : undefined}
+            onClose={() => setAiOpen(false)}
+          />
+        </aside>
+      )}
       </div>
     </div>
   );

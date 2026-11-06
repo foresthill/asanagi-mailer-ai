@@ -2,8 +2,29 @@
 
 import { useRef } from "react";
 import { Paperclip, X } from "lucide-react";
-import type { OutgoingAttachment } from "@/lib/types";
+import type { Attachment, OutgoingAttachment } from "@/lib/types";
 import { formatBytes } from "./StorageMeter";
+
+/**
+ * Fetch one of a message's attachments from the provider (bytes are pulled on
+ * demand, never cached) and read it into an OutgoingAttachment — used to carry
+ * the original's attachments when forwarding. `emailId` is the account-qualified
+ * id ({account}/{providerId}); `att` is the metadata from `email.attachments`.
+ */
+export async function fetchAttachmentAsOutgoing(
+  emailId: string,
+  att: Attachment,
+  signal?: AbortSignal,
+): Promise<OutgoingAttachment> {
+  const url = `/api/emails/${encodeURIComponent(emailId)}/attachment/${encodeURIComponent(att.id)}`;
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`${att.filename}: HTTP ${res.status}`);
+  const blob = await res.blob();
+  const file = new File([blob], att.filename, {
+    type: att.mimeType || blob.type || "application/octet-stream",
+  });
+  return fileToOutgoingAttachment(file);
+}
 
 /** Read a browser File into an OutgoingAttachment (base64, no data: prefix). */
 export function fileToOutgoingAttachment(file: File): Promise<OutgoingAttachment> {

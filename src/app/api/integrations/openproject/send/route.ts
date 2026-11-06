@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordLog, errMsg } from "@/lib/logbuf";
-import { getOpenProjectSettings, setTodoOpLink } from "@/lib/store";
+import { getOpenProjectSettings, setOpLink, setTodoOpLink } from "@/lib/store";
 import {
   createWorkPackage,
   isOpConfigured,
@@ -20,7 +20,13 @@ export const dynamic = "force-dynamic";
  * the work package useless). Nothing is sent unless the user presses the button.
  */
 export async function POST(req: Request) {
-  let body: { subject?: string; description?: string; todoId?: string };
+  let body: {
+    subject?: string;
+    description?: string;
+    todoId?: string;
+    /** メール/スレッドキー。起票した WP を本文チップで表示するため紐付ける。 */
+    linkKey?: string;
+  };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -53,6 +59,10 @@ export async function POST(req: Request) {
     });
     if (body.todoId) {
       await setTodoOpLink(body.todoId, String(wp.id), wp.url);
+    }
+    // メール本文からの起票でも紐付けを残す（本文に状態チップを出す＝双方向）。
+    if (body.linkKey) {
+      await setOpLink(body.linkKey, wp.id, wp.url);
     }
     recordLog("info", "openproject", `起票OK #${wp.id}`);
     return NextResponse.json({ ok: true, id: wp.id, url: wp.url });

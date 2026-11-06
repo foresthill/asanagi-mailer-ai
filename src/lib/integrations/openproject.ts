@@ -320,3 +320,44 @@ export async function getProjectProgress(
     recent: wps.slice(0, 8),
   };
 }
+
+/**
+ * Fetch specific work packages by id (any status, any assignee). Used to show
+ * the *current* state of a WP linked to an email — the "double" of starting one
+ * from mail. A missing/forbidden id is skipped rather than failing the batch.
+ */
+export async function getWorkPackages(
+  settings: OpenProjectSettings,
+  ids: number[],
+): Promise<OpWorkPackage[]> {
+  const baseUrl = normalizeBaseUrl(settings.baseUrl);
+  const apiKey = settings.apiKey?.trim();
+  if (!baseUrl || !apiKey) throw new OpError("OpenProject が未設定です。");
+  const uniq = [...new Set(ids.filter((n) => Number.isFinite(n) && n > 0))];
+  const results = await Promise.all(
+    uniq.map(async (id): Promise<OpWorkPackage | null> => {
+      try {
+        const e = (await opFetch(
+          baseUrl,
+          apiKey,
+          `/api/v3/work_packages/${id}`,
+        )) as Record<string, unknown>;
+        const links = (e._links ?? {}) as Record<
+          string,
+          { title?: string } | undefined
+        >;
+        return {
+          id,
+          subject: String(e.subject ?? ""),
+          status: links.status?.title,
+          type: links.type?.title,
+          dueDate: typeof e.dueDate === "string" ? e.dueDate : undefined,
+          url: `${baseUrl}/work_packages/${id}`,
+        };
+      } catch {
+        return null; // 削除済み/権限外は黙ってスキップ
+      }
+    }),
+  );
+  return results.filter((w): w is OpWorkPackage => w !== null);
+}
