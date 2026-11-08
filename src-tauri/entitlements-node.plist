@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the bundled Node.js sidecar (src-tauri/binaries/node).
+
+  Node ships signed by "Developer ID Application: Node.js Foundation" with
+  Hardened Runtime already enabled, but its signature also carries
+  com.apple.security.get-task-allow=true (a debug entitlement that Apple
+  notarization REJECTS in a submitted bundle). So the build re-signs node under
+  OUR Developer ID (scripts/sign-mac-sidecar.sh) using these entitlements —
+  the same JIT / memory / library entitlements Node needs to run, minus
+  get-task-allow.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+  <key>com.apple.security.cs.disable-executable-page-protection</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>
