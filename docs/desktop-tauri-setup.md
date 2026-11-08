@@ -7,6 +7,9 @@ Asanagi をデスクトップアプリにする手順。設計の決定は [03 �
 > - **Stage A**: `tauri dev` でネイティブ窓に Asanagi を表示（dev サーバに接続するだけ・packaging不要）。まずここで「窓が出る」を確認する。
 > - **Stage B**: 本番バンドル（standalone サーバ＋Node をサイドカー同梱し Rust から起動）。難所。
 
+> **現状（2026-11-09 時点・実績）**: **Stage A / B は完了し、3 OS で配布済み**。GitHub Releases に macOS（`.dmg` / `.app.tar.gz`・aarch64）、Linux（`.AppImage` / `.deb` / `.rpm`）、Windows（`.exe`）を自動アップデート付きで出している（最新 app-v0.5.3）。Node サイドカー起動・空きポート選択・`ASANAGI_DATA_DIR`・レディネス待ち→navigate・起動失敗時のログ付きエラーページ・system node フォールバックは `src-tauri/src/lib.rs` に実装済み。
+> 以降の Stage A / B の記述は**再現手順のリファレンス**として残す。残っているのは **Stage C（Dev ID 署名＋公証の実ビルド検証）** と **Stage D（mailto ハンドラ）**。
+
 出典（一次情報）:
 - 前提条件: https://v2.tauri.app/start/prerequisites
 - 開発 / devUrl・beforeDevCommand: https://v2.tauri.app/develop
@@ -16,7 +19,7 @@ Asanagi をデスクトップアプリにする手順。設計の決定は [03 �
 
 ---
 
-## Stage A — まずネイティブ窓を出す
+## Stage A — まずネイティブ窓を出す ✅ 完了（再現手順リファレンス）
 
 ### A-1. 前提ツール（初回のみ・あなたの環境）
 
@@ -74,19 +77,21 @@ npm run tauri dev
 
 ---
 
-## Stage B — 本番バンドル（Node サイドカー）※次の山場
+## Stage B — 本番バンドル（Node サイドカー）✅ 実装・出荷済み
 
-方針: `BUILD_STANDALONE=1 npm run build:standalone` で `.next-standalone/standalone/server.js` を作り、これを **Node ランタイムごと**サイドカー同梱して Rust 起動時に spawn、WebView を `http://localhost:<port>` に向ける。
+方針: `BUILD_STANDALONE=1 npm run build:standalone`（＝`package.json` の `build:standalone`）で `.next-standalone/standalone/server.js` を作り、これを **Node ランタイムごと**サイドカー同梱して Rust 起動時に spawn、WebView を `http://127.0.0.1:<port>` に向ける。
 
-未確定の課題（着手時に詰める）:
-- **Node の同梱方法**: `node` バイナリを `externalBin` として target triple 付きで同梱（`sidecar-<triple>`）／または SEA 等で単一バイナリ化。node:sqlite は Node 22+ ビルトインのため単純な pkg 化は不可。`node` 同梱が現実的。
-- **server.js と node_modules の同梱**: `.next-standalone/standalone` を Tauri の `resources` に含める。
-- **`.data` の保存先**: `ASANAGI_DATA_DIR` を OS アプリデータ領域（例 `~/Library/Application Support/Asanagi`）に設定して spawn（コードは対応済み: store.ts / db.ts）。
-- **ポート**: 空きポートを動的に選んで server に渡し、WebView もそのポートへ。
-- **OAuth リダイレクト**: Gmail 認証のコールバックURL（現在 localhost 前提）の扱い。
-- **権限**: `shell:allow-execute`（sidecar: true）を capabilities に付与。
+**実装済みの要素（`src-tauri/src/lib.rs` / `tauri.conf.json`）**:
+- **Node 同梱**: `src-tauri/binaries/node`（公式 node バイナリ・約118MB）を `bundle.resources` で同梱。node:sqlite が Node 22+ ビルトインのため pkg 化せず node 同梱。実行時に書込可能な app-data へコピーして `chmod +x`（resource dir が読み取り専用でも動くように）。bundled が動かない環境では **system node へフォールバック**（`system_node()`）。
+- **server.js と node_modules の同梱**: `../.next-standalone/standalone` を resource `server/` として同梱（`bundle.resources`）。
+- **`.data` の保存先**: `ASANAGI_DATA_DIR` を `app_data_dir()`（例 `~/Library/Application Support/com.foresthill.asanagi`）に設定して spawn。`server.log` もそこへ。
+- **ポート**: `free_port()` で空きポートを動的選択（固定3100の EADDRINUSE 回避）。
+- **レディネス**: 最大20秒 TCP 接続を待ってから WebView を `127.0.0.1:<port>` へ navigate（`localhost` の IPv6 `::1` 誤解決を避けるため 127.0.0.1 固定）。起動失敗時はログ付きの日本語エラーページを表示。
+- **自動アップデート / ヘルプメニュー**: `tauri-plugin-updater` で起動時バックグラウンド更新＋手動確認、ヘルプメニューからログフォルダを開ける。
 
-これらは Stage A が通ってから、1つずつ実機検証して進める。
+**出荷実績**: GitHub Releases に macOS/Linux/Windows を配布（最新 app-v0.5.3・自動アップデート付き）。
+
+> 旧 docs では「次の山場（未確定）」としていたが、上記の通り実装・配布済み。OAuth リダイレクト（Gmail コールバック）は現状 localhost 前提のまま動いているが、配布環境での挙動は継続確認対象。
 
 ---
 
