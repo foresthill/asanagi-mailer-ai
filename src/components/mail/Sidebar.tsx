@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import type { FolderView } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { AiStatusChip } from "./AiStatusChip";
 import { StorageMeter, type StorageInfo } from "./StorageMeter";
 import { ThemeToggle } from "./ThemeToggle";
 import { ColorPreset } from "./ColorPreset";
@@ -451,6 +452,10 @@ export function Sidebar({
 
       <div className="mt-auto flex flex-col gap-1">
         <StorageMeter storage={storage} />
+        {/* 今どのAIに繋がっているかを常時表示（オンプレは死活も）。クリックで接続設定。 */}
+        <div className="px-2">
+          <AiStatusChip onOpenSettings={onOpenSettings} />
+        </div>
         <div className="px-2">
           {/* 最初に必要なのはメール接続。ここが未設定のときだけ警告色で促す。
               AI(BYOK)は任意の二次設定なので、未設定でも警告は出さない
