@@ -154,3 +154,40 @@ codesign -d --entitlements - --xml "$APP/Contents/Resources/.../node" 2>/dev/nul
   `--deep` 挙動の回避）を検討する。初回公証が失敗したら **Apple の notarization ログ**
   （`xcrun notarytool log <submission-id>`）を読んで、どの実行ファイルが弾かれたかで切り分ける。
 - これらは実証明書＋App用パスワードでの実ビルドが要るため、ここまでは**設定のみ**（実公証は未検証）。
+
+---
+
+## Stage D — mailto ハンドラ（朝凪を「既定メール」にする）
+
+**狙い**: 他アプリの「メールで開く」や Web ページの `mailto:` リンクを押したとき、Mail.app ではなく **朝凪の作成画面**が開くようにする。Claude Desktop の「メールで開く」もこれで朝凪に流せる。
+
+### D-1. 調査で確定した事実（2026-11-09・実機確認）
+
+- **macOS の仕組み（✅実機確認）**: `mailto:` は OS の「既定メールリーダー」に routed される。このMacでは `LSHandlers` に mailto の上書きが無く、`Mail.app`（`CFBundleURLSchemes=[mailto]` + `LSIsAppleDefaultForScheme=true`）が既定。アプリが Info.plist で `mailto` を宣言すれば「既定メール」候補に並び、**ユーザーが手動で既定に設定**できる（Spark/Outlook/Thunderbird と同じ）。macOS は**既定ハンドラの実行時登録を許さない**＝強制設定は不可、ユーザー操作が必須（Apple仕様）。
+- **Claude Desktop「メールで開く」= `mailto:`（✅実機確認）**: 既定が Mail.app の状態で Claude Desktop の「メールで開く」を押すと、Mail.app が宛先・件名・本文入り（prefill）で起動した。したがって `mailto:` を発行している。→ 朝凪を既定メールにすれば、同じ押下で朝凪が開く。
+- **Tauri v2 側（✅公式ドキュメント確認）**:
+  - `bundle.macOS.infoPlist`（別 plist を merge）で **`CFBundleURLTypes` に `mailto` を宣言**し、アプリを mailto ハンドラにできる。
+  - deep-link プラグイン（`plugins.deep-link.desktop.schemes` に `"mailto"`）＋ JS `onOpenUrl` / Rust `app.deep_link().on_open_url(...)` で、開かれた `mailto:…` URL を実行時に受け取れる。
+  - 注意: 「実行時のスキーム登録は macOS 不可」「アプリは `/Applications` 配下に居る必要」。
+
+出典（一次情報）:
+- Tauri v2 Deep Linking（schemes / onOpenUrl / macは実行時登録不可・/Applications要件）: https://v2.tauri.app/plugin/deep-linking/
+- macOS URL スキーム宣言（CFBundleURLTypes）: https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleurltypes
+
+### D-2. 前提（この Stage に入る条件）
+
+- **Stage B（本番バンドル）が通っていること**。mailto ハンドラは「インストールされた実アプリ」でしか機能しない（`tauri dev` の窓では既定メールになれない）。
+- 署名済みアプリ（Stage C）だと配布先でも素直に既定に設定できる。
+
+### D-3. 実装に必要なもの（Stage B 後に着手）
+
+1. **`src-tauri/Info.plist`（merge用・新規）**に `CFBundleURLTypes` を追加（`CFBundleURLSchemes = [mailto]`）。`tauri.conf.json` の `bundle.macOS.infoPlist` でこの plist を指すか、既存の infoPlist に merge。
+2. **deep-link プラグイン**を導入し、`plugins.deep-link.desktop.schemes` に `"mailto"` を追加。capabilities に deep-link 権限。
+3. **受信ハンドラ**: `onOpenUrl` で受けた `mailto:foo@example.com?subject=...&body=...` を**パース**（to / cc / bcc / subject / body、`%` デコード）し、朝凪の**作成画面を開く**（既存の作成タブに宛先・件名・本文をプリフィル）。既存の「ワークタブ化」（PR#323）に流し込む形が自然。
+4. **既定設定の導線**: 初回起動時などに「朝凪を既定メールにしますか？」の案内（macOS は強制不可なので、システム設定 or Mail.app の「デフォルトのメールアプリ」で選んでもらう）。
+
+### D-4. 未検証・残課題（実装時に実機で詰める）
+
+- deep-link プラグインが `"mailto"`（標準スキーム）を**desktop で受けられるか**は、プラグインの docs に標準スキームの明記が無い（カスタムスキーム例が中心）。`CFBundleURLTypes` での宣言＋Apple Event (`kAEGetURL`) 経由で `onOpenUrl` が発火する想定だが、**実アプリで要確認**。発火しない場合は Rust 側で `kAEGetURL` を直接ハンドルする代替を検討。
+- `mailto` の本文長・改行・日本語の `%` エンコードの取りこぼし（パーサの堅牢性）。
+- 「既定メール」にした状態で、通常の Web リンクの `mailto:` も全部朝凪に来る（意図通りだが、ユーザーに説明が要る）。
