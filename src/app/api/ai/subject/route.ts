@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateText } from "ai";
-import { loadAIConfig, resolveModel } from "@/lib/ai/model";
+import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import { SUBJECT_SYSTEM } from "@/lib/ai/prompts";
 import { logAiUsage } from "@/lib/db";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "本文が空です" }, { status: 400 });
   }
 
-  const cfg = await loadAIConfig();
+  const cfg = await loadActiveAIConfig();
   if (!cfg.configured) {
     // No key: fall back to the first non-empty, non-quoted line, trimmed.
     const line = body

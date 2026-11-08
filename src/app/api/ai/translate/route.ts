@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateText } from "ai";
-import { loadAIConfig, resolveModel } from "@/lib/ai/model";
+import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import { PiiMasker } from "@/lib/ai/pii";
 import { cleanForAI } from "@/lib/ai/clean";
 
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   }
   const lang = LANGS[target ?? "en"] ?? "English";
 
-  const cfg = await loadAIConfig();
+  const cfg = await loadActiveAIConfig();
   if (!cfg.configured) {
     return NextResponse.json(
       { error: "AIキーが未設定です（設定から接続してください）" },

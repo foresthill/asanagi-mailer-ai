@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { loadAIConfig, resolveModel } from "@/lib/ai/model";
+import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import {
   PROJECTS_SYSTEM,
   projectsContext,
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
     .json()
     .then((b) => (b as { locale?: string })?.locale)
     .catch(() => undefined);
-  const cfg = await loadAIConfig();
+  const cfg = await loadActiveAIConfig();
   if (!cfg.configured) {
     return NextResponse.json(
       { error: "AIキーが未設定です（接続設定から設定してください）" },

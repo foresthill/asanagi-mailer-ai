@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { loadAIConfig, resolveModel } from "@/lib/ai/model";
+import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import { SWEEP_SYSTEM, profileBlock, langDirective } from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage } from "@/lib/db";
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const cfg = await loadAIConfig();
+  const cfg = await loadActiveAIConfig();
   const ai = await getAISettings();
 
   // Jev（System One）: 未判定分を Jev で処分判定（高速・安価・型付き）。1メール=1コール

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { loadAIConfig, resolveModel } from "@/lib/ai/model";
+import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import {
   REPLY_SYSTEM,
   emailContext,
@@ -23,7 +23,7 @@ const draftSchema = z.object({
 
 export async function POST(req: Request) {
   const { email, guidance, history } = (await req.json()) as DraftRequest;
-  const cfg = await loadAIConfig();
+  const cfg = await loadActiveAIConfig();
 
   // Graceful fallback so the app works before any API key is configured.
   if (!cfg.configured) {

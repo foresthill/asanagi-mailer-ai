@@ -55,6 +55,7 @@ interface View {
   models: Record<AIProvider, string>;
   judgmentModels: Record<AIProvider, string>;
   baseUrl: string;
+  fallbackProvider: "none" | AIProvider;
   piiMask: boolean;
   nerMask: boolean;
   keys: Record<AIProvider, KeyStatus>;
@@ -137,6 +138,10 @@ export function ConnectionsSettings({
   const [judgmentModel, setJudgmentModel] = useState("");
   // OpenAI-compatible endpoint (e.g. Ollama /v1) — on-prem inference.
   const [baseUrl, setBaseUrl] = useState("");
+  // On-prem→cloud fallback target (opt-in, default "none").
+  const [fallbackProvider, setFallbackProvider] = useState<"none" | AIProvider>(
+    "none",
+  );
   // Keys the user typed this session (per provider). Empty string = clear.
   const [keyInputs, setKeyInputs] = useState<
     Partial<Record<AIProvider, string>>
@@ -172,6 +177,7 @@ export function ConnectionsSettings({
       setModel(modelForProvider(data, initProvider));
       setJudgmentModel(judgmentForProvider(data, initProvider));
       setBaseUrl(data.baseUrl ?? "");
+      setFallbackProvider(data.fallbackProvider ?? "none");
       setKeyInputs({});
       setJevKeyInput(undefined);
     } finally {
@@ -213,6 +219,7 @@ export function ConnectionsSettings({
         provider,
         ...modelFields,
         baseUrl,
+        fallbackProvider,
         keys,
         // Only send the Jev key when the user touched the field (undefined = keep).
         ...(jevKeyInput !== undefined ? { jevApiKey: jevKeyInput } : {}),
@@ -507,6 +514,30 @@ export function ConnectionsSettings({
                 <span className="text-[11px] text-fg-subtle">
                   {t("conn.endpoint.note")}
                 </span>
+                {/* オンプレ断時のフォールバック先（opt-in・既定なし）。選ぶと本文が
+                    クラウドに出るため、発動時は PII マスクが強制される。 */}
+                <div className="mt-1 flex flex-col gap-1.5 rounded-lg border border-border/70 bg-surface/50 p-2">
+                  <span className="text-xs font-medium text-fg-muted">
+                    {t("conn.fallback.label")}
+                  </span>
+                  <select
+                    value={fallbackProvider}
+                    onChange={(e) =>
+                      setFallbackProvider(
+                        e.target.value as "none" | AIProvider,
+                      )
+                    }
+                    className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+                  >
+                    <option value="none">{t("conn.fallback.none")}</option>
+                    <option value="anthropic">Claude (Anthropic)</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="gateway">Vercel AI Gateway</option>
+                  </select>
+                  <span className="text-[11px] text-fg-subtle">
+                    {t("conn.fallback.note")}
+                  </span>
+                </div>
               </div>
             )}
 
