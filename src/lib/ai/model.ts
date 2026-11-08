@@ -3,7 +3,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
 import { getAISettings } from "@/lib/store";
-import type { AIProvider } from "@/lib/types";
+import type { AIProvider, AISettings } from "@/lib/types";
 
 /**
  * Provider abstraction so the email AI can run on Claude, OpenAI, OpenRouter,
@@ -72,60 +72,54 @@ function envKey(p: AIProvider): string | undefined {
   }
 }
 
-function isProvider(v: string): v is AIProvider {
+export function isProvider(v: string): v is AIProvider {
   return (PROVIDERS as readonly string[]).includes(v);
 }
 
-/**
- * Resolve the active AI configuration from in-app settings, falling back to
- * environment variables. Async because settings are read from local storage.
- */
-export async function loadAIConfig(): Promise<AIConfig> {
-  const s = await getAISettings();
+/** True when the active provider is an on-prem OpenAI-compatible endpoint. */
+export function isOnprem(cfg: Pick<AIConfig, "provider" | "baseUrl">): boolean {
+  return cfg.provider === "openai" && Boolean(cfg.baseUrl);
+}
 
+/** Human-facing endpoint label (no secrets): host for on-prem, provider otherwise. */
+export function endpointLabel(cfg: Pick<AIConfig, "provider" | "baseUrl">): string {
+  if (isOnprem(cfg) && cfg.baseUrl) {
+    try {
+      return new URL(cfg.baseUrl).host;
+    } catch {
+      return cfg.baseUrl;
+    }
+  }
+  return cfg.provider;
+}
+
+/** Resolve the full AIConfig for one specific provider from the stored settings. */
+function buildConfig(s: AISettings, provider: AIProvider, explicit: boolean): AIConfig {
   const storedKey = (p: AIProvider) => s.keys?.[p]?.trim() || undefined;
   const mergedKey = (p: AIProvider) => storedKey(p) ?? envKey(p);
-
-  const explicitSetting =
-    s.provider && s.provider !== "auto" && isProvider(s.provider) ? s.provider : undefined;
-  const envRaw = (process.env.AI_PROVIDER ?? "").toLowerCase();
-  const explicitEnv = isProvider(envRaw) ? envRaw : undefined;
-
-  const autoDetect = (): AIProvider => {
-    for (const p of PROVIDERS) if (mergedKey(p)) return p;
-    return "anthropic";
-  };
-
-  const provider = explicitSetting ?? explicitEnv ?? autoDetect();
-  // Model is per-provider now: models[provider] → legacy shared `model` → env →
-  // default. Lets OpenRouter⇄Anthropic etc. keep their own model across switches.
+  // Model is per-provider: models[provider] → legacy shared `model` → env → default.
   const model =
     s.models?.[provider]?.trim() ||
     s.model?.trim() ||
     process.env.AI_MODEL ||
     DEFAULT_MODELS[provider];
-  // Judgment model is opt-in; empty → same as the main model (no change).
   const judgmentModel =
     s.judgmentModels?.[provider]?.trim() || s.judgmentModel?.trim() || model;
   const apiKey = mergedKey(provider);
-  // baseUrl applies only to the openai provider (OpenAI-compatible endpoints
-  // like Ollama). Ignored for the others.
+  // baseUrl applies only to the openai provider (OpenAI-compatible endpoints).
   const baseUrl = provider === "openai" ? s.baseUrl?.trim() || undefined : undefined;
   const configured =
     provider === "gateway"
       ? Boolean(apiKey || process.env.VERCEL_OIDC_TOKEN)
-      : // A custom OpenAI-compatible endpoint (e.g. a bare local Ollama) may need
-        // no key, so a set baseUrl counts as configured on its own.
-        Boolean(apiKey) || Boolean(baseUrl);
+      : Boolean(apiKey) || Boolean(baseUrl);
   const source: "settings" | "env" =
     storedKey(provider) ||
-    explicitSetting ||
+    explicit ||
     s.models?.[provider]?.trim() ||
     s.model?.trim() ||
     baseUrl
       ? "settings"
       : "env";
-
   return {
     provider,
     model,
@@ -137,6 +131,100 @@ export async function loadAIConfig(): Promise<AIConfig> {
     piiMask: s.piiMask ?? true,
     nerMask: s.nerMask ?? false,
   };
+}
+
+/** Pick the active provider: explicit setting → AI_PROVIDER env → auto-detect. */
+function pickProvider(s: AISettings): { provider: AIProvider; explicit: boolean } {
+  const explicitSetting =
+    s.provider && s.provider !== "auto" && isProvider(s.provider) ? s.provider : undefined;
+  const envRaw = (process.env.AI_PROVIDER ?? "").toLowerCase();
+  const explicitEnv = isProvider(envRaw) ? envRaw : undefined;
+  if (explicitSetting) return { provider: explicitSetting, explicit: true };
+  if (explicitEnv) return { provider: explicitEnv, explicit: true };
+  const storedKey = (p: AIProvider) => s.keys?.[p]?.trim() || undefined;
+  for (const p of PROVIDERS) if (storedKey(p) ?? envKey(p)) return { provider: p, explicit: false };
+  return { provider: "anthropic", explicit: false };
+}
+
+/**
+ * Resolve the active AI configuration from in-app settings, falling back to
+ * environment variables. Async because settings are read from local storage.
+ */
+export async function loadAIConfig(): Promise<AIConfig> {
+  const s = await getAISettings();
+  const { provider, explicit } = pickProvider(s);
+  return buildConfig(s, provider, explicit);
+}
+
+// --- On-prem reachability probe (shared with /api/ai/status), cached briefly ---
+// Keeps the hot AI-call path from re-probing the tunnel on every request while
+// still noticing a dropped/restored tunnel within a few seconds.
+const REACH_TTL_MS = 15_000;
+const reachCache = new Map<string, { ok: boolean; at: number }>();
+
+export async function probeOnpremReachable(baseUrl: string, apiKey?: string): Promise<boolean> {
+  const url = `${baseUrl.replace(/\/+$/, "")}/models`;
+  const now = Date.now();
+  const hit = reachCache.get(url);
+  if (hit && now - hit.at < REACH_TTL_MS) return hit.ok;
+  let ok = false;
+  try {
+    const res = await fetch(url, {
+      headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+      signal: AbortSignal.timeout(3500),
+    });
+    ok = res.ok;
+  } catch {
+    ok = false;
+  }
+  reachCache.set(url, { ok, at: now });
+  return ok;
+}
+
+export interface ActiveAIConfig extends AIConfig {
+  /** True when the on-prem primary was unreachable and we switched to the cloud fallback. */
+  fallbackActive: boolean;
+  /** When fallbackActive, the on-prem primary we fell back FROM (for UI/logs). */
+  primary?: { provider: AIProvider; model: string; endpoint: string };
+}
+
+/**
+ * Like loadAIConfig, but applies the opt-in on-prem→cloud fallback. Feature
+ * routes use THIS so a dropped SSH tunnel degrades to the user's chosen cloud
+ * provider instead of failing — but ONLY when they opted in (settings
+ * `fallbackProvider`). On fallback, PII masking is FORCED on (piiMask + nerMask),
+ * because bodies that were meant to stay on the LAN would now reach the cloud.
+ * When no fallback applies it is identical to loadAIConfig (fallbackActive:false).
+ */
+export async function loadActiveAIConfig(): Promise<ActiveAIConfig> {
+  const s = await getAISettings();
+  const primary = await loadAIConfig();
+  const fb = s.fallbackProvider;
+  const fbIsProvider =
+    typeof fb === "string" && fb !== "none" && isProvider(fb) && fb !== "openai";
+
+  if (isOnprem(primary) && fbIsProvider) {
+    const fbCfg = buildConfig(s, fb as AIProvider, false);
+    if (fbCfg.configured) {
+      const reachable = await probeOnpremReachable(primary.baseUrl!, primary.apiKey);
+      if (!reachable) {
+        return {
+          ...fbCfg,
+          // Bodies now leave the LAN — never ship them unmasked.
+          piiMask: true,
+          nerMask: true,
+          fallbackActive: true,
+          primary: {
+            provider: primary.provider,
+            model: primary.model,
+            endpoint: endpointLabel(primary),
+          },
+        };
+      }
+    }
+  }
+
+  return { ...primary, fallbackActive: false };
 }
 
 /** Build the language model for the given resolved config. */

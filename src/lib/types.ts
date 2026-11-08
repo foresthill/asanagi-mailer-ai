@@ -258,6 +258,15 @@ export interface AISettings {
    * Ollama needs no key.
    */
   baseUrl?: string;
+  /**
+   * Opt-in fallback for when the on-prem endpoint (provider `openai` + `baseUrl`,
+   * e.g. an Ollama behind an SSH tunnel) is unreachable. When set to a cloud
+   * provider (that has a key configured), the mail AI automatically switches to
+   * it instead of failing — with PII masking FORCED on, since bodies would then
+   * leave the LAN. `"none"` / empty → no fallback (AI just stops; safest, default).
+   * Only consulted while the active provider is on-prem.
+   */
+  fallbackProvider?: AIProvider | "none";
 }
 
 // ---------------------------------------------------------------------------

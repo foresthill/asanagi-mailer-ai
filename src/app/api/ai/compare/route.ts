@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { loadAIConfig, resolveModel } from "@/lib/ai/model";
+import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import {
   CLASSIFY_SYSTEM,
   classifyContext,
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
 
   const [cfg, ai, signals, threatSenders, safeSenders, profile] =
     await Promise.all([
-      loadAIConfig(),
+      loadActiveAIConfig(),
       getAISettings(),
       listSignals(),
       listThreatSenders(),

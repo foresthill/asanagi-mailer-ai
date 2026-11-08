@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { loadAIConfig, resolveModel } from "@/lib/ai/model";
+import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import { REFINE_SYSTEM, emailContext, writingNoteBlock } from "@/lib/ai/prompts";
 import { getWritingNote } from "@/lib/store";
 import { logAiUsage } from "@/lib/db";
@@ -23,7 +23,7 @@ interface Body {
 
 export async function POST(req: Request) {
   const { email, draft, instruction, selection, subject } = (await req.json()) as Body;
-  const cfg = await loadAIConfig();
+  const cfg = await loadActiveAIConfig();
 
   // No key: return the draft unchanged → client computes "変更なし".
   if (!cfg.configured) {

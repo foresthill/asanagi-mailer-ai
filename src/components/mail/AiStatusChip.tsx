@@ -16,9 +16,12 @@ type AiStatus = {
   endpoint: string;
   /** true = live-reachable (on-prem probe), false = down/not-set, null = cloud (not pinged). */
   reachable: boolean | null;
-  modelCount: number | null;
-  modelMissing?: boolean;
-  error?: string;
+  /** Configured standby fallback (on-prem only), or null. */
+  fallback: { provider: string } | null;
+  /** True when the tunnel is down and the cloud fallback is serving right now. */
+  fallbackActive: boolean;
+  /** What is actually answering while fallbackActive. */
+  serving: { provider: string; model: string } | null;
 };
 
 const POLL_MS = 45_000;
@@ -63,11 +66,22 @@ export function AiStatusChip({ onOpenSettings }: { onOpenSettings: () => void })
     };
   }, []);
 
-  // Dot colour + short status word from the snapshot.
+  // Dot colour + what's actually serving + short status word from the snapshot.
   let dot = "bg-fg-subtle";
   let label = t("aistatus.checking");
+  // What is answering right now: normally the primary, but the cloud fallback
+  // when the tunnel is down and fallback is serving (so the user sees bodies are
+  // going to the cloud).
+  let serving = s ? `${s.provider}:${s.model}` : "AI";
+  let endpoint = s?.endpoint ?? "";
   if (s) {
-    if (!s.configured) {
+    if (s.fallbackActive && s.serving) {
+      // On-prem down → cloud is serving. Amber = "your bodies are on the cloud now".
+      dot = "bg-amber-500";
+      label = t("aistatus.fallback");
+      serving = `${s.serving.provider}:${s.serving.model}`;
+      endpoint = s.serving.provider;
+    } else if (!s.configured) {
       dot = "bg-fg-subtle";
       label = t("aistatus.notset");
     } else if (s.reachable === true) {
@@ -83,9 +97,8 @@ export function AiStatusChip({ onOpenSettings }: { onOpenSettings: () => void })
     }
   }
 
-  const primary = s ? `${s.provider}:${s.model}` : "AI";
-  const sub = s ? (s.endpoint ? `${label} · ${s.endpoint}` : label) : label;
-  const title = `${t("aistatus.open")}${s ? ` — ${s.provider}:${s.model} (${s.endpoint})` : ""}`;
+  const sub = endpoint ? `${label} · ${endpoint}` : label;
+  const title = `${t("aistatus.open")}${s ? ` — ${serving} (${endpoint})` : ""}`;
 
   return (
     <button
@@ -101,7 +114,7 @@ export function AiStatusChip({ onOpenSettings }: { onOpenSettings: () => void })
         )}
       />
       <span className="flex min-w-0 flex-1 flex-col text-left leading-tight">
-        <span className="truncate">{primary}</span>
+        <span className="truncate">{serving}</span>
         <span className="truncate text-[10px] text-fg-subtle">{sub}</span>
       </span>
     </button>

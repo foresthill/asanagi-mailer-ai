@@ -39,6 +39,7 @@ async function safeView() {
     models,
     judgmentModels,
     baseUrl: s.baseUrl ?? "",
+    fallbackProvider: s.fallbackProvider ?? "none",
     piiMask: s.piiMask ?? true,
     nerMask: s.nerMask ?? false,
     keys,
@@ -91,6 +92,14 @@ export async function POST(req: Request) {
     }
   }
   if (typeof body.baseUrl === "string") patch.baseUrl = body.baseUrl.trim();
+  // On-prem→cloud fallback target: "none" or a valid cloud provider.
+  if (
+    body.fallbackProvider === "none" ||
+    (typeof body.fallbackProvider === "string" &&
+      PROVIDERS.includes(body.fallbackProvider))
+  ) {
+    patch.fallbackProvider = body.fallbackProvider;
+  }
   if (typeof body.jevApiKey === "string") patch.jevApiKey = body.jevApiKey; // "" clears (store)
   if (body.jevEndpoint === "typesafe" || body.jevEndpoint === "openrouter")
     patch.jevEndpoint = body.jevEndpoint;

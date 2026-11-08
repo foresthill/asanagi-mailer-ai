@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { loadAIConfig, resolveModel } from "@/lib/ai/model";
+import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import { SIGNATURE_SYSTEM } from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { logAiUsage } from "@/lib/db";
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "本文が空です" }, { status: 400 });
   }
 
-  const cfg = await loadAIConfig();
+  const cfg = await loadActiveAIConfig();
   if (!cfg.configured) {
     return NextResponse.json(
       { error: "AIが未設定です（接続設定から設定してください）" },

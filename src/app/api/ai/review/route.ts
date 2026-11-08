@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { loadAIConfig, resolveModel } from "@/lib/ai/model";
+import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import { emailContext } from "@/lib/ai/prompts";
 import { logAiUsage } from "@/lib/db";
 import { PiiMasker } from "@/lib/ai/pii";
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   if (!draft?.trim()) {
     return NextResponse.json({ error: "draft required" }, { status: 400 });
   }
-  const cfg = await loadAIConfig();
+  const cfg = await loadActiveAIConfig();
   if (!cfg.configured) {
     return NextResponse.json(
       { error: "AIキーが未設定です（設定から接続してください）" },

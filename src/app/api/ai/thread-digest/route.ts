@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { loadAIConfig, resolveModel } from "@/lib/ai/model";
+import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import { DIGEST_SYSTEM, langDirective } from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import { cleanForAI } from "@/lib/ai/clean";
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "スレッドが空です" }, { status: 400 });
   }
 
-  const cfg = await loadAIConfig();
+  const cfg = await loadActiveAIConfig();
   if (!cfg.configured) {
     return NextResponse.json(
       {

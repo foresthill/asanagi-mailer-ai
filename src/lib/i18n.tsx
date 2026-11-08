@@ -356,6 +356,10 @@ const ja: Dict = {
   "conn.endpoint.empty":
     "接続OK。ただしモデル未取得です（サーバ側で ollama pull してください）。",
   "conn.endpoint.pick": "一覧から選択",
+  "conn.fallback.label": "オンプレ断時のフォールバック先",
+  "conn.fallback.none": "なし（AIを停止・最も安全／既定）",
+  "conn.fallback.note":
+    "トンネルが落ちた時だけ、選んだクラウドに自動で切替えます。本文がクラウドに出るため、発動中はPIIマスクを強制し、画面にも「クラウド代替中」と表示します。選んだプロバイダにキーが必要です。",
   "conn.judge": "判定用モデル ID（朝の一凪・重要度判定／任意）",
   "conn.judge.placeholder.cheap": "安価な例: {model}",
   "conn.judge.placeholder.same": "空欄ならメインと同じ",
@@ -394,6 +398,7 @@ const ja: Dict = {
   "aistatus.notset": "AI未設定",
   "aistatus.checking": "確認中…",
   "aistatus.open": "クリックで接続設定を開く",
+  "aistatus.fallback": "クラウド代替中",
   "conn.test.ok": "接続OK — {label}",
   "conn.test.fail": "接続テストに失敗しました",
   "conn.pii.title": "個人情報マスキング（推奨・既定ON）",
@@ -1169,6 +1174,10 @@ const en: Dict = {
   "conn.endpoint.empty":
     "Connected, but no models yet (run `ollama pull` on the server).",
   "conn.endpoint.pick": "Pick from list",
+  "conn.fallback.label": "Fallback when on-prem is down",
+  "conn.fallback.none": "None (stop AI · safest · default)",
+  "conn.fallback.note":
+    "Only when the tunnel drops, automatically switch to the chosen cloud provider. Bodies then leave the LAN, so PII masking is forced on and the UI shows “Cloud fallback”. The chosen provider needs a key.",
   "conn.judge": "Judgment model ID (Morning Sweep / importance / optional)",
   "conn.judge.placeholder.cheap": "Cheap example: {model}",
   "conn.judge.placeholder.same": "Empty = same as main",
@@ -1208,6 +1217,7 @@ const en: Dict = {
   "aistatus.notset": "No AI",
   "aistatus.checking": "Checking…",
   "aistatus.open": "Open AI connection settings",
+  "aistatus.fallback": "Cloud fallback",
   "conn.test.ok": "Connected — {label}",
   "conn.test.fail": "Connection test failed",
   "conn.pii.title": "PII masking (recommended, on by default)",
@@ -1998,6 +2008,10 @@ const fr: Dict = {
   "conn.endpoint.empty":
     "Connecté, mais aucun modèle (lancez « ollama pull » sur le serveur).",
   "conn.endpoint.pick": "Choisir dans la liste",
+  "conn.fallback.label": "Secours si le sur-site est hors ligne",
+  "conn.fallback.none": "Aucun (arrêter l’IA · le plus sûr · défaut)",
+  "conn.fallback.note":
+    "Uniquement quand le tunnel tombe, bascule automatiquement vers le fournisseur cloud choisi. Les contenus quittent alors le LAN : le masquage PII est forcé et l’interface affiche « Secours cloud ». Le fournisseur choisi doit avoir une clé.",
   "conn.judge":
     "ID du modèle de tri (Accalmie du matin / importance / facultatif)",
   "conn.judge.placeholder.cheap": "Exemple économique : {model}",
@@ -2038,6 +2052,7 @@ const fr: Dict = {
   "aistatus.notset": "Aucune IA",
   "aistatus.checking": "Vérification…",
   "aistatus.open": "Ouvrir les réglages de connexion IA",
+  "aistatus.fallback": "Secours cloud",
   "conn.test.ok": "Connecté — {label}",
   "conn.test.fail": "Le test de connexion a échoué",
   "conn.pii.title":
@@ -2805,6 +2820,10 @@ const zh: Dict = {
   "conn.endpoint.fail": "未连接。请检查 SSH 隧道／端点。",
   "conn.endpoint.empty": "已连接，但尚无模型（请在服务器执行 ollama pull）。",
   "conn.endpoint.pick": "从列表选择",
+  "conn.fallback.label": "本地断连时的回退目标",
+  "conn.fallback.none": "无（停止 AI・最安全・默认）",
+  "conn.fallback.note":
+    "仅当隧道断开时，自动切换到所选云端提供商。正文将离开局域网，因此回退期间强制启用 PII 脱敏，界面会显示“云端备用中”。所选提供商需要密钥。",
   "conn.judge": "判定用模型 ID（晨间一凪・重要度判定／可选）",
   "conn.judge.placeholder.cheap": "便宜示例：{model}",
   "conn.judge.placeholder.same": "留空＝与主模型相同",
@@ -2843,6 +2862,7 @@ const zh: Dict = {
   "aistatus.notset": "未设置 AI",
   "aistatus.checking": "检查中…",
   "aistatus.open": "点击打开连接设置",
+  "aistatus.fallback": "云端备用中",
   "conn.test.ok": "连接成功 — {label}",
   "conn.test.fail": "连接测试失败",
   "conn.pii.title": "个人信息脱敏（推荐，默认开启）",
