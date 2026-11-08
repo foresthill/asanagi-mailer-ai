@@ -4,7 +4,7 @@
   "version": "0.5.4",
   "identifier": "com.foresthill.asanagi",
   "build": {
-    "beforeBuildCommand": "npm run build:standalone",
+    "beforeBuildCommand": "npm run build:standalone && bash scripts/sign-mac-sidecar.sh",
     "frontendDist": "splash",
     "devUrl": "http://localhost:3100"
   },
@@ -29,7 +29,7 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "macOS": {
-      "signingIdentity": "-"
+      "signingIdentity": "Developer ID Application: Naoya Morioka (M836YTN2FQ)"
     },
     "resources": {
       "../.next-standalone/standalone": "server",

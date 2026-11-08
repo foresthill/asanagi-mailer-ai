@@ -87,3 +87,70 @@ npm run tauri dev
 - **権限**: `shell:allow-execute`（sidecar: true）を capabilities に付与。
 
 これらは Stage A が通ってから、1つずつ実機検証して進める。
+
+---
+
+## Stage C — コード署名＋公証（macOS 配布）
+
+配布した `.app`/`.dmg` を他の Mac で Gatekeeper 警告なしに開けるようにする。
+**Developer ID Application 証明書での署名時は公証（notarization）が必須**。
+
+出典（一次情報）:
+- Tauri v2 macOS 署名: https://v2.tauri.app/distribute/sign/macos/
+- Hardened Runtime: https://developer.apple.com/documentation/security/hardened_runtime
+- notarytool: https://developer.apple.com/documentation/security/customizing-the-notarization-workflow
+
+### C-1. 前提（あなたの環境）
+
+- Apple Developer Program 加入済み、`Developer ID Application: …` 証明書が keychain にある
+  （確認: `security find-identity -v -p codesigning`）。
+- Xcode 同梱の `notarytool` が使える（`xcrun --find notarytool`）。
+- 公証用の **App 用パスワード**（通常のApple IDパスワードではない）を
+  https://appleid.apple.com → サインインとセキュリティ → App用パスワード で発行しておく。
+
+### C-2. このリポジトリで入れてある設定
+
+- `src-tauri/tauri.conf.json` → `bundle.macOS.signingIdentity` に Developer ID を設定済み。
+  `hardenedRuntime` は Tauri 既定で true（公証の必須要件）。
+  ※ 別マシン/CI では環境変数 `APPLE_SIGNING_IDENTITY` で上書きできる。
+- **同梱 node の再署名**: 公式 node は `Developer ID Application: Node.js Foundation` 署名だが
+  `com.apple.security.get-task-allow=true`（デバッグ用 entitlement）が付いており、これは
+  **公証で弾かれる**。そこで `beforeBuildCommand` で `scripts/sign-mac-sidecar.sh` を実行し、
+  `src-tauri/entitlements-node.plist`（JIT/メモリ/library-validation は残し get-task-allow だけ除外）で
+  **自分の Developer ID に再署名**する。macOS 以外・証明書が無い環境では自動スキップ（従来のアドホックビルドは壊れない）。
+
+### C-3. 署名＋公証ビルドの流し方
+
+> dev サーバ（:3100）を**止めてから**。`tauri build` は `next build` を走らせるため稼働中 dev と競合する。
+
+```bash
+# 公証用の資格情報（App用パスワードは自分のシェルで export。リポジトリに書かない）
+export APPLE_ID="あなたのAppleID@example.com"
+export APPLE_PASSWORD="xxxx-xxxx-xxxx-xxxx"   # App用パスワード
+export APPLE_TEAM_ID="M836YTN2FQ"
+
+# 署名＋公証つきビルド
+npm run tauri build
+```
+
+- 署名は keychain の証明書で自動的に行われる（`APPLE_CERTIFICATE`/`_PASSWORD` はCIで .p12 を使う時だけ）。
+- 公証は上記3変数があると `tauri build` が自動で `notarytool submit` → stapling まで行う。
+- App Store Connect API キー方式を使う場合は `APPLE_API_ISSUER` / `APPLE_API_KEY` / `APPLE_API_KEY_PATH`。
+
+### C-4. 検証（実機・配布前に必ず）
+
+```bash
+APP=src-tauri/target/release/bundle/macos/Asanagi.app
+codesign --verify --deep --strict --verbose=2 "$APP"   # 署名の整合
+spctl -a -vvv -t exec "$APP"                            # Gatekeeper 評価（accepted + Notarized になるか）
+xcrun stapler validate "$APP"                           # 公証チケットが貼られているか
+# 同梱 node に get-task-allow が残っていないこと
+codesign -d --entitlements - --xml "$APP/Contents/Resources/.../node" 2>/dev/null | grep get-task-allow && echo "NG" || echo "OK"
+```
+
+**未検証の残課題（初回の実公証で確認する）**:
+- Tauri がバンドル時に同梱 node を**再署名し直す**かどうか。もし Tauri が app 側の entitlements で
+  node を上書きすると node の JIT 等が壊れうる。その場合は node 用 entitlements を保つ運用（または
+  `--deep` 挙動の回避）を検討する。初回公証が失敗したら **Apple の notarization ログ**
+  （`xcrun notarytool log <submission-id>`）を読んで、どの実行ファイルが弾かれたかで切り分ける。
+- これらは実証明書＋App用パスワードでの実ビルドが要るため、ここまでは**設定のみ**（実公証は未検証）。
