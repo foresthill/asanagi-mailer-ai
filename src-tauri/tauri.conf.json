@@ -29,7 +29,8 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "macOS": {
-      "signingIdentity": "Developer ID Application: Naoya Morioka (M836YTN2FQ)"
+      "signingIdentity": "Developer ID Application: Naoya Morioka (M836YTN2FQ)",
+      "infoPlist": "Info.plist"
     },
     "resources": {
       "../.next-standalone/standalone": "server",
@@ -47,6 +48,11 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["mailto"]
+      }
+    },
     "updater": {
       "endpoints": [
         "https://github.com/foresthill/asanagi-mailer-ai/releases/latest/download/latest.json"
