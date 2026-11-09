@@ -17,6 +17,7 @@ import type {
   OpProjectProgress,
   DevlogIssue,
 } from "@/lib/types";
+import { AiStatusChip } from "./AiStatusChip";
 import { Sidebar } from "./Sidebar";
 import { EmailList } from "./EmailList";
 import { EmailReader } from "./EmailReader";
@@ -2384,6 +2385,11 @@ export function MailApp({
           a composer guard. min-h-0 keeps the column inside the viewport so its
           scrollable children (list/reader) scroll internally, not the page. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {/* 常時表示: いまどの AI に繋がっているか。返信前に必ず目に入るよう最上部へ
+          （クラウド/オンプレの別・到達性をヘルスドットで示す）。 */}
+      <div className="flex h-9 shrink-0 items-center justify-end gap-2 border-b border-border px-3">
+        <AiStatusChip variant="bar" onOpenSettings={() => setShowSettings(true)} />
+      </div>
       {view === "mail" && tabsEnabled && tabs.length > 0 && (
         <WorkTabStrip
           tabs={tabs}
