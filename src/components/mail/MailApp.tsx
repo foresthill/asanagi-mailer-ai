@@ -39,6 +39,7 @@ import type { StorageInfo } from "./StorageMeter";
 import type { AccountInfo } from "@/lib/email/accounts";
 import {
   buildCompose,
+  composeInitFromMailto,
   composeTitle,
   greetTargetOf,
   type ComposeAI,
@@ -301,6 +302,12 @@ export function MailApp({
     if (!makeRoomIfSingle()) return;
     openComposeTab(init, tabTitleForCompose(init));
   };
+  // Live ref so the mount-once mailto listener always calls the current closure
+  // without re-subscribing each render (mirrors singleModeRef below).
+  const startComposeRef = useRef(startCompose);
+  useEffect(() => {
+    startComposeRef.current = startCompose;
+  });
   useEffect(() => {
     singleModeRef.current = {
       off: !tabsEnabled,
@@ -1455,6 +1462,28 @@ export function MailApp({
     );
     setTimeout(() => setToast(null), 4000);
     window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
+  // Desktop (Tauri) mailto handler. The native side (src-tauri/src/lib.rs) receives
+  // an OS `mailto:` open and injects the URL via win.eval — both as a CustomEvent
+  // ("asanagi:mailto") and as a window global set before this listener mounts
+  // (cold start, i.e. the app was launched BY the mailto click). Either path opens
+  // a prefilled compose tab. Harmless in the browser (nothing injects these).
+  useEffect(() => {
+    const handle = (url: unknown) => {
+      if (typeof url !== "string") return;
+      const init = composeInitFromMailto(url);
+      if (init) startComposeRef.current(init);
+    };
+    const w = window as unknown as { __ASANAGI_PENDING_MAILTO__?: string };
+    if (typeof w.__ASANAGI_PENDING_MAILTO__ === "string") {
+      const pending = w.__ASANAGI_PENDING_MAILTO__;
+      w.__ASANAGI_PENDING_MAILTO__ = undefined;
+      handle(pending);
+    }
+    const onEvt = (e: Event) => handle((e as CustomEvent).detail);
+    window.addEventListener("asanagi:mailto", onEvt);
+    return () => window.removeEventListener("asanagi:mailto", onEvt);
   }, []);
 
   const classify = useCallback(

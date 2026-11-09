@@ -1,6 +1,72 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::Manager;
+
+/// Buffers incoming `mailto:` URLs until the webview has loaded. On a cold start
+/// (the app is launched BY a mailto click) the deep-link event fires before the
+/// bundled Node server is up and the window has navigated, so we queue the URL
+/// and flush it once the UI is ready. Managed as Tauri state.
+#[derive(Default)]
+struct MailtoQueue {
+    ready: AtomicBool,
+    pending: Mutex<Vec<String>>,
+}
+
+/// JS injected into the web UI to hand it a mailto URL. Sets a global (read on
+/// mount — covers the listener-not-yet-mounted case) AND dispatches an event
+/// (covers the app-already-running case). The web side parses it into a compose
+/// tab (see src/components/mail/MailApp.tsx). The URL is serde-escaped, so it
+/// cannot break out of the string literal.
+const MAILTO_JS: &str = r#"(function(){
+  var url = __URL__;
+  try { window.__ASANAGI_PENDING_MAILTO__ = url; } catch(e){}
+  try { window.dispatchEvent(new CustomEvent('asanagi:mailto', { detail: url })); } catch(e){}
+})();"#;
+
+/// Deliver a mailto URL to the web UI, or queue it if the UI isn't ready yet.
+/// Only `mailto:` is accepted (other deep links are ignored).
+fn deliver_mailto(handle: &tauri::AppHandle, url: String) {
+    if !url.trim_start().to_ascii_lowercase().starts_with("mailto:") {
+        return;
+    }
+    let state = handle.state::<MailtoQueue>();
+    if state.ready.load(Ordering::SeqCst) {
+        eval_mailto(handle, &url);
+    } else if let Ok(mut q) = state.pending.lock() {
+        log::info!("mailto queued (UI not ready yet)");
+        q.push(url);
+    }
+}
+
+/// Inject one mailto URL into the loaded web UI via `win.eval`.
+fn eval_mailto(handle: &tauri::AppHandle, url: &str) {
+    match handle.get_webview_window("main") {
+        Some(win) => {
+            let json = serde_json::to_string(url).unwrap_or_else(|_| "\"\"".into());
+            let js = MAILTO_JS.replace("__URL__", &json);
+            let _ = win.eval(&js);
+            log::info!("mailto delivered to web UI");
+        }
+        None => log::warn!("mailto: no main window to deliver to"),
+    }
+}
+
+/// Mark the UI ready and flush any mailto URLs that arrived during startup.
+fn flush_mailto(handle: &tauri::AppHandle) {
+    let state = handle.state::<MailtoQueue>();
+    state.ready.store(true, Ordering::SeqCst);
+    // Drain into an owned Vec so the mutex guard is released before we eval
+    // (which reborrows `handle`), avoiding holding the lock across delivery.
+    let urls: Vec<String> = match state.pending.lock() {
+        Ok(mut q) => q.drain(..).collect(),
+        Err(_) => return,
+    };
+    for u in urls {
+        eval_mailto(handle, &u);
+    }
+}
 
 /// Open a file or folder with the OS default handler (file manager / text
 /// viewer). Used by the Help menu so users can reach logs from the GUI instead
@@ -233,6 +299,9 @@ fn start_server(handle: &tauri::AppHandle) {
                     }
                     Err(e) => log::error!("bad server url: {e}"),
                 }
+                // UI is loading — release any mailto URL received during startup
+                // (cold start where the app was launched by a mailto click).
+                flush_mailto(&handle);
             } else {
                 // The server never came up — show an actionable error with the
                 // actual logs embedded (+ a Copy button), so the user doesn't
@@ -482,18 +551,39 @@ async fn check_for_update(handle: tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    use tauri_plugin_deep_link::DeepLinkExt;
     tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(log_plugin())
+        .manage(MailtoQueue::default())
         .setup(|app| {
             // Native Help menu (log access) — available in both dev and release.
             install_menu(app);
+            // mailto: handler — the OS opens a `mailto:` URL (e.g. from "open in
+            // email") and the deep-link plugin hands it here; forward to the web UI
+            // (queued until the UI is ready; see deliver_mailto/flush_mailto).
+            let handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                for u in event.urls() {
+                    deliver_mailto(&handle, u.to_string());
+                }
+            });
+            // Cold start: the launch URL may already be available.
+            if let Ok(Some(urls)) = app.deep_link().get_current() {
+                for u in urls {
+                    deliver_mailto(app.handle(), u.to_string());
+                }
+            }
             // Release: launch the bundled standalone server. Dev: use devUrl.
             if !cfg!(debug_assertions) {
                 start_server(app.handle());
                 // 起動時にバックグラウンドで更新確認（再起動は強制しない＝次回起動で適用）。
                 let h = app.handle().clone();
                 tauri::async_runtime::spawn(check_for_update(h));
+            } else {
+                // Dev loads devUrl immediately, so the mailto queue is ready now.
+                app.state::<MailtoQueue>().ready.store(true, Ordering::SeqCst);
             }
             Ok(())
         })

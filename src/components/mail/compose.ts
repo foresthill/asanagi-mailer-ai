@@ -268,6 +268,53 @@ export function looksLikeAddressList(input: string): boolean {
   );
 }
 
+/**
+ * Parse a `mailto:` URL (RFC 6068) into a "new" ComposeInit, used by the desktop
+ * app's mailto handler so OS `mailto:` links / "open in email" buttons open a
+ * prefilled draft tab. Per RFC 6068 "+" is a literal plus (not a space), so each
+ * field is decoded with decodeURIComponent (NOT URLSearchParams, which maps
+ * "+"→space and would corrupt addresses like `a+b@x.com`). Returns null when the
+ * input is not a mailto URL. Note: `bcc` is parsed-away (ComposeInit has no bcc
+ * field for a live tab); the common "open in email" links don't set it.
+ */
+export function composeInitFromMailto(input: string): ComposeInit | null {
+  const raw = (input ?? "").trim();
+  if (!/^mailto:/i.test(raw)) return null;
+  const rest = raw.slice(raw.indexOf(":") + 1);
+  const qIdx = rest.indexOf("?");
+  const toPart = qIdx >= 0 ? rest.slice(0, qIdx) : rest;
+  const query = qIdx >= 0 ? rest.slice(qIdx + 1) : "";
+  const dec = (s: string): string => {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return s;
+    }
+  };
+  const fields: Record<string, string> = {};
+  for (const pair of query.split("&")) {
+    if (!pair) continue;
+    const eq = pair.indexOf("=");
+    const key = dec(eq >= 0 ? pair.slice(0, eq) : pair).toLowerCase();
+    const val = dec(eq >= 0 ? pair.slice(eq + 1) : "");
+    // Merge repeated to/cc; first value wins for everything else.
+    if (key === "to" || key === "cc") {
+      fields[key] = fields[key] ? `${fields[key]},${val}` : val;
+    } else if (!(key in fields)) {
+      fields[key] = val;
+    }
+  }
+  const toStr = [dec(toPart), fields.to ?? ""].filter(Boolean).join(",");
+  return {
+    kind: "new",
+    mode: "plain",
+    to: parseAddressList(toStr),
+    cc: parseAddressList(fields.cc ?? ""),
+    subject: fields.subject ?? "",
+    body: fields.body ?? "",
+  };
+}
+
 /** Display form: `名前 <a@b.c>` when the name is known, bare address otherwise. */
 export function formatAddressList(list: EmailAddress[]): string {
   return list

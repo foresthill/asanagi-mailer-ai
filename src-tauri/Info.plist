@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged into the app bundle's Info.plist by Tauri (bundle.macOS.infoPlist).
+  Declares Asanagi as a handler for the `mailto:` URL scheme so the user can set
+  it as the default email app; incoming mailto URLs are delivered to the Rust
+  side via the deep-link plugin (see src-tauri/src/lib.rs). CFBundleURLName uses
+  the app's bundle id as a unique handler identifier.
+-->
+<plist version="1.0">
+<dict>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.foresthill.asanagi.mailto</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>mailto</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>
