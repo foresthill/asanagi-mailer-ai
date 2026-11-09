@@ -14,7 +14,15 @@ on:
 
 jobs:
   smoke:
-    runs-on: ubuntu-22.04
+    # macOS も必ず回す: Turbopack の standalone 出力は OS で差があり、external
+    # パッケージ(imapflow)の require がハッシュ名で壊れる事故は **macOS 出力でしか
+    # 出なかった**（Linux は 200 なのに配布した .app が 500）。配布ターゲットの
+    # macOS で「起動して 200」を担保する。
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 

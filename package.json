@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:standalone": "cross-env BUILD_STANDALONE=1 next build && node scripts/copy-standalone-assets.mjs",
+    "build:standalone": "cross-env BUILD_STANDALONE=1 next build --webpack && node scripts/copy-standalone-assets.mjs",
     "start:standalone": "node .next-standalone/standalone/server.js",
     "start": "next start",
     "tauri": "tauri",
