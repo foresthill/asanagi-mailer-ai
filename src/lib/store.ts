@@ -305,6 +305,16 @@ export async function recordWritingSample(
   await writeJson(WRITING_SAMPLES, all.slice(-WRITING_SAMPLES_CAP));
 }
 
+/** Drop one sample (by its `at` timestamp) — used once it's been ruled/dismissed. */
+export async function removeWritingSample(at: string): Promise<void> {
+  if (!at) return;
+  const all = await listWritingSamples();
+  await writeJson(
+    WRITING_SAMPLES,
+    all.filter((x) => x.at !== at),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // プロジェクト・ハブ — AI抽出した案件一覧（pull型）。実データはローカルのみ。
 // ---------------------------------------------------------------------------
