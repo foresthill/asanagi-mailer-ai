@@ -33,7 +33,14 @@ const POLL_MS = 45_000;
  * opens the connection settings. Cloud providers show "設定済み" (configured): we
  * do not ping them because a real request would cost a token.
  */
-export function AiStatusChip({ onOpenSettings }: { onOpenSettings: () => void }) {
+export function AiStatusChip({
+  onOpenSettings,
+  variant = "sidebar",
+}: {
+  onOpenSettings: () => void;
+  /** "sidebar" = full-width footer button; "bar" = compact pill for a top bar. */
+  variant?: "sidebar" | "bar";
+}) {
   const { t } = useI18n();
   const [s, setS] = useState<AiStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -99,6 +106,28 @@ export function AiStatusChip({ onOpenSettings }: { onOpenSettings: () => void })
 
   const sub = endpoint ? `${label} · ${endpoint}` : label;
   const title = `${t("aistatus.open")}${s ? ` — ${serving} (${endpoint})` : ""}`;
+
+  // Compact pill for the always-visible top bar (so the active AI is clear
+  // before replying). Same dot/label logic as the sidebar variant.
+  if (variant === "bar") {
+    return (
+      <button
+        onClick={onOpenSettings}
+        title={title}
+        className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11px] text-fg-muted transition-colors hover:bg-surface hover:text-fg"
+      >
+        <span
+          className={cn(
+            "size-1.5 shrink-0 rounded-full",
+            dot,
+            !loaded && "animate-pulse",
+          )}
+        />
+        <span className="max-w-[200px] truncate font-medium">{serving}</span>
+        <span className="truncate text-fg-subtle">· {sub}</span>
+      </button>
+    );
+  }
 
   return (
     <button
