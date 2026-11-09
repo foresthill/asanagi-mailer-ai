@@ -847,6 +847,22 @@ const ja: Dict = {
   "wnote.example":
     "例:「絵文字は使わない」「過剰敬語にしない」「勝手に日程を確約しない」「箇条書きを多用しない」",
   "wnote.placeholder": "1行に1ルール。例: 絵文字は使わない",
+  "wsamp.title": "最近の修正から学ぶ",
+  "wsamp.intro":
+    "AIの下書きと、あなたが実際に送った文の差です。直したものを「ルール化」すると、上の文章作成メモに1行追加され、次回以降のAI下書きに反映されます（素材は端末内だけに保存されます）。",
+  "wsamp.noSubject": "(件名なし)",
+  "wsamp.edited": "編集あり",
+  "wsamp.asis": "そのまま採用",
+  "wsamp.ai": "AI案",
+  "wsamp.final": "あなたの最終形",
+  "wsamp.toRule": "ルール化",
+  "wsamp.dismiss": "消す",
+  "wsamp.suggesting": "AIがルールを考えています…",
+  "wsamp.rulePlaceholder": "この修正を一般的な文体ルールにすると？ 例: 絵文字は使わない",
+  "wsamp.add": "メモに追加",
+  "wsamp.cancel": "やめる",
+  "wsamp.added": "✓ ルールを追加しました",
+  "wsamp.failed": "追加に失敗しました",
 };
 
 const en: Dict = {
@@ -1673,6 +1689,22 @@ const en: Dict = {
   "wnote.example":
     "e.g. no emoji / not overly polite / don't promise dates yourself / avoid heavy bullet lists",
   "wnote.placeholder": "One rule per line. e.g. no emoji",
+  "wsamp.title": "Learn from recent edits",
+  "wsamp.intro":
+    "The AI's draft vs. what you actually sent. Turn an edit into a rule and it's appended to your writing notes above, shaping future AI drafts (samples stay on this device only).",
+  "wsamp.noSubject": "(no subject)",
+  "wsamp.edited": "edited",
+  "wsamp.asis": "sent as-is",
+  "wsamp.ai": "AI draft",
+  "wsamp.final": "Your version",
+  "wsamp.toRule": "Make a rule",
+  "wsamp.dismiss": "Dismiss",
+  "wsamp.suggesting": "AI is drafting a rule…",
+  "wsamp.rulePlaceholder": "Generalize this edit into a style rule. e.g. no emoji",
+  "wsamp.add": "Add to notes",
+  "wsamp.cancel": "Cancel",
+  "wsamp.added": "✓ Rule added",
+  "wsamp.failed": "Couldn't add",
 };
 
 // fr / zh: キー予約。未訳は en へフォールバック（順次追加）。
@@ -2519,6 +2551,22 @@ const fr: Dict = {
   "wnote.example":
     "ex. pas d'emoji / pas de politesse excessive / ne pas confirmer de dates soi-même / éviter les listes à puces",
   "wnote.placeholder": "Une règle par ligne. ex. pas d'emoji",
+  "wsamp.title": "Apprendre de vos retouches",
+  "wsamp.intro":
+    "Le brouillon de l'IA vs. ce que vous avez réellement envoyé. Transformez une retouche en règle : elle s'ajoute à vos notes d'écriture ci-dessus et oriente les futurs brouillons (les échantillons restent sur cet appareil).",
+  "wsamp.noSubject": "(sans objet)",
+  "wsamp.edited": "modifié",
+  "wsamp.asis": "envoyé tel quel",
+  "wsamp.ai": "Brouillon IA",
+  "wsamp.final": "Votre version",
+  "wsamp.toRule": "Créer une règle",
+  "wsamp.dismiss": "Ignorer",
+  "wsamp.suggesting": "L'IA rédige une règle…",
+  "wsamp.rulePlaceholder": "Généralisez cette retouche en règle de style. ex. pas d'emoji",
+  "wsamp.add": "Ajouter aux notes",
+  "wsamp.cancel": "Annuler",
+  "wsamp.added": "✓ Règle ajoutée",
+  "wsamp.failed": "Échec de l'ajout",
 };
 
 const zh: Dict = {
@@ -3292,6 +3340,22 @@ const zh: Dict = {
   "wnote.example":
     "例：不用表情符号 / 不过度敬语 / 不擅自确定日程 / 不滥用要点列表",
   "wnote.placeholder": "每行一条规则。例：不用表情符号",
+  "wsamp.title": "从最近的修改中学习",
+  "wsamp.intro":
+    "AI 的草稿与你实际发送的内容对比。把某处修改「变成规则」后，会追加到上面的写作备忘，并影响今后的 AI 草稿（样本仅保存在本机）。",
+  "wsamp.noSubject": "(无主题)",
+  "wsamp.edited": "已编辑",
+  "wsamp.asis": "原样发送",
+  "wsamp.ai": "AI 草稿",
+  "wsamp.final": "你的版本",
+  "wsamp.toRule": "生成规则",
+  "wsamp.dismiss": "移除",
+  "wsamp.suggesting": "AI 正在拟定规则…",
+  "wsamp.rulePlaceholder": "把这处修改概括为文体规则。例：不用表情符号",
+  "wsamp.add": "加入备忘",
+  "wsamp.cancel": "取消",
+  "wsamp.added": "✓ 已添加规则",
+  "wsamp.failed": "添加失败",
 };
 
 const DICTS: Record<Locale, Dict> = { ja, en, fr, zh };

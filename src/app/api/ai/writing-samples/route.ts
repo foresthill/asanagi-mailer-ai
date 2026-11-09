@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { listWritingSamples, recordWritingSample } from "@/lib/store";
+import {
+  listWritingSamples,
+  recordWritingSample,
+  removeWritingSample,
+} from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -30,5 +34,12 @@ export async function POST(req: Request) {
     ai: body.ai ?? "",
     final: body.final ?? "",
   });
+  return NextResponse.json({ ok: true });
+}
+
+/** DELETE ?at=<iso> → ルール化/棄却したサンプルを一覧から外す。 */
+export async function DELETE(req: Request) {
+  const at = new URL(req.url).searchParams.get("at") ?? "";
+  await removeWritingSample(at);
   return NextResponse.json({ ok: true });
 }

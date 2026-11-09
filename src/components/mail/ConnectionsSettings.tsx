@@ -25,6 +25,7 @@ import {
 import { EmailConnectSection } from "./EmailConnectSection";
 import { ReplySignatureSection } from "./ReplySignatureSection";
 import { WritingNoteSection } from "./WritingNoteSection";
+import { WritingSamplesSection } from "./WritingSamplesSection";
 import { OpenProjectSection } from "./OpenProjectSection";
 import { DevlogSection } from "./DevlogSection";
 import { NextcloudSection } from "./NextcloudSection";
@@ -781,6 +782,8 @@ export function ConnectionsSettings({
             <ReplySignatureSection />
 
             <WritingNoteSection />
+
+            <WritingSamplesSection />
 
             <OpenProjectSection />
 
