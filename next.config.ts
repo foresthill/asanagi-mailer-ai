@@ -15,6 +15,17 @@ const nextConfig: NextConfig = {
   // 問題なく、ランタイムでも動く）。
   serverExternalPackages: ["imapflow", "mailparser"],
 
+  // standalone の output file tracing が `src-tauri/target`（Rust ビルド成果物・
+  // 数百MB〜GB）を辿ってバンドルへコピーしてしまう問題の抑止。Node サーバの実行に
+  // src-tauri は一切不要なのに、tracer が .rlib 等を `.next-standalone/standalone/`
+  // に取り込み、バンドルを肥大させ（実測 ~878M）ビルド時の ENOSPC も誘発していた。
+  // Next 16 の outputFileTracingExcludes（キー=ルートglob・値=project root基準glob、
+  // `'/*'`=全ルート）で、トレース対象からビルド生成物ディレクトリを除外する。
+  // ref: node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/output.md
+  outputFileTracingExcludes: {
+    "/*": ["src-tauri/**/*", ".next/**/*", ".next-standalone/**/*"],
+  },
+
   // Desktop (Tauri) packaging builds a self-contained Node server with
   // `BUILD_STANDALONE=1 next build` → .next-standalone/standalone/server.js.
   // Gated by env AND written to a SEPARATE distDir so it never clobbers the
