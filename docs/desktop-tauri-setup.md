@@ -8,7 +8,7 @@ Asanagi をデスクトップアプリにする手順。設計の決定は [03 �
 > - **Stage B**: 本番バンドル（standalone サーバ＋Node をサイドカー同梱し Rust から起動）。難所。
 
 > **現状（2026-11-09 時点・実績）**: **Stage A / B は完了し、3 OS で配布済み**。GitHub Releases に macOS（`.dmg` / `.app.tar.gz`・aarch64）、Linux（`.AppImage` / `.deb` / `.rpm`）、Windows（`.exe`）を自動アップデート付きで出している（最新 app-v0.5.3）。Node サイドカー起動・空きポート選択・`ASANAGI_DATA_DIR`・レディネス待ち→navigate・起動失敗時のログ付きエラーページ・system node フォールバックは `src-tauri/src/lib.rs` に実装済み。
-> 以降の Stage A / B の記述は**再現手順のリファレンス**として残す。残っているのは **Stage C（Dev ID 署名＋公証の実ビルド検証）** と **Stage D（mailto ハンドラ）**。
+> 以降の Stage A / B の記述は**再現手順のリファレンス**として残す。**Stage C（Dev ID 署名＋公証）も CI で実証済み**（2026-11-09・run 42550921528）。残るは **Stage D（mailto ハンドラ）** のみ。
 
 出典（一次情報）:
 - 前提条件: https://v2.tauri.app/start/prerequisites
@@ -95,10 +95,12 @@ npm run tauri dev
 
 ---
 
-## Stage C — コード署名＋公証（macOS 配布）
+## Stage C — コード署名＋公証（macOS 配布）✅ CI で実証済み（2026-11-09）
 
 配布した `.app`/`.dmg` を他の Mac で Gatekeeper 警告なしに開けるようにする。
 **Developer ID Application 証明書での署名時は公証（notarization）が必須**。
+
+> **到達状況**: **本番の署名＋公証は CI（`.github/workflows/desktop.yml`）で自動実行**し、run `42550921528` で `Notarizing Finished with status Accepted` → `Stapling app...` を確認済み（3 OS 全 success）。ローカル `tauri build`（C-3）は手元検証用のリファレンス。必要な GitHub Secrets は6つ（下記 C-5）。
 
 出典（一次情報）:
 - Tauri v2 macOS 署名: https://v2.tauri.app/distribute/sign/macos/
@@ -153,12 +155,19 @@ xcrun stapler validate "$APP"                           # 公証チケットが�
 codesign -d --entitlements - --xml "$APP/Contents/Resources/.../node" 2>/dev/null | grep get-task-allow && echo "NG" || echo "OK"
 ```
 
-**未検証の残課題（初回の実公証で確認する）**:
-- Tauri がバンドル時に同梱 node を**再署名し直す**かどうか。もし Tauri が app 側の entitlements で
-  node を上書きすると node の JIT 等が壊れうる。その場合は node 用 entitlements を保つ運用（または
-  `--deep` 挙動の回避）を検討する。初回公証が失敗したら **Apple の notarization ログ**
-  （`xcrun notarytool log <submission-id>`）を読んで、どの実行ファイルが弾かれたかで切り分ける。
-- これらは実証明書＋App用パスワードでの実ビルドが要るため、ここまでは**設定のみ**（実公証は未検証）。
+**実証結果（2026-11-09・CI run 42550921528）**:
+- macOS が **Developer ID 署名 → 公証 → staple** まで成功（`Notarizing Finished with status Accepted` / `Stapling app...`）。3 OS 全ジョブ success。
+- 旧「Tauri がバンドル時に同梱 node を再署名し直すか」の未確認点は**解消**: Tauri は node を上書きせず、`sign-mac-sidecar.sh` の Dev ID 署名（get-task-allow 除去・timestamp・hardened runtime）がそのまま公証を通った。
+
+### C-5. CI（desktop.yml）での署名＋公証 — 必要 Secrets と踏んだ地雷
+
+**GitHub Secrets（6つ・Tauri v2 公式準拠 https://v2.tauri.app/distribute/sign/macos/ ）**:
+`APPLE_CERTIFICATE`（Developer ID **Application** の .p12 を base64）, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`（App用パスワード）, `APPLE_TEAM_ID`。
+
+**到達までに踏んだ地雷（再発防止）**:
+1. **証明書の取り違え**: `APPLE_CERTIFICATE` に「**Apple Development**」証明書を入れると `certificate ... does not match provided identity` で失敗。**「Developer ID Application」**の .p12（秘密鍵付き）を書き出して base64 化する。
+2. **取り込み順序**: Tauri は証明書を beforeBuildCommand の**後**に取り込むため、beforeBuildCommand の `sign-mac-sidecar.sh` が証明書を見つけられず node がアドホックのまま → 公証が `secure timestamp` / `hardened runtime` エラーで **Invalid**。対策: CI では **tauri-action の前に** `apple-actions/import-codesign-certs@v7` で取り込む（desktop.yml 実装済み）。tauri-action には `APPLE_CERTIFICATE` を渡さない（二重取り込みで identity 曖昧化を回避）。
+3. **`secrets` は step の `if:` で使えない**（`Unrecognized named-value: 'secrets'` で workflow invalid）。`if: startsWith(matrix.platform, 'macos')` のように platform 判定のみにする。
 
 ---
 
