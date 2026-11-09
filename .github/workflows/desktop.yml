@@ -81,6 +81,22 @@ jobs:
             chmod +x src-tauri/binaries/node
           fi
 
+      # macOS: Developer ID 証明書を beforeBuildCommand より前にキーチェーンへ取り込む。
+      # tauri-action は証明書をバンドル署名の直前(=beforeBuildCommand の後)に取り込むため、
+      # beforeBuildCommand で走る sign-mac-sidecar.sh が証明書を見つけられず同梱 node の
+      # Dev ID 再署名をスキップ→node がアドホック(タイムスタンプ/hardened runtime 無し)の
+      # まま公証で "signature does not include a secure timestamp" /
+      # "does not have the hardened runtime enabled" で弾かれていた。先に取り込むことで
+      # sign-mac-sidecar が node を正しく再署名できる。tauri-action には APPLE_CERTIFICATE を
+      # 渡さず、このキーチェーンの identity をそのまま使わせる（二重取り込みで identity が
+      # 曖昧化するのを避ける）。
+      - name: Import Developer ID into keychain (macOS, before build)
+        if: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE != '' }}
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
       # tauri build が conf の beforeBuildCommand(build:standalone)を実行し、
       # .next-standalone を bundle.resources として同梱する。bundle.targets="all"
       # なので各OSのネイティブ形式（Linux=deb/rpm/appimage, macOS=dmg/app）を作る。
@@ -92,14 +108,11 @@ jobs:
           # 署名し latest.json を Release に添付する。未設定なら署名はスキップされる。
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS コード署名＋公証（GitHub Secrets・6つ）。macOS runner でのみ使われ、
-          # Linux/Windows では tauri-action が無視する。tauri-action が APPLE_CERTIFICATE を
-          # 一時キーチェーンに取り込み→Dev ID 署名→APPLE_ID/PASSWORD/TEAM_ID で公証→staple
-          # まで自動実行。6つ揃うと他の Mac で Gatekeeper 警告なしに開ける。未設定なら
-          # アドホック署名のまま（従来どおり未署名配布）にフォールバック。
-          # ref: https://v2.tauri.app/distribute/sign/macos/
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # macOS コード署名＋公証。証明書の取り込みは直前の "Import Developer ID" ステップで
+          # 済ませてある（beforeBuildCommand の sign-mac-sidecar が node を再署名できるように）。
+          # ここでは identity の指定と公証資格情報だけ渡す。APPLE_CERTIFICATE を渡さないのは、
+          # tauri-action が別キーチェーンに二重取り込みして identity が曖昧化するのを避けるため。
+          # Linux/Windows runner では無視される。ref: https://v2.tauri.app/distribute/sign/macos/
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
