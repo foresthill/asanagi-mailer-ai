@@ -16,6 +16,10 @@ type AiStatus = {
   endpoint: string;
   /** true = live-reachable (on-prem probe), false = down/not-set, null = cloud (not pinged). */
   reachable: boolean | null;
+  /** On-prem: configured model is actually installed. null = unknown (cloud/unreachable). */
+  modelAvailable?: boolean | null;
+  /** On-prem: model ids the endpoint serves right now. */
+  availableModels?: string[];
   /** Configured standby fallback (on-prem only), or null. */
   fallback: { provider: string } | null;
   /** True when the tunnel is down and the cloud fallback is serving right now. */
@@ -92,8 +96,15 @@ export function AiStatusChip({
       dot = "bg-fg-subtle";
       label = t("aistatus.notset");
     } else if (s.reachable === true) {
-      dot = "bg-emerald-500";
-      label = t("aistatus.reachable");
+      if (s.modelAvailable === false) {
+        // Endpoint is up, but the configured model isn't installed there — the
+        // one case where a "green tunnel" still can't generate. Amber, not green.
+        dot = "bg-amber-500";
+        label = t("aistatus.nomodel");
+      } else {
+        dot = "bg-emerald-500";
+        label = t("aistatus.reachable");
+      }
     } else if (s.reachable === false) {
       dot = "bg-high";
       label = t("aistatus.unreachable");
@@ -105,7 +116,13 @@ export function AiStatusChip({
   }
 
   const sub = endpoint ? `${label} · ${endpoint}` : label;
-  const title = `${t("aistatus.open")}${s ? ` — ${serving} (${endpoint})` : ""}`;
+  // When the configured on-prem model is missing, surface the installed models
+  // right in the tooltip so the fix ("合わせる") is one glance away.
+  const candidates =
+    s?.modelAvailable === false && s.availableModels?.length
+      ? `\n導入済み: ${s.availableModels.join(", ")}`
+      : "";
+  const title = `${t("aistatus.open")}${s ? ` — ${serving} (${endpoint})` : ""}${candidates}`;
 
   // Compact pill for the always-visible top bar (so the active AI is clear
   // before replying). Same dot/label logic as the sidebar variant.

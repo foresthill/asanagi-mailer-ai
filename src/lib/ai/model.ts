@@ -181,6 +181,43 @@ export async function probeOnpremReachable(baseUrl: string, apiKey?: string): Pr
   return ok;
 }
 
+// Like probeOnpremReachable, but also parses the model ids the endpoint serves,
+// so the status chip can tell "endpoint up" from "configured model missing"
+// (a green tunnel whose model name was never pulled → generation 500s and the
+// reply silently falls back to the plain template). local-first: only reaches
+// the user's own endpoint. Warms reachCache too so the hot AI path hits cache.
+const modelsCache = new Map<string, { ok: boolean; models: string[]; at: number }>();
+
+export async function probeOnpremModels(
+  baseUrl: string,
+  apiKey?: string,
+): Promise<{ reachable: boolean; models: string[] }> {
+  const url = `${baseUrl.replace(/\/+$/, "")}/models`;
+  const now = Date.now();
+  const hit = modelsCache.get(url);
+  if (hit && now - hit.at < REACH_TTL_MS) return { reachable: hit.ok, models: hit.models };
+  let ok = false;
+  let models: string[] = [];
+  try {
+    const res = await fetch(url, {
+      headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+      signal: AbortSignal.timeout(3500),
+    });
+    ok = res.ok;
+    if (ok) {
+      const json = (await res.json()) as { data?: { id?: string }[] };
+      models = (json.data ?? [])
+        .map((m) => m.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0);
+    }
+  } catch {
+    ok = false;
+  }
+  modelsCache.set(url, { ok, models, at: now });
+  reachCache.set(url, { ok, at: now }); // keep the hot-path probe warm
+  return { reachable: ok, models };
+}
+
 export interface ActiveAIConfig extends AIConfig {
   /** True when the on-prem primary was unreachable and we switched to the cloud fallback. */
   fallbackActive: boolean;

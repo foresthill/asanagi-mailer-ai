@@ -5,7 +5,7 @@ import {
   isProvider,
   loadAIConfig,
   loadActiveAIConfig,
-  probeOnpremReachable,
+  probeOnpremModels,
 } from "@/lib/ai/model";
 import { getAISettings } from "@/lib/store";
 
@@ -32,10 +32,18 @@ export async function GET() {
       : null;
 
   let reachable: boolean | null = null;
+  // On-prem only: whether the CONFIGURED model id is actually served by the
+  // endpoint (null = can't tell: cloud, or unreachable), plus the live list so
+  // the UI can offer "合わせる" (switch to an installed model).
+  let modelAvailable: boolean | null = null;
+  let availableModels: string[] = [];
   if (!primary.configured) {
     reachable = false;
   } else if (onprem) {
-    reachable = await probeOnpremReachable(primary.baseUrl!, primary.apiKey);
+    const probe = await probeOnpremModels(primary.baseUrl!, primary.apiKey);
+    reachable = probe.reachable;
+    availableModels = probe.models;
+    modelAvailable = probe.reachable ? probe.models.includes(primary.model) : null;
   } // else cloud: leave null (not live-pinged)
 
   // Only resolve the active (possibly fallen-back) config when it could matter:
@@ -53,6 +61,10 @@ export async function GET() {
     kind: onprem ? ("onprem" as const) : ("cloud" as const),
     endpoint: endpointLabel(primary),
     reachable,
+    // On-prem: is the configured model actually installed? (null when unknown.)
+    modelAvailable,
+    // On-prem: model ids the endpoint serves right now ("合わせる" picker source).
+    availableModels,
     // Configured standby fallback (on-prem only). null when not set / not applicable.
     fallback: fbProvider ? { provider: fbProvider } : null,
     // True when the tunnel is down AND the fallback is actually serving now.
