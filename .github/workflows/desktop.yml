@@ -58,6 +58,12 @@ jobs:
       - name: Install JS deps
         # npm ci はロックの厳密一致を要求（optional依存の欠けで失敗するため）
         # ビルド用途では reconcile する npm install を使う。
+        env:
+          # onnxruntime-node は postinstall で GPU(CUDA)版バイナリ(onnxruntime-*-gpu)を
+          # GitHub から DL しようとするが、CI ランナーに GPU は無く(`nvcc not found`)不要。
+          # 巨大DLで GitHub の 504 Gateway Time-out を踏み Linux ジョブが落ちていた。
+          # skip で CPU/CoreML EP には一切影響なし（アプリは CUDA EP を使わない）。install.js:173
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
         run: npm install --no-audit --no-fund
 
       # Bundle the Node runtime so the end user needs nothing installed.
