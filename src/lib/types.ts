@@ -104,6 +104,27 @@ export interface Draft {
   body: string;
 }
 
+/**
+ * 返信文体の教師データ（個人的無意識）: AIが生成した下書き本文と、ユーザーが
+ * 実際に送った自筆部分のペア。差分が「このユーザーはAIのどこを直すか」という
+ * 教師信号になる。本文を含むため **ローカル専用**（.data、学習履歴gitにも
+ * 載せない）。判定学習(signals)と同じ pull 型で、ここでは素材を貯めるだけ。
+ */
+export interface WritingSample {
+  /** 送信元アカウント（gmail / imap）。 */
+  account?: string;
+  /** 件名（文脈把握用・任意）。 */
+  subject?: string;
+  /** AIが出した下書きの自筆部分（引用なし）。 */
+  ai: string;
+  /** ユーザーが実際に送った自筆部分（引用を除いた head）。 */
+  final: string;
+  /** AI下書きを編集したか（false = そのまま採用＝肯定信号）。 */
+  edited: boolean;
+  /** 記録時刻（ISO）。 */
+  at: string;
+}
+
 export type SendStatus =
   "scheduled" | "sending" | "sent" | "failed" | "canceled";
 

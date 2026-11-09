@@ -15,6 +15,7 @@ import type {
   ContactMeta,
   ResolvedContactMeta,
   TodoItem,
+  WritingSample,
   AiCacheEntry,
   OpenProjectSettings,
   DevlogSettings,
@@ -267,6 +268,41 @@ export async function getWritingNote(): Promise<string> {
 
 export async function saveWritingNote(text: string): Promise<void> {
   await writeJson(WRITING_NOTE, { text: text.slice(0, 4000) });
+}
+
+// ---------------------------------------------------------------------------
+// 返信文体の教師データ（個人的無意識）— AIの下書きと、ユーザーが実際に送った
+// 自筆部分のペア。差分がそのまま「このユーザーはAIのどこを直すか」の教師信号。
+// 判定学習(signals)と同じく pull 型: ここでは素材を貯めるだけで、LLMに勝手に
+// 抽出・上書きさせない（ユーザー自身の CLAUDE.md「自動生成＋高頻度review 禁止」
+// に沿う）。本文を含むため **ローカル専用** — 学習履歴gitのTRACKEDに載せない
+// ので端末外に出ない。昇格(B)は別UIで writing-note に1行足す形。
+// ---------------------------------------------------------------------------
+const WRITING_SAMPLES = "writing-samples.json";
+const WRITING_SAMPLES_CAP = 500; // keep the most recent N (bounded local set)
+
+export async function listWritingSamples(): Promise<WritingSample[]> {
+  return readJson<WritingSample[]>(WRITING_SAMPLES, []);
+}
+
+export async function recordWritingSample(
+  sample: Pick<WritingSample, "account" | "subject" | "ai" | "final">,
+): Promise<void> {
+  const ai = (sample.ai ?? "").trim();
+  const final = (sample.final ?? "").trim();
+  // Only a real AI-assisted reply with user-visible text is a teacher signal.
+  if (!ai || !final) return;
+  const all = await listWritingSamples();
+  all.push({
+    account: sample.account,
+    subject: sample.subject,
+    ai,
+    final,
+    edited: ai !== final, // false = sent the AI draft verbatim (positive signal)
+    at: new Date().toISOString(),
+  });
+  // Cap to the most recent N so the local file can't grow without bound.
+  await writeJson(WRITING_SAMPLES, all.slice(-WRITING_SAMPLES_CAP));
 }
 
 // ---------------------------------------------------------------------------

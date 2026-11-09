@@ -168,6 +168,9 @@ export function ReplyComposer({
   // assigned when we auto-retain after a send failure). Reused so a failed
   // retry updates the SAME 未送信 draft instead of piling up duplicates.
   const retainedIdRef = useRef<string | undefined>(init.draftId);
+  // AIが出した下書きの自筆部分（引用なし）。送信成功時に、ユーザーが実際に
+  // 送った自筆 head と対にして教師データ(.data)へ記録する（返信文体の差分学習）。
+  const aiBaselineRef = useRef<string | null>(null);
   // 指示入力の送信キー（Enter送信 ⇄ Shift+Enter送信）。端末に保存。
   const [enterToSend, setEnterToSend] = useState(loadEnterSend);
   const toggleEnterSend = () =>
@@ -269,6 +272,9 @@ export function ReplyComposer({
           } else {
             setSubject(data.draft.subject);
             setInitialDraft(withQuote(data.draft.body));
+            // Remember the AI's own text (pre-quote) so send-time can learn the
+            // diff against what the user actually sends. Only genuine AI drafts.
+            if (data.ai) aiBaselineRef.current = data.draft.body;
           }
         } else {
           // AI生成が失敗（クレジット切れ等で500）でも、引用付きの定型文を必ず
@@ -597,6 +603,34 @@ export function ReplyComposer({
     }
   }
 
+  /**
+   * 返信文体の教師データを1件記録（個人的無意識）: AIが出した下書き(aiBaseline)
+   * と、ユーザーが実際に送った自筆部分(head)の対。差分が「このユーザーはAIの
+   * どこを直すか」の学習素材になる。AI生成を使った返信のときだけ記録し、送信の
+   * 成否はブロックしない（fire-and-forget）。local-first: .data 内に留まる。
+   */
+  function recordWritingSample() {
+    const ai = aiBaselineRef.current;
+    aiBaselineRef.current = null; // one-shot per compose
+    if (!ai) return;
+    const finalHead = richMode
+      ? (richEditorRef.current?.getText() ?? richText)
+      : splitQuotedDraft(body, init.quote ?? "").head;
+    if (!finalHead.trim()) return;
+    void fetch("/api/ai/writing-samples", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        account: init.account,
+        subject,
+        ai,
+        final: finalHead,
+      }),
+    }).catch(() => {
+      /* 学習は best-effort — 送信体験に一切影響させない */
+    });
+  }
+
   /** Save the current draft locally (.data) without sending. */
   async function saveDraft() {
     setSavingDraft(true);
@@ -694,6 +728,7 @@ export function ReplyComposer({
       // 送信自体は成功したが控えの保存等に失敗 — 黙殺せず必ず知らせる。
       if (data.warning) alert(data.warning);
       await discardSavedDraft(); // 送れたら下書きは消す
+      recordWritingSample(); // 返信文体の教師データ（AI下書き vs 実送信）
       onSent("sent");
     } catch {
       // ネットワーク断等で送れたか不明 → 本文を失わないよう未送信へ退避。
@@ -725,6 +760,7 @@ export function ReplyComposer({
         return;
       }
       await discardSavedDraft(); // 予約できたら下書きは消す
+      recordWritingSample(); // 返信文体の教師データ（AI下書き vs 実送信）
       onSent("scheduled");
     } catch {
       await retainFailedDraft(t("composer.toast.scheduleFailedNet"));
