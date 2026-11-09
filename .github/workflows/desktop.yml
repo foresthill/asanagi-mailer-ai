@@ -90,8 +90,12 @@ jobs:
       # sign-mac-sidecar が node を正しく再署名できる。tauri-action には APPLE_CERTIFICATE を
       # 渡さず、このキーチェーンの identity をそのまま使わせる（二重取り込みで identity が
       # 曖昧化するのを避ける）。
+      # secrets は step の if: で参照できない（Unrecognized named-value: 'secrets'）。
+      # platform だけで判定する。owner のリポジトリでは APPLE_CERTIFICATE が常に有るため
+      # macOS では常に取り込む。証明書が無い環境（fork 等）では取り込みが失敗して macOS
+      # ジョブが落ちるが、未署名を黙って配布するより望ましい（fail loud）。
       - name: Import Developer ID into keychain (macOS, before build)
-        if: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE != '' }}
+        if: startsWith(matrix.platform, 'macos')
         uses: apple-actions/import-codesign-certs@v7
         with:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
