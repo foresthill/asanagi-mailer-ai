@@ -15,16 +15,14 @@ const nextConfig: NextConfig = {
   // 問題なく、ランタイムでも動く）。
   serverExternalPackages: ["imapflow", "mailparser"],
 
-  // standalone の output file tracing が `src-tauri/target`（Rust ビルド成果物・
-  // 数百MB〜GB）を辿ってバンドルへコピーしてしまう問題の抑止。Node サーバの実行に
-  // src-tauri は一切不要なのに、tracer が .rlib 等を `.next-standalone/standalone/`
-  // に取り込み、バンドルを肥大させ（実測 ~878M）ビルド時の ENOSPC も誘発していた。
-  // Next 16 の outputFileTracingExcludes（キー=ルートglob・値=project root基準glob、
-  // `'/*'`=全ルート）で、トレース対象からビルド生成物ディレクトリを除外する。
-  // ref: node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/output.md
-  outputFileTracingExcludes: {
-    "/*": ["src-tauri/**/*", ".next/**/*", ".next-standalone/**/*"],
-  },
+  // NOTE: `outputFileTracingExcludes` を使ってはいけない（Turbopack 16.2.7 と非互換）。
+  // 以前ここで src-tauri 等を除外しようとしたが、Turbopack のトレースが壊れ、standalone
+  // 出力から SSR チャンク（`.next-standalone/server/chunks/ssr/[turbopack]_runtime.js`）が
+  // 取りこぼされ、パッケージ版が起動直後に 500（Cannot find module ...[turbopack]_runtime）
+  // になった（app-v0.5.4 の事故）。src-tauri/.data 等の不要物の除去は **ビルド後に**
+  // `scripts/copy-standalone-assets.mjs` の PRUNE_ROOT / PRUNE_MODULES で行う（そちらが
+  // 正しい方法）。この非互換は回帰しやすいので CI の standalone スモークテスト
+  // (.github/workflows/standalone-smoke.yml) で「起動して / が 200」を必ず検証する。
 
   // Desktop (Tauri) packaging builds a self-contained Node server with
   // `BUILD_STANDALONE=1 next build` → .next-standalone/standalone/server.js.

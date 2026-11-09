@@ -1,0 +1,78 @@
+name: Standalone smoke test
+
+# 「ビルドが通る」だけでなく「パッケージ版と同じ standalone サーバが実際に起動し、
+# ルートが 200 を返す」までを PR ごとに検証する e2e スモーク。
+# app-v0.5.4 では next.config の outputFileTracingExcludes が Turbopack 16.2.7 と
+# 非互換で SSR チャンク(chunks/ssr/[turbopack]_runtime.js)を取りこぼし、署名・公証は
+# 通ったのに起動直後 500（Internal Server Error）になった。署名できる≠動く。
+# このテストはその級の回帰を「配布前に」必ず捕まえる。
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install JS deps
+        env:
+          # CIにGPUは無い。onnxruntime の CUDA 版 DL(504で落ちる)を止める。
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+        run: npm install --no-audit --no-fund
+
+      # パッケージ版(Tauri サイドカー)と同じ output:standalone をビルドする。
+      - name: Build standalone server
+        run: npm run build:standalone
+
+      # 実際に起動して HTTP を確認する（＝パッケージ版の node サイドカーと同じ起動経路）。
+      - name: Boot standalone server and assert HTTP 200
+        run: |
+          set -euo pipefail
+          export ASANAGI_DATA_DIR="$(mktemp -d)"   # 書き込み可能な空のデータディレクトリ
+          export PORT=3123
+          export HOSTNAME=127.0.0.1
+          node .next-standalone/standalone/server.js &
+          SERVER_PID=$!
+          cleanup() { kill "$SERVER_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+
+          # 起動待ち（最大40秒）。
+          for i in $(seq 1 40); do
+            if curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/api/ai/status"; then
+              echo "server is up (after ${i}s)"; break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              echo "::error::standalone server exited during boot"; exit 1
+            fi
+            sleep 1
+          done
+
+          # ルート(/)は SSR。chunks/ssr 取りこぼしだとここで 500 になる（0.5.4 の事故）。
+          code=$(curl -s -o /tmp/root.html -w '%{http_code}' "http://127.0.0.1:${PORT}/")
+          echo "GET / -> HTTP ${code}"
+          if [ "${code}" != "200" ]; then
+            echo "::error::root route returned HTTP ${code} (expected 200)"
+            head -c 2000 /tmp/root.html || true
+            exit 1
+          fi
+          if grep -qi "Internal Server Error" /tmp/root.html; then
+            echo "::error::root route body contains 'Internal Server Error'"
+            head -c 2000 /tmp/root.html || true
+            exit 1
+          fi
+
+          # API ルート（node:sqlite 等の import 連鎖も実際に走る）。
+          api=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/api/ai/status")
+          echo "GET /api/ai/status -> HTTP ${api}"
+          [ "${api}" = "200" ] || { echo "::error::/api/ai/status returned HTTP ${api}"; exit 1; }
+
+          echo "✓ standalone server boots and serves (200)"
