@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, Mail, AlertCircle } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { GmailConnectSection, type GmailView } from "./GmailConnectSection";
@@ -28,6 +29,7 @@ const CHOICES: { value: EmailView["choice"]; labelKey: string }[] = [
  */
 export function EmailConnectSection() {
   const { t } = useI18n();
+  const router = useRouter();
   const [view, setView] = useState<EmailView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
@@ -57,6 +59,10 @@ export function EmailConnectSection() {
       const res = await fetch("/api/settings/email", { signal: ctrl.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setView((await res.json()) as EmailView);
+      // Re-run the server component (page.tsx) so the sidebar's メール設定済み/
+      // 未設定 バッジ(emailConfigured prop)が接続/切断後に即更新される。これが
+      // 無いと「IMAP接続済みでもメール未設定のまま」になる（サーバで1度だけ算出）。
+      router.refresh();
     } catch (e) {
       setError(
         e instanceof Error && e.name === "AbortError"
@@ -68,7 +74,7 @@ export function EmailConnectSection() {
     } finally {
       clearTimeout(timer);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     // Fetch the masked settings view on mount.
