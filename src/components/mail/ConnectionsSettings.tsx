@@ -31,7 +31,15 @@ import { DevlogSection } from "./DevlogSection";
 import { NextcloudSection } from "./NextcloudSection";
 import { JevPlayground } from "./JevPlayground";
 
-type ProviderChoice = AIProvider | "auto";
+// UI 上の選択肢。"onprem"（ローカル/オンプレ Ollama 等）は保存時に
+// provider="openai" + baseUrl にマップする UI 専用の別名（内部に openai プロバイダは
+// 1つだが、UIでは「クラウドOpenAI」と「ローカル/オンプレ」を別項目に分けて迷わせない）。
+type ProviderChoice = AIProvider | "auto" | "onprem";
+
+/** UI選択 → 実プロバイダ。onprem は openai（+baseUrl）として扱う。 */
+function realProvider(p: ProviderChoice): AIProvider | "auto" {
+  return p === "onprem" ? "openai" : p;
+}
 
 interface KeyStatus {
   set: boolean;
@@ -40,12 +48,14 @@ interface KeyStatus {
 
 /** 選択プロバイダに保存されたモデルID（per-provider → 旧・共通のフォールバック）。 */
 function modelForProvider(v: View, p: ProviderChoice): string {
-  if (p === "auto") return v.model ?? "";
-  return v.models?.[p] || v.model || "";
+  const rp = realProvider(p);
+  if (rp === "auto") return v.model ?? "";
+  return v.models?.[rp] || v.model || "";
 }
 function judgmentForProvider(v: View, p: ProviderChoice): string {
-  if (p === "auto") return v.judgmentModel ?? "";
-  return v.judgmentModels?.[p] || v.judgmentModel || "";
+  const rp = realProvider(p);
+  if (rp === "auto") return v.judgmentModel ?? "";
+  return v.judgmentModels?.[rp] || v.judgmentModel || "";
 }
 
 interface View {
@@ -98,6 +108,12 @@ const PROVIDER_OPTIONS: {
     label: "OpenAI",
     hintKey: "conn.provider.openai.hint",
     needsKey: true,
+  },
+  {
+    value: "onprem",
+    labelKey: "conn.provider.onprem.label",
+    hintKey: "conn.provider.onprem.hint",
+    needsKey: false, // local Ollama needs no key (gated proxy may; optional)
   },
   {
     value: "gateway",
@@ -169,10 +185,13 @@ export function ConnectionsSettings({
       setView(data);
       // Default the picker to OpenRouter on a pristine ("auto") state so the
       // key field is visible immediately; "auto" stays selectable explicitly.
-      const initProvider: ProviderChoice =
+      const saved: ProviderChoice =
         data.provider && data.provider !== "auto"
           ? data.provider
           : "openrouter";
+      // openai + baseUrl 設定済み = ローカル/オンプレ。UIでは "onprem" 項目を選ぶ。
+      const initProvider: ProviderChoice =
+        saved === "openai" && (data.baseUrl ?? "").trim() ? "onprem" : saved;
       setProvider(initProvider);
       // モデルは選択中プロバイダの保存値で初期化（無ければ旧・共通値）。
       setModel(modelForProvider(data, initProvider));
@@ -195,21 +214,28 @@ export function ConnectionsSettings({
   if (!open) return null;
 
   const selectedOpt = PROVIDER_OPTIONS.find((o) => o.value === provider);
+  // onprem は openai のキー枠を使う（ローカルは任意）。auto/gateway はキー無し。
   const keyProvider: AIProvider | null =
-    provider !== "auto" && provider !== "gateway" ? provider : null;
+    provider === "onprem"
+      ? "openai"
+      : provider !== "auto" && provider !== "gateway"
+        ? provider
+        : null;
 
   async function persist(): Promise<View | null> {
     const keys: Partial<Record<AIProvider, string>> = {};
     for (const [k, v] of Object.entries(keyInputs)) {
       if (v !== undefined) keys[k as AIProvider] = v;
     }
+    // onprem は実プロバイダ openai として保存（+baseUrl がローカル/オンプレの印）。
+    const rp = realProvider(provider);
     // モデルはプロバイダ別に保存（切替で復元される）。auto は旧・共通へ。
     const modelFields =
-      provider === "auto"
+      rp === "auto"
         ? { model, judgmentModel }
         : {
-            models: { [provider]: model } as Partial<Record<AIProvider, string>>,
-            judgmentModels: { [provider]: judgmentModel } as Partial<
+            models: { [rp]: model } as Partial<Record<AIProvider, string>>,
+            judgmentModels: { [rp]: judgmentModel } as Partial<
               Record<AIProvider, string>
             >,
           };
@@ -217,7 +243,7 @@ export function ConnectionsSettings({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        provider,
+        provider: rp,
         ...modelFields,
         baseUrl,
         fallbackProvider,
@@ -316,10 +342,12 @@ export function ConnectionsSettings({
   }
 
   const currentKeyStatus = keyProvider ? view?.keys[keyProvider] : undefined;
+  // onprem → openai の既定/安価モデルを引く（auto は無し）。
+  const rpForModels = realProvider(provider);
   const defaultModel =
-    view && provider !== "auto" ? view.defaultModels[provider] : "";
+    view && rpForModels !== "auto" ? view.defaultModels[rpForModels] : "";
   const cheapModel =
-    view && provider !== "auto" ? view.cheapModels[provider] : "";
+    view && rpForModels !== "auto" ? view.cheapModels[rpForModels] : "";
 
   return (
     <div
@@ -367,6 +395,11 @@ export function ConnectionsSettings({
                   if (view) {
                     setModel(modelForProvider(view, next));
                     setJudgmentModel(judgmentForProvider(view, next));
+                  }
+                  // onprem を選んだのに baseUrl 空だと保存後 openai に戻ってしまう。
+                  // 既定の Ollama エンドポイントを補完して「選んだのに消える」を防ぐ。
+                  if (next === "onprem" && !baseUrl.trim()) {
+                    setBaseUrl("http://localhost:11435/v1");
                   }
                   setTest(null);
                 }}
@@ -456,8 +489,9 @@ export function ConnectionsSettings({
             </label>
 
             {/* Custom endpoint (OpenAI-compatible) — e.g. on-prem Ollama /v1.
-                Only meaningful for the openai provider. */}
-            {provider === "openai" && (
+                Shown for the dedicated "onprem" choice (primary) and cloud
+                "openai" (power users who proxy it). */}
+            {(provider === "onprem" || provider === "openai") && (
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-fg-muted">
                   {t("conn.endpoint")}
