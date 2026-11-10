@@ -397,9 +397,10 @@ export function ConnectionsSettings({
                     setJudgmentModel(judgmentForProvider(view, next));
                   }
                   // onprem を選んだのに baseUrl 空だと保存後 openai に戻ってしまう。
-                  // 既定の Ollama エンドポイントを補完して「選んだのに消える」を防ぐ。
+                  // Ollama の既定エンドポイント(11434)を補完して「選んだのに消える」を防ぐ。
+                  // 11434 = Ollama のデフォルトポート。別ポート/トンネルなら手で直す。
                   if (next === "onprem" && !baseUrl.trim()) {
-                    setBaseUrl("http://localhost:11435/v1");
+                    setBaseUrl("http://localhost:11434/v1");
                   }
                   setTest(null);
                 }}
