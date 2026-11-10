@@ -141,6 +141,12 @@ export const RichEditor = forwardRef<
       attributes: {
         class:
           "min-h-full text-[15px] leading-7 outline-none [&_img]:my-1.5 [&_img]:max-w-full [&_img]:rounded-md [&_p]:min-h-[1.2em] [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_a]:text-accent [&_a]:underline",
+        // macOS WKWebView の既定テキスト置換（自動修正・スマート引用符・自動
+        // 大文字化）を無効化。「勝手にスペース/大文字が入る」のを防ぐ。
+        spellcheck: "false",
+        autocorrect: "off",
+        autocapitalize: "off",
+        autocomplete: "off",
       },
       // macOS Ctrl+A=行頭 / Ctrl+E=行末（Shiftで行選択）。
       handleKeyDown: handleLineNavKeyDown,
