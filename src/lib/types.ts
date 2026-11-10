@@ -300,6 +300,59 @@ export interface AISettings {
  * All field values are strings (numbers/bools encoded) so the store can
  * uniformly treat blank as "clear this field".
  */
+/** Gmail アカウントの資格情報（BYO OAuth クライアント）。 */
+export interface GmailAccountSettings {
+  /** Your own Google Cloud OAuth client (BYO client). */
+  clientId?: string;
+  clientSecret?: string;
+  /** Issued once via the consent flow; presence = connected. */
+  refreshToken?: string;
+  /** Connected account address, for display. */
+  address?: string;
+  /** このアカウントの受信箱の表示開始日 (YYYY-MM-DD)。 */
+  inboxCutoff?: string;
+}
+
+/** IMAP/SMTP アカウントの資格情報・設定。 */
+export interface ImapAccountSettings {
+  /** このアカウントの受信箱の表示開始日 (YYYY-MM-DD)。 */
+  inboxCutoff?: string;
+  /** 送信時の差出人表示名（例: 森岡尚哉）。空なら省略（アドレスのみ）。 */
+  fromName?: string;
+  host?: string;
+  port?: string; // default "993"
+  secure?: string; // "false" to disable TLS
+  user?: string;
+  password?: string;
+  archiveFolder?: string; // default "Archive"
+  trashFolder?: string; // default "Trash"
+  sentFolder?: string; // default "Sent"
+  // SMTP (send); blank fields fall back to the IMAP values.
+  smtpHost?: string;
+  smtpPort?: string; // default "465"
+  smtpSecure?: string;
+  smtpUser?: string;
+  smtpPassword?: string;
+  smtpFrom?: string;
+}
+
+/**
+ * 多アカウント（docs/11・v0.6）。1アカウント = 1バックエンド。`id` は
+ * メールIDの account 修飾子 `{account}/{providerId}` に使う安定キー。移行時は
+ * 既存キャッシュ/下書き/予約と互換にするため "gmail"/"imap" を踏襲する。
+ * Phase 1 では legacy の単数 gmail/imap から導出するだけ（ストレージ/UIは据え置き）。
+ */
+export interface MailAccount {
+  id: string;
+  type: "gmail" | "imap";
+  /** 表示名（例 "会社(Acme)" "個人Gmail"）。 */
+  label: string;
+  /** 表示用アドレス。 */
+  address?: string;
+  gmail?: GmailAccountSettings;
+  imap?: ImapAccountSettings;
+}
+
 export interface EmailSettings {
   /** Which backend drives the mailbox; "auto" detects from credentials. */
   active?: "auto" | "gmail" | "imap" | "mock";
@@ -311,38 +364,15 @@ export interface EmailSettings {
    * この値は未設定アカウントのフォールバック。
    */
   inboxCutoff?: string;
-  gmail?: {
-    /** Your own Google Cloud OAuth client (BYO client). */
-    clientId?: string;
-    clientSecret?: string;
-    /** Issued once via the consent flow; presence = connected. */
-    refreshToken?: string;
-    /** Connected account address, for display. */
-    address?: string;
-    /** このアカウントの受信箱の表示開始日 (YYYY-MM-DD)。 */
-    inboxCutoff?: string;
-  };
-  imap?: {
-    /** このアカウントの受信箱の表示開始日 (YYYY-MM-DD)。 */
-    inboxCutoff?: string;
-    /** 送信時の差出人表示名（例: 森岡尚哉）。空なら省略（アドレスのみ）。 */
-    fromName?: string;
-    host?: string;
-    port?: string; // default "993"
-    secure?: string; // "false" to disable TLS
-    user?: string;
-    password?: string;
-    archiveFolder?: string; // default "Archive"
-    trashFolder?: string; // default "Trash"
-    sentFolder?: string; // default "Sent"
-    // SMTP (send); blank fields fall back to the IMAP values.
-    smtpHost?: string;
-    smtpPort?: string; // default "465"
-    smtpSecure?: string;
-    smtpUser?: string;
-    smtpPassword?: string;
-    smtpFrom?: string;
-  };
+  gmail?: GmailAccountSettings;
+  imap?: ImapAccountSettings;
+  /**
+   * 多アカウント（docs/11・v0.6, Phase 2〜で正）。未設定なら legacy の
+   * 単数 gmail/imap から導出する（Phase 1）。
+   */
+  accounts?: MailAccount[];
+  /** 表示対象アカウント id（"all"=統合）。Phase 1 では未使用（UI据え置き）。 */
+  activeAccountId?: string;
 }
 
 // ---------------------------------------------------------------------------
