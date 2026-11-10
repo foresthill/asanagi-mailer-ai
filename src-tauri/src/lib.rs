@@ -414,28 +414,13 @@ async fn check_update_interactive(handle: tauri::AppHandle) {
     };
     match updater.check().await {
         Ok(Some(update)) => {
-            let v = update.version.clone();
-            log::info!("manual check: update {} -> {v}", update.current_version);
-            notify_web(
-                &handle,
-                &format!("新しいバージョン {v} をダウンロードしています…"),
-            );
-            match update.download_and_install(|_chunk, _total| {}, || {}).await {
-                Ok(_) => {
-                    log::info!("manual update installed; applies on next launch");
-                    let done = format!(
-                        "バージョン {v} をダウンロードしました。\n一度終了して開き直すと適用されます。"
-                    );
-                    notify_web(&handle, &done);
-                    notify_native(&handle, "アップデート", &done);
-                }
-                Err(e) => {
-                    log::warn!("manual update install failed: {e}");
-                    let m = "更新のダウンロードに失敗しました。時間をおいて再度お試しください。";
-                    notify_web(&handle, m);
-                    notify_native(&handle, "アップデート", m);
-                }
-            }
+            let newv = update.version.clone();
+            let curv = update.current_version.clone();
+            log::info!("manual check: update {curv} -> {newv}");
+            // Show current vs latest and let the user confirm before downloading.
+            // Non-blocking: the dialog's callback drives the download, so this
+            // async fn returns while the dialog is open.
+            confirm_and_install(handle.clone(), update, curv, newv);
         }
         Ok(None) => {
             let cur = handle.package_info().version.to_string();
@@ -451,6 +436,64 @@ async fn check_update_interactive(handle: tauri::AppHandle) {
             notify_native(&handle, "アップデート", m);
         }
     }
+}
+
+/// Confirmation step for the manual update flow: show the current and latest
+/// versions with an「アップデート」/「あとで」choice, and only download when the
+/// user confirms. The native dialog is non-blocking — its `FnOnce(bool)`
+/// callback (true = user pressed「アップデート」) spawns the download, which is
+/// staged and applied on the next launch.
+fn confirm_and_install(
+    handle: tauri::AppHandle,
+    update: tauri_plugin_updater::Update,
+    cur: String,
+    new: String,
+) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    let msg = format!(
+        "現在のバージョン: v{cur}\n最新のバージョン: v{new}\n\nアップデートしますか？\n（ダウンロード後、アプリを開き直すと適用されます）"
+    );
+    let h = handle.clone();
+    handle
+        .dialog()
+        .message(msg)
+        .title("アップデートがあります")
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "アップデート".to_string(),
+            "あとで".to_string(),
+        ))
+        .show(move |ok| {
+            if !ok {
+                log::info!("manual update: user chose 'later'");
+                notify_web(&h, "アップデートをキャンセルしました。");
+                return;
+            }
+            let h2 = h.clone();
+            let newv = new.clone();
+            tauri::async_runtime::spawn(async move {
+                notify_web(
+                    &h2,
+                    &format!("新しいバージョン {newv} をダウンロードしています…"),
+                );
+                match update.download_and_install(|_chunk, _total| {}, || {}).await {
+                    Ok(_) => {
+                        log::info!("manual update installed; applies on next launch");
+                        let done = format!(
+                            "バージョン {newv} をダウンロードしました。\n一度終了して開き直すと適用されます。"
+                        );
+                        notify_web(&h2, &done);
+                        notify_native(&h2, "アップデート", &done);
+                    }
+                    Err(e) => {
+                        log::warn!("manual update install failed: {e}");
+                        let m = "更新のダウンロードに失敗しました。時間をおいて再度お試しください。";
+                        notify_web(&h2, m);
+                        notify_native(&h2, "アップデート", m);
+                    }
+                }
+            });
+        });
 }
 
 /// Native Help menu → open the log folder / individual log files with the OS
