@@ -215,6 +215,29 @@ export function ConnectionsSettings({
   if (!open) return null;
 
   const selectedOpt = PROVIDER_OPTIONS.find((o) => o.value === provider);
+
+  // 「いま使うAI」1行サマリ: プロバイダ＝本命、フォールバック＝ローカル停止時の
+  // 予備、という優先関係を日本語で明示する（フォーム状態を即反映）。単独クラウド
+  // はモデルまで、オンプレは host と予備先を出す。
+  const brand = (p: AIProvider): string =>
+    PROVIDER_OPTIONS.find((o) => o.value === p)?.label ?? p;
+  const activeSummary = ((): string => {
+    if (provider === "auto") return t("conn.active.auto");
+    if (provider === "onprem") {
+      let host = baseUrl.trim();
+      try {
+        if (host) host = new URL(baseUrl).host;
+      } catch {
+        /* keep raw baseUrl when it isn't a full URL yet */
+      }
+      const loc = t("conn.active.local") + (host ? `（${host}）` : "");
+      return fallbackProvider === "none"
+        ? `${loc} ／ ${t("conn.active.standby")}: ${t("conn.active.none")}`
+        : `${loc} → ${t("conn.active.down")} ${brand(fallbackProvider)}`;
+    }
+    const m = model.trim() || view?.defaultModels?.[provider] || "";
+    return m ? `${brand(provider)}（${m}）` : brand(provider);
+  })();
   // onprem は openai のキー枠を使う（ローカルは任意）。auto/gateway はキー無し。
   const keyProvider: AIProvider | null =
     provider === "onprem"
@@ -418,6 +441,11 @@ export function ConnectionsSettings({
                   </option>
                 ))}
               </select>
+              {/* 優先関係を1行で明示: 本命＝選んだプロバイダ、予備＝オンプレ停止時のみ。 */}
+              <span className="text-[11px] text-fg-subtle">
+                {t("conn.active.label")}:{" "}
+                <span className="font-medium text-fg-muted">{activeSummary}</span>
+              </span>
             </label>
 
             {/* API key (per selected provider) */}
