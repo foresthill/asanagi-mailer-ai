@@ -6,6 +6,7 @@ import {
   FileText,
   MessageCircleQuestion,
   Languages,
+  Scale,
   Loader2,
   X,
   CornerDownLeft,
@@ -17,6 +18,7 @@ import {
 import type { Email, AiSummary, AiCacheEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { JevCompare } from "./JevCompare";
 
 /**
  * 読む時のAI（✨AI）。開いているメール（会話）に対し要約・質問・翻訳を行い、本文の
@@ -24,7 +26,7 @@ import { useI18n } from "@/lib/i18n";
  * クリック時だけ各APIを呼ぶ（自動生成しない）。本文はPIIマスクの関所を通してAIへ。
  */
 
-type Tab = "summary" | "ask" | "translate";
+type Tab = "summary" | "ask" | "translate" | "judge";
 type Scope = "message" | "thread";
 
 const LANGS: { code: string; label: string }[] = [
@@ -252,6 +254,7 @@ export function ReaderAiPanel({
           {renderTab("summary", FileText, "要約")}
           {renderTab("ask", MessageCircleQuestion, "質問")}
           {renderTab("translate", Languages, "翻訳")}
+          {renderTab("judge", Scale, "判定")}
         </div>
         <button
           onClick={onClose}
@@ -426,6 +429,17 @@ export function ReaderAiPanel({
             </div>
           )}
           <span className="text-[10px] text-fg-subtle">{t("translate.note")}</span>
+        </div>
+      )}
+
+      {/* 判定（Jev）: この1通を Jev（分類専用）と現行LLMで同時に判定して比較。
+          任意実行・試用（学習ログには記録しない）。自動のメール判定とは別。 */}
+      {tab === "judge" && (
+        <div className="flex flex-col gap-2">
+          <p className="text-[11px] leading-relaxed text-fg-subtle">
+            このメールを Jev（分類専用）と現行の判定で比較します。
+          </p>
+          <JevCompare key={email.id} email={email} />
         </div>
       )}
     </div>
