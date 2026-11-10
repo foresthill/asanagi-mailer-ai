@@ -74,7 +74,10 @@ export const DraftEditor = forwardRef<
     editorProps: {
       attributes: {
         class:
-          "min-h-full whitespace-pre-wrap text-[15px] leading-7 outline-none",
+          // leading-6 (24px): 空行に立つカーソルは行の高さいっぱいに描かれる
+          // ため、leading-7(28px) だと宛名の下の空行でカーソルが文字より明らかに
+          // 太く見えた（WKWebView）。本文の読みやすさを保てる範囲で詰めて軽減。
+          "min-h-full whitespace-pre-wrap text-[15px] leading-6 outline-none",
         // macOS WKWebView の既定テキスト置換（自動修正＝語尾スペース挿入・
         // スマート引用符・自動大文字化）を無効化。メール本文で「勝手にスペース/
         // 大文字が入る」のを防ぐ。RecipientFields / ImapConnectSection と同方針。
