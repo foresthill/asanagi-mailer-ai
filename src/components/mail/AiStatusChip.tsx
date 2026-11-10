@@ -30,6 +30,11 @@ type AiStatus = {
 
 const POLL_MS = 45_000;
 
+/** Fired by the connection-settings dialog after AI settings are saved, so the
+ *  sidebar chip re-reads /api/ai/status immediately instead of waiting for the
+ *  next poll. Kept here (next to the only listener) as the single source. */
+export const AI_STATUS_REFRESH_EVENT = "asanagi:ai-status-refresh";
+
 /**
  * Always-visible chip in the sidebar footer showing which AI the app is wired to
  * right now, and — for on-prem endpoints — whether it is actually reachable (an
@@ -70,11 +75,15 @@ export function AiStatusChip({
     }, POLL_MS);
     const onFocus = () => void load();
     window.addEventListener("focus", onFocus);
+    // 接続設定でAI設定を保存した直後に即再取得する。これが無いと、プロバイダを
+    // 切替えても最大45秒（次のポーリング）まで旧プロバイダ表示のままになる。
+    window.addEventListener(AI_STATUS_REFRESH_EVENT, onFocus);
     return () => {
       alive = false;
       clearTimeout(first);
       clearInterval(poll);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener(AI_STATUS_REFRESH_EVENT, onFocus);
     };
   }, []);
 

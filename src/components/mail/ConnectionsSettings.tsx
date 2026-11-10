@@ -30,6 +30,7 @@ import { OpenProjectSection } from "./OpenProjectSection";
 import { DevlogSection } from "./DevlogSection";
 import { NextcloudSection } from "./NextcloudSection";
 import { JevPlayground } from "./JevPlayground";
+import { AI_STATUS_REFRESH_EVENT } from "./AiStatusChip";
 
 // UI 上の選択肢。"onprem"（ローカル/オンプレ Ollama 等）は保存時に
 // provider="openai" + baseUrl にマップする UI 専用の別名（内部に openai プロバイダは
@@ -257,6 +258,11 @@ export function ConnectionsSettings({
     setKeyInputs({});
     setJevKeyInput(undefined);
     onSaved(data.active.configured);
+    // サイドバーのAIステータスチップを即更新（ポーリング待ちで旧プロバイダ＝
+    // openrouter のままに見える問題の修正）。保存はPOST完了済みなので競合なし。
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event(AI_STATUS_REFRESH_EVENT));
+    }
     return data;
   }
 
