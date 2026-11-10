@@ -384,6 +384,19 @@ const TOAST_JS: &str = r#"(function(){
   el._t = setTimeout(function(){ if(el&&el.parentNode) el.parentNode.removeChild(el); }, 9000);
 })();"#;
 
+/// Native OS dialog for update *results* — unlike `notify_web` (a toast injected
+/// into the web UI), this is visible even when the web UI failed to load (the
+/// exact case the user hit while updating FROM a broken build). Non-blocking.
+fn notify_native(handle: &tauri::AppHandle, title: &str, msg: &str) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+    handle
+        .dialog()
+        .message(msg.to_string())
+        .title(title.to_string())
+        .kind(MessageDialogKind::Info)
+        .show(|_| {});
+}
+
 /// Manual update check from the Help menu. Reports progress via `notify_web`.
 /// Unlike the silent startup check, this always tells the user the result —
 /// including "already up to date" — because they explicitly asked.
@@ -395,6 +408,7 @@ async fn check_update_interactive(handle: tauri::AppHandle) {
         Err(e) => {
             log::warn!("updater unavailable: {e}");
             notify_web(&handle, "アップデート機能を利用できません。");
+            notify_native(&handle, "アップデート", "アップデート機能を利用できません。");
             return;
         }
     };
@@ -409,30 +423,32 @@ async fn check_update_interactive(handle: tauri::AppHandle) {
             match update.download_and_install(|_chunk, _total| {}, || {}).await {
                 Ok(_) => {
                     log::info!("manual update installed; applies on next launch");
-                    notify_web(
-                        &handle,
-                        &format!(
-                            "バージョン {v} をダウンロードしました。\n「終了する」で一度閉じて開き直すと適用されます。"
-                        ),
+                    let done = format!(
+                        "バージョン {v} をダウンロードしました。\n一度終了して開き直すと適用されます。"
                     );
+                    notify_web(&handle, &done);
+                    notify_native(&handle, "アップデート", &done);
                 }
                 Err(e) => {
                     log::warn!("manual update install failed: {e}");
-                    notify_web(&handle, "更新のダウンロードに失敗しました。時間をおいて再度お試しください。");
+                    let m = "更新のダウンロードに失敗しました。時間をおいて再度お試しください。";
+                    notify_web(&handle, m);
+                    notify_native(&handle, "アップデート", m);
                 }
             }
         }
         Ok(None) => {
             let cur = handle.package_info().version.to_string();
             log::info!("manual check: up to date (v{cur})");
-            notify_web(&handle, &format!("最新版です（v{cur}）。"));
+            let m = format!("最新版です（v{cur}）。");
+            notify_web(&handle, &m);
+            notify_native(&handle, "アップデート", &m);
         }
         Err(e) => {
             log::warn!("manual update check failed: {e}");
-            notify_web(
-                &handle,
-                "更新を確認できませんでした（オフラインの可能性があります）。",
-            );
+            let m = "更新を確認できませんでした（オフラインの可能性があります）。";
+            notify_web(&handle, m);
+            notify_native(&handle, "アップデート", m);
         }
     }
 }
@@ -449,22 +465,61 @@ fn install_menu(app: &tauri::App) {
             MenuItemBuilder::with_id("open_server_log", "サーバログを表示 (server.log)").build(app)?;
         let check_update =
             MenuItemBuilder::with_id("check_update", "アップデートを確認").build(app)?;
-        // Quit lives in the ファイル (File) menu, per the usual desktop convention
-        // (not buried in ヘルプ). Predefined so it gets the native ⌘Q accelerator
-        // and correct per-OS label; it exits on its own (no on_menu_event arm).
-        let quit = PredefinedMenuItem::quit(app, Some("終了する"))?;
-        let file = SubmenuBuilder::new(app, "ファイル").items(&[&quit]).build()?;
-        let sep1 = PredefinedMenuItem::separator(app)?;
+
+        // アプリメニュー（macOS は先頭サブメニュー＝アプリ名のメニュー）。
+        let app_menu = SubmenuBuilder::new(app, &app.package_info().name)
+            .items(&[
+                &PredefinedMenuItem::about(app, None, None)?,
+                &PredefinedMenuItem::separator(app)?,
+                &PredefinedMenuItem::services(app, None)?,
+                &PredefinedMenuItem::separator(app)?,
+                &PredefinedMenuItem::hide(app, None)?,
+                &PredefinedMenuItem::hide_others(app, None)?,
+                &PredefinedMenuItem::show_all(app, None)?,
+                &PredefinedMenuItem::separator(app)?,
+                &PredefinedMenuItem::quit(app, Some("終了する"))?,
+            ])
+            .build()?;
+        // ファイル（ウィンドウを閉じる。終了はアプリメニューの慣習に合わせ移動）。
+        let file = SubmenuBuilder::new(app, "ファイル")
+            .items(&[&PredefinedMenuItem::close_window(app, Some("ウィンドウを閉じる"))?])
+            .build()?;
+        // 編集: これが無いと macOS の WebView で ⌘C/⌘V/⌘X/⌘A が効かない（ペースト
+        // できない不具合の原因）。Predefined ロールで OS 標準の挙動になる。
+        let edit = SubmenuBuilder::new(app, "編集")
+            .items(&[
+                &PredefinedMenuItem::undo(app, None)?,
+                &PredefinedMenuItem::redo(app, None)?,
+                &PredefinedMenuItem::separator(app)?,
+                &PredefinedMenuItem::cut(app, None)?,
+                &PredefinedMenuItem::copy(app, None)?,
+                &PredefinedMenuItem::paste(app, None)?,
+                &PredefinedMenuItem::select_all(app, None)?,
+            ])
+            .build()?;
+        // 表示
+        let view = SubmenuBuilder::new(app, "表示")
+            .items(&[&PredefinedMenuItem::fullscreen(app, None)?])
+            .build()?;
+        // ウィンドウ
+        let window = SubmenuBuilder::new(app, "ウィンドウ")
+            .items(&[
+                &PredefinedMenuItem::minimize(app, None)?,
+                &PredefinedMenuItem::maximize(app, None)?,
+            ])
+            .build()?;
         let help = SubmenuBuilder::new(app, "ヘルプ")
             .items(&[
                 &open_dir,
                 &open_app_log,
                 &open_server_log,
-                &sep1,
+                &PredefinedMenuItem::separator(app)?,
                 &check_update,
             ])
             .build()?;
-        let menu = MenuBuilder::new(app).items(&[&file, &help]).build()?;
+        let menu = MenuBuilder::new(app)
+            .items(&[&app_menu, &file, &edit, &view, &window, &help])
+            .build()?;
         app.set_menu(menu)?;
         Ok(())
     };
@@ -554,6 +609,7 @@ pub fn run() {
     use tauri_plugin_deep_link::DeepLinkExt;
     tauri::Builder::default()
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(log_plugin())
         .manage(MailtoQueue::default())

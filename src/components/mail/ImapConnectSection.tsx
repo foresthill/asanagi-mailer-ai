@@ -3,6 +3,15 @@
 import { useEffect, useState } from "react";
 import { Loader2, Check, AlertCircle, Unplug } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { deriveSmtpHost } from "@/lib/email/smtp-host";
+
+// Technical fields (hosts/addresses/ports) must never be auto-capitalized or
+// auto-corrected — macOS/WebKit turned "imap.lolipop" into "Imap.lolipop".
+const noAutoFix = {
+  autoCapitalize: "off",
+  autoCorrect: "off",
+  spellCheck: false,
+} as const;
 
 export interface ImapView {
   fromName: string;
@@ -224,7 +233,7 @@ export function ImapConnectSection({
           onChange={onUserChange}
           placeholder="you@example.com"
           autoComplete="off"
-          className={inputCls}
+          {...noAutoFix} className={inputCls}
         />
       </label>
 
@@ -247,7 +256,7 @@ export function ImapConnectSection({
               : t("imap.placeholder.appPassword")
           }
           autoComplete="off"
-          className={inputCls}
+          {...noAutoFix} className={inputCls}
         />
       </label>
 
@@ -294,7 +303,7 @@ export function ImapConnectSection({
                 value={form.host}
                 onChange={set("host")}
                 placeholder="imap.example.com"
-                className={inputCls}
+                {...noAutoFix} className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -305,7 +314,7 @@ export function ImapConnectSection({
                 value={form.port}
                 onChange={set("port")}
                 placeholder="993"
-                className={inputCls}
+                {...noAutoFix} className={inputCls}
               />
             </label>
           </div>
@@ -317,8 +326,8 @@ export function ImapConnectSection({
               <input
                 value={form.smtpHost}
                 onChange={set("smtpHost")}
-                placeholder={form.host || "smtp.example.com"}
-                className={inputCls}
+                placeholder={deriveSmtpHost(form.host) || "smtp.example.com"}
+                {...noAutoFix} className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -329,7 +338,7 @@ export function ImapConnectSection({
                 value={form.smtpPort}
                 onChange={set("smtpPort")}
                 placeholder="465"
-                className={inputCls}
+                {...noAutoFix} className={inputCls}
               />
             </label>
           </div>
@@ -342,7 +351,7 @@ export function ImapConnectSection({
                 value={form.smtpUser}
                 onChange={set("smtpUser")}
                 placeholder={t("imap.placeholder.sameAsImap")}
-                className={inputCls}
+                {...noAutoFix} className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -356,7 +365,7 @@ export function ImapConnectSection({
                 onChange={set("smtpPassword")}
                 placeholder={t("imap.placeholder.sameAsImap")}
                 autoComplete="off"
-                className={inputCls}
+                {...noAutoFix} className={inputCls}
               />
             </label>
           </div>
@@ -369,7 +378,7 @@ export function ImapConnectSection({
                 value={form.smtpFrom}
                 onChange={set("smtpFrom")}
                 placeholder={t("imap.placeholder.sameAsUser")}
-                className={inputCls}
+                {...noAutoFix} className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -380,7 +389,7 @@ export function ImapConnectSection({
                 value={form.archiveFolder}
                 onChange={set("archiveFolder")}
                 placeholder="Archive"
-                className={inputCls}
+                {...noAutoFix} className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -391,7 +400,7 @@ export function ImapConnectSection({
                 value={form.trashFolder}
                 onChange={set("trashFolder")}
                 placeholder="Trash"
-                className={inputCls}
+                {...noAutoFix} className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -402,7 +411,7 @@ export function ImapConnectSection({
                 value={form.sentFolder}
                 onChange={set("sentFolder")}
                 placeholder="Sent"
-                className={inputCls}
+                {...noAutoFix} className={inputCls}
               />
             </label>
           </div>
