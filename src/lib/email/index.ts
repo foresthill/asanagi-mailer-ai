@@ -3,6 +3,7 @@ import { MockProvider } from "./mock";
 import { GmailProvider, envGmailCreds, type GmailCreds } from "./gmail";
 import { ImapProvider, envImapCreds, type ImapCreds } from "./imap";
 import { getEmailSettings } from "@/lib/store";
+import { deriveSmtpHost } from "./smtp-host";
 
 /**
  * Resolve Gmail credentials: in-app connect (stored locally) wins over env.
@@ -34,7 +35,9 @@ export async function resolveImapCreds(): Promise<ImapCreds | null> {
       trashFolder: i.trashFolder || "Trash",
       sentFolder: i.sentFolder || "Sent",
       smtp: {
-        host: i.smtpHost || i.host,
+        // Blank SMTP host → derive from the IMAP host (imap.x → smtp.x), not
+        // the IMAP host verbatim (that was usually wrong). See smtp-host.ts.
+        host: i.smtpHost || deriveSmtpHost(i.host),
         port: Number(i.smtpPort || 465),
         secure: i.smtpSecure !== "false",
         user: i.smtpUser || i.user,
