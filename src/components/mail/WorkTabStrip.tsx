@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail, PenLine, X } from "lucide-react";
+import { Mail, PenLine, X, XCircle } from "lucide-react";
 
 import { useI18n } from "@/lib/i18n";
 
@@ -16,11 +16,14 @@ export function WorkTabStrip({
   activeId,
   onActivate,
   onClose,
+  onCloseAll,
 }: {
   tabs: WorkTab[];
   activeId: string | null;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
+  /** Close every open tab at once (confirms if any compose tab is unsent). */
+  onCloseAll?: () => void;
 }) {
   const { t } = useI18n();
   return (
@@ -69,6 +72,19 @@ export function WorkTabStrip({
           </div>
         );
       })}
+      {/* 「すべて閉じる」: タブが増えて閉じ忘れたときの一括クローズ（2枚以上で表示）。
+          作成中(未送信)が含まれる場合は呼び出し側が破棄確認を出す。 */}
+      {onCloseAll && tabs.length >= 2 && (
+        <button
+          type="button"
+          onClick={onCloseAll}
+          title={t("tabs.closeAll")}
+          className="ml-auto flex shrink-0 items-center gap-1 self-center rounded-lg px-2 py-1.5 text-sm text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+        >
+          <XCircle className="size-3.5 shrink-0" />
+          <span className="whitespace-nowrap">{t("tabs.closeAll")}</span>
+        </button>
+      )}
     </div>
   );
 }
