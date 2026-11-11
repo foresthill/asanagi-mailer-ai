@@ -397,6 +397,35 @@ fn notify_native(handle: &tauri::AppHandle, title: &str, msg: &str) {
         .show(|_| {});
 }
 
+/// After a manual update finishes downloading, offer「再起動」/「あとで」instead of
+/// telling the user to quit and reopen. 「再起動」relaunches the app so the staged
+/// update applies immediately (Tauri `AppHandle::restart` re-resolves the bundle on
+/// macOS); 「あとで」leaves it to apply on the next normal launch. Non-blocking.
+fn prompt_restart(handle: tauri::AppHandle, newv: String) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    let msg =
+        format!("バージョン {newv} をダウンロードしました。\n今すぐ再起動して適用しますか？");
+    let h = handle.clone();
+    handle
+        .dialog()
+        .message(msg)
+        .title("アップデート完了")
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "再起動".to_string(),
+            "あとで".to_string(),
+        ))
+        .show(move |restart| {
+            if restart {
+                log::info!("manual update: restarting to apply");
+                h.restart();
+            } else {
+                log::info!("manual update: apply deferred to next launch");
+                notify_web(&h, "次回アプリを起動したときに適用されます。");
+            }
+        });
+}
+
 /// Manual update check from the Help menu. Reports progress via `notify_web`.
 /// Unlike the silent startup check, this always tells the user the result —
 /// including "already up to date" — because they explicitly asked.
@@ -451,7 +480,7 @@ fn confirm_and_install(
 ) {
     use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
     let msg = format!(
-        "現在のバージョン: v{cur}\n最新のバージョン: v{new}\n\nアップデートしますか？\n（ダウンロード後、アプリを開き直すと適用されます）"
+        "現在のバージョン: v{cur}\n最新のバージョン: v{new}\n\nアップデートしますか？\n（ダウンロード後に再起動で適用できます）"
     );
     let h = handle.clone();
     handle
@@ -478,12 +507,13 @@ fn confirm_and_install(
                 );
                 match update.download_and_install(|_chunk, _total| {}, || {}).await {
                     Ok(_) => {
-                        log::info!("manual update installed; applies on next launch");
-                        let done = format!(
-                            "バージョン {newv} をダウンロードしました。\n一度終了して開き直すと適用されます。"
+                        log::info!("manual update installed; prompting restart");
+                        notify_web(
+                            &h2,
+                            &format!("バージョン {newv} をダウンロードしました。"),
                         );
-                        notify_web(&h2, &done);
-                        notify_native(&h2, "アップデート", &done);
+                        // 「開き直してください」ではなく、再起動ボタンで即適用できるようにする。
+                        prompt_restart(h2.clone(), newv.clone());
                     }
                     Err(e) => {
                         log::warn!("manual update install failed: {e}");
@@ -507,12 +537,15 @@ fn install_menu(app: &tauri::App) {
         let open_server_log =
             MenuItemBuilder::with_id("open_server_log", "サーバログを表示 (server.log)").build(app)?;
         let check_update =
-            MenuItemBuilder::with_id("check_update", "アップデートを確認").build(app)?;
+            MenuItemBuilder::with_id("check_update", "アップデートを確認…").build(app)?;
 
         // アプリメニュー（macOS は先頭サブメニュー＝アプリ名のメニュー）。
+        // 「アップデートを確認…」は macOS 慣習に合わせ About の近く（アプリメニュー）に置く。
         let app_menu = SubmenuBuilder::new(app, &app.package_info().name)
             .items(&[
                 &PredefinedMenuItem::about(app, None, None)?,
+                &PredefinedMenuItem::separator(app)?,
+                &check_update,
                 &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::services(app, None)?,
                 &PredefinedMenuItem::separator(app)?,
@@ -552,13 +585,7 @@ fn install_menu(app: &tauri::App) {
             ])
             .build()?;
         let help = SubmenuBuilder::new(app, "ヘルプ")
-            .items(&[
-                &open_dir,
-                &open_app_log,
-                &open_server_log,
-                &PredefinedMenuItem::separator(app)?,
-                &check_update,
-            ])
+            .items(&[&open_dir, &open_app_log, &open_server_log])
             .build()?;
         let menu = MenuBuilder::new(app)
             .items(&[&app_menu, &file, &edit, &view, &window, &help])
