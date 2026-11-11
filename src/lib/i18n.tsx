@@ -825,6 +825,11 @@ const ja: Dict = {
   "imap.gmail.detected":
     "Gmail を検出：サーバ設定を自動入力しました。パスワードは Gmail の「アプリパスワード」を使ってください（通常のログインパスワードは使えません）。",
   "imap.gmail.appPwLink": "アプリパスワードの作り方",
+  "imap.title.gmail": "Gmail / Google Workspace 接続",
+  "imap.gmail.workspace":
+    "Gmail / Google Workspace：サーバ設定を Gmail に合わせました。パスワードは Gmail の「アプリパスワード」を使ってください（通常のログインパスワードや2段階認証では接続できません）。",
+  "imap.gmail.slotTaken":
+    "いまは別のメール（{host}）が接続済みです。接続できるのは1口のみのため、Gmail を使うには上の「クリア」で現在の接続を外してください（複数アカウント対応は今後）。",
   "imap.advanced":
     "詳細設定（サーバ・ポート・SMTP・フォルダ名 — 空欄はIMAPの値/既定値を使用）",
   "imap.smtpHost": "SMTP ホスト",
@@ -1675,6 +1680,11 @@ const en: Dict = {
   "imap.gmail.detected":
     "Gmail detected: server settings filled in automatically. Use a Gmail “App password” for the password (your normal login password will not work).",
   "imap.gmail.appPwLink": "How to create an app password",
+  "imap.title.gmail": "Gmail / Google Workspace connect",
+  "imap.gmail.workspace":
+    "Gmail / Google Workspace: servers set to Gmail. Use a Google \u201capp password\u201d (your normal login password / 2-step won\u2019t connect).",
+  "imap.gmail.slotTaken":
+    "Another mailbox ({host}) is already connected. Only one is supported for now \u2014 use \u201cClear\u201d above to disconnect it before using Gmail (multi-account is coming).",
   "imap.advanced":
     "Advanced settings (server, port, SMTP & folder names — blank uses the IMAP value / default)",
   "imap.smtpHost": "SMTP host",
