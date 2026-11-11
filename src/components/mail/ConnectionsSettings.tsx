@@ -238,6 +238,23 @@ export function ConnectionsSettings({
     const m = model.trim() || view?.defaultModels?.[provider] || "";
     return m ? `${brand(provider)}（${m}）` : brand(provider);
   })();
+
+  // 本命プロバイダの切替（カード選択・以前は select の onChange に直書きだった）。
+  const selectProvider = (next: ProviderChoice) => {
+    setProvider(next);
+    // 切替先プロバイダの保存モデルを復元（モデル欄を触らなくてよい）。
+    if (view) {
+      setModel(modelForProvider(view, next));
+      setJudgmentModel(judgmentForProvider(view, next));
+    }
+    // onprem を選んだのに baseUrl 空だと保存後 openai に戻ってしまう。Ollama の
+    // 既定エンドポイント(11434)を補完して「選んだのに消える」を防ぐ。別ポート/
+    // トンネルなら手で直す。
+    if (next === "onprem" && !baseUrl.trim()) {
+      setBaseUrl("http://localhost:11434/v1");
+    }
+    setTest(null);
+  };
   // onprem は openai のキー枠を使う（ローカルは任意）。auto/gateway はキー無し。
   const keyProvider: AIProvider | null =
     provider === "onprem"
@@ -378,15 +395,12 @@ export function ConnectionsSettings({
   const cheapModel =
     view && rpForModels !== "auto" ? view.cheapModels[rpForModels] : "";
 
+  // ウィンドウ（アプリ窓の中身）いっぱいに被せる全画面表示。OSのディスプレイ
+  // 全画面ではない。中央モーダルだと max-w-lg で狭かったため、メール画面を
+  // 上書きして広く使う。閉じるは X / Esc（MailApp 側で Esc→onClose）。
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 flex flex-col bg-surface">
+      <div className="flex h-full w-full flex-col overflow-hidden bg-surface">
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-3.5">
           <KeyRound className="size-4 text-accent" />
           <h2 className="text-sm font-semibold">{t("conn.header")}</h2>
@@ -403,7 +417,7 @@ export function ConnectionsSettings({
             <Loader2 className="size-5 animate-spin" />
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+          <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto px-5 py-6">
             {/* メール設定を最上部に（まずメールを繋ぐ→次にAI）。 */}
             <EmailConnectSection />
             <div className="flex items-center gap-2 border-t border-border pt-4">
@@ -411,42 +425,44 @@ export function ConnectionsSettings({
               <h3 className="text-xs font-semibold">{t("conn.byok")}</h3>
             </div>
             {/* Provider */}
-            <label className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-fg-muted">
                 {t("conn.provider.label")}
               </span>
-              <select
-                value={provider}
-                onChange={(e) => {
-                  const next = e.target.value as ProviderChoice;
-                  setProvider(next);
-                  // 切替先プロバイダの保存モデルを復元（モデル欄を触らなくてよい）。
-                  if (view) {
-                    setModel(modelForProvider(view, next));
-                    setJudgmentModel(judgmentForProvider(view, next));
-                  }
-                  // onprem を選んだのに baseUrl 空だと保存後 openai に戻ってしまう。
-                  // Ollama の既定エンドポイント(11434)を補完して「選んだのに消える」を防ぐ。
-                  // 11434 = Ollama のデフォルトポート。別ポート/トンネルなら手で直す。
-                  if (next === "onprem" && !baseUrl.trim()) {
-                    setBaseUrl("http://localhost:11434/v1");
-                  }
-                  setTest(null);
-                }}
-                className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
-              >
-                {PROVIDER_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label ?? t(o.labelKey!)} — {t(o.hintKey)}
-                  </option>
-                ))}
-              </select>
+              {/* 本命をカード選択に。どれが最優先か一目で分かる（ドロップダウンは
+                  開かないと中身が見えず「本命がどれか」が埋もれていた）。 */}
+              <div role="radiogroup" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {PROVIDER_OPTIONS.map((o) => {
+                  const selected = provider === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => selectProvider(o.value)}
+                      className={`flex flex-col gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors ${
+                        selected
+                          ? "border-accent bg-accent-soft/40 ring-1 ring-accent"
+                          : "border-border bg-bg hover:bg-surface-2"
+                      }`}
+                    >
+                      <span className="text-sm font-medium">
+                        {o.label ?? t(o.labelKey!)}
+                      </span>
+                      <span className="text-[11px] leading-snug text-fg-subtle">
+                        {t(o.hintKey)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
               {/* 優先関係を1行で明示: 本命＝選んだプロバイダ、予備＝オンプレ停止時のみ。 */}
               <span className="text-[11px] text-fg-subtle">
                 {t("conn.active.label")}:{" "}
                 <span className="font-medium text-fg-muted">{activeSummary}</span>
               </span>
-            </label>
+            </div>
 
             {/* API key (per selected provider) */}
             {keyProvider ? (
