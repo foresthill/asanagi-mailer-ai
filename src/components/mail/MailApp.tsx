@@ -1327,6 +1327,21 @@ export function MailApp({
     return true;
   };
 
+  // タブの一括クローズ（「すべて閉じる」）。作成中(未送信)の作成タブが含まれる
+  // ときだけ、まとめて1回の破棄確認を出す（1枚ごとに聞かない）。閲覧タブだけなら
+  // 確認不要でそのまま閉じる。
+  const closeAllTabsWithConfirm = () => {
+    const n = composeTabs.length;
+    if (
+      n > 0 &&
+      !window.confirm(
+        `作成中のメールが${n}件あります。すべて破棄してタブを閉じますか？（まだ送信されていません）`,
+      )
+    )
+      return;
+    closeAllTabs();
+  };
+
   const changeFolder = (f: FolderView) => {
     // Clicking a folder returns to the list; any open tab (reader/compose) stays
     // in the strip, one click away. Only a plain list→list switch records folder
@@ -2396,6 +2411,7 @@ export function MailApp({
           activeId={activeId}
           onActivate={activateTab}
           onClose={closeComposeTab}
+          onCloseAll={closeAllTabsWithConfirm}
         />
       )}
       {view === "contacts" && (
