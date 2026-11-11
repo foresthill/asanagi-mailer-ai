@@ -64,6 +64,30 @@ function loadEnterSend(): boolean {
   return localStorage.getItem(ENTER_SEND_KEY) === "1";
 }
 
+/**
+ * fetch with a hard timeout. Sending must never hang the UI forever: the desktop
+ * build runs the API as a local standalone server where the route's `maxDuration`
+ * does NOT apply, so a non-responding request would otherwise leave the spinner
+ * turning with no error. Bounding it makes failure surface as the existing
+ * 「未送信へ退避＋赤バナー」path instead. SEND_TIMEOUT_MS is set well ABOVE the
+ * server-side SMTP/IMAP limits (~80s worst case) so a genuinely slow-but-OK send
+ * is never aborted — aborting one that actually went out would risk a double send.
+ */
+const SEND_TIMEOUT_MS = 120_000;
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  ms: number,
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 interface HistoryItem {
   id: string;
   instruction: string;
@@ -597,7 +621,13 @@ export function ReplyComposer({
     const id = retainedIdRef.current;
     if (!id) return;
     try {
-      await fetch(`/api/drafts/${encodeURIComponent(id)}`, { method: "DELETE" });
+      // Bounded: this runs fire-and-forget off the send critical path, so a
+      // non-responding DELETE must not linger as a zombie request forever.
+      await fetchWithTimeout(
+        `/api/drafts/${encodeURIComponent(id)}`,
+        { method: "DELETE" },
+        15_000,
+      );
     } catch {
       /* leftover draft is harmless; user can delete it manually */
     }
@@ -709,11 +739,15 @@ export function ReplyComposer({
     setSending(true);
     setSendError(null);
     try {
-      const res = await fetch("/api/send", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(outgoing()),
-      });
+      const res = await fetchWithTimeout(
+        "/api/send",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(outgoing()),
+        },
+        SEND_TIMEOUT_MS,
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         // 送信失敗は絶対に取りこぼさない: 本文を「未送信」へ自動退避し、
@@ -725,11 +759,16 @@ export function ReplyComposer({
         setSending(false);
         return;
       }
-      // 送信自体は成功したが控えの保存等に失敗 — 黙殺せず必ず知らせる。
+      // 送信は成功。ユーザーの目的は完了したので、ここから先（控え削除・学習記録）は
+      // 絶対にクリティカルパスに置かない。以前は `await discardSavedDraft()` がここに
+      // 居て、standaloneサーバの DELETE が返らないと「メールは送れたのにスピナーが
+      // 永遠に回る」状態になっていた（下書きから開いた返信では必ず通る経路）。
+      // 先に onSent() でタブを閉じてスピナーを止め、後片付けは best-effort で流す。
+      recordWritingSample(); // editor ref を unmount 前に読む（fire-and-forget）
+      void discardSavedDraft(); // 送れたら下書きは消す（失敗しても送信体験に影響させない）
+      onSent("sent"); // タブを閉じる＝スピナー即停止
+      // まれ: 送信OKだが送信箱への控え保存に失敗 — 黙殺せず知らせる。
       if (data.warning) alert(data.warning);
-      await discardSavedDraft(); // 送れたら下書きは消す
-      recordWritingSample(); // 返信文体の教師データ（AI下書き vs 実送信）
-      onSent("sent");
     } catch {
       // ネットワーク断等で送れたか不明 → 本文を失わないよう未送信へ退避。
       await retainFailedDraft(t("composer.toast.sendFailedNet"));
@@ -745,11 +784,15 @@ export function ReplyComposer({
     setSending(true);
     setSendError(null);
     try {
-      const res = await fetch("/api/schedule", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message: outgoing(), sendAt: iso }),
-      });
+      const res = await fetchWithTimeout(
+        "/api/schedule",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ message: outgoing(), sendAt: iso }),
+        },
+        SEND_TIMEOUT_MS,
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const err = data.error ?? t("composer.toast.scheduleFailed");
@@ -759,9 +802,10 @@ export function ReplyComposer({
         setSending(false);
         return;
       }
-      await discardSavedDraft(); // 予約できたら下書きは消す
-      recordWritingSample(); // 返信文体の教師データ（AI下書き vs 実送信）
-      onSent("scheduled");
+      // 予約成功。後片付けはクリティカルパスから外す（sendNow と同方針）。
+      recordWritingSample(); // editor ref を unmount 前に読む（fire-and-forget）
+      void discardSavedDraft(); // 予約できたら下書きは消す（best-effort）
+      onSent("scheduled"); // タブを閉じる＝スピナー即停止
     } catch {
       await retainFailedDraft(t("composer.toast.scheduleFailedNet"));
       setSendError(
