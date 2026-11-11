@@ -4,26 +4,26 @@ import { GmailProvider, envGmailCreds, type GmailCreds } from "./gmail";
 import { ImapProvider, envImapCreds, type ImapCreds } from "./imap";
 import { getEmailSettings } from "@/lib/store";
 import { deriveSmtpHost } from "./smtp-host";
+import type { GmailAccountSettings, ImapAccountSettings } from "@/lib/types";
 
 /**
- * Resolve Gmail credentials: in-app connect (stored locally) wins over env.
+ * Build Gmail creds from one account's stored settings (no env fallback). Used
+ * per-account (docs/11 多アカウント) — `resolveGmailCreds` wraps this for the
+ * legacy singular slot and adds the env fallback.
  */
-export async function resolveGmailCreds(): Promise<GmailCreds | null> {
-  const s = await getEmailSettings();
-  const g = s.gmail;
+export function gmailCredsFrom(g: GmailAccountSettings | undefined): GmailCreds | null {
   if (g?.clientId && g?.clientSecret && g?.refreshToken) {
     return { clientId: g.clientId, clientSecret: g.clientSecret, refreshToken: g.refreshToken };
   }
-  return envGmailCreds();
+  return null;
 }
 
 /**
- * Resolve IMAP/SMTP credentials: in-app settings win over env. Blank SMTP
- * fields fall back to the IMAP values (the common single-account case).
+ * Build IMAP/SMTP creds from one account's stored settings (no env fallback).
+ * Blank SMTP fields fall back to the IMAP values (the common single-account
+ * case). `resolveImapCreds` wraps this for the legacy singular slot + env.
  */
-export async function resolveImapCreds(): Promise<ImapCreds | null> {
-  const s = await getEmailSettings();
-  const i = s.imap;
+export function imapCredsFrom(i: ImapAccountSettings | undefined): ImapCreds | null {
   if (i?.host && i?.user && i?.password) {
     return {
       host: i.host,
@@ -47,7 +47,24 @@ export async function resolveImapCreds(): Promise<ImapCreds | null> {
       },
     };
   }
-  return envImapCreds();
+  return null;
+}
+
+/**
+ * Resolve Gmail credentials: in-app connect (stored locally) wins over env.
+ */
+export async function resolveGmailCreds(): Promise<GmailCreds | null> {
+  const s = await getEmailSettings();
+  return gmailCredsFrom(s.gmail) ?? envGmailCreds();
+}
+
+/**
+ * Resolve IMAP/SMTP credentials: in-app settings win over env. Blank SMTP
+ * fields fall back to the IMAP values (the common single-account case).
+ */
+export async function resolveImapCreds(): Promise<ImapCreds | null> {
+  const s = await getEmailSettings();
+  return imapCredsFrom(s.imap) ?? envImapCreds();
 }
 
 /**
