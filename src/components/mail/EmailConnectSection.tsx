@@ -207,7 +207,11 @@ export function EmailConnectSection() {
           「詳細」(<details>) に畳んで既定では見せない（キーに見えて誤解を招くため）。
           デモ(mock)は接続フォーム不要。 */}
       {view.choice !== "mock" && (
-        <ImapConnectSection imap={view.imap} onRefresh={refresh} />
+        <ImapConnectSection
+          imap={view.imap}
+          gmailChoice={view.choice === "gmail"}
+          onRefresh={refresh}
+        />
       )}
 
       {(view.choice === "gmail" || view.choice === "auto") && (

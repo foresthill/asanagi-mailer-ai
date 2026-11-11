@@ -59,11 +59,17 @@ function gmailPreset(email: string): { host: string; smtpHost: string } | null {
  * locally (.data); blank SMTP fields fall back to the IMAP values.
  * View state lives in EmailConnectSection.
  */
+const GMAIL_SERVERS = { host: "imap.gmail.com", smtpHost: "smtp.gmail.com" };
+
 export function ImapConnectSection({
   imap,
+  gmailChoice = false,
   onRefresh,
 }: {
   imap: ImapView;
+  /** 接続方法で「Gmail / Google Workspace」を選んでいる。独自ドメイン
+   *  (例: you@yourco.com の Workspace) でも Gmail サーバを前提にする。 */
+  gmailChoice?: boolean;
   onRefresh: () => Promise<void>;
 }) {
   const { t } = useI18n();
@@ -77,15 +83,29 @@ export function ImapConnectSection({
     setForm((f) => ({ ...f, ...imap, password: "", smtpPassword: "" }));
   }, [imap]);
 
+  useEffect(() => {
+    // 「Gmail / Google Workspace」を選んだら、空のサーバ欄を Gmail に前詰め。
+    // Workspace の独自ドメインはアドレスから判定できないので、選択をもって
+    // Gmail サーバと確定する。既存の別サーバ(例: 会社IMAP)は上書きしない。
+    if (!gmailChoice) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- derive from choice
+    setForm((f) =>
+      f.host
+        ? f
+        : { ...f, host: GMAIL_SERVERS.host, smtpHost: f.smtpHost || GMAIL_SERVERS.smtpHost },
+    );
+  }, [gmailChoice]);
+
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  // Typing a Gmail address fills the servers so the user only supplies address
-  // + app password. Don't clobber a host the user set to something non-Gmail.
+  // Typing a Gmail address (or having chosen Gmail/Workspace) fills the servers
+  // so the user only supplies address + app password. Don't clobber a host the
+  // user set to something non-Gmail.
   const onUserChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const user = e.target.value;
     setForm((f) => {
-      const preset = gmailPreset(user);
+      const preset = gmailPreset(user) ?? (gmailChoice ? GMAIL_SERVERS : null);
       const autofill =
         preset && (!f.host || f.host === "imap.gmail.com")
           ? { host: preset.host, smtpHost: preset.smtpHost }
@@ -93,9 +113,14 @@ export function ImapConnectSection({
       return { ...f, user, ...autofill };
     });
   };
-  const isGmail = Boolean(gmailPreset(form.user));
+  const domainGmail = Boolean(gmailPreset(form.user));
+  const isGmail = domainGmail || gmailChoice;
 
   const configured = Boolean(imap.host && imap.user && imap.passwordSet);
+  // Gmail を選んだのに、既に別サーバ(会社IMAP等)が設定済み。今は1口のみなので
+  // クリアを促す（恒久対応は多アカウント対応 docs/11）。
+  const slotTakenByOther =
+    gmailChoice && configured && !/gmail\.com$/i.test(imap.host);
 
   async function save(): Promise<void> {
     const body: Record<string, string> = {
@@ -194,7 +219,7 @@ export function ImapConnectSection({
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <h4 className="text-[11px] font-semibold text-fg-muted">
-          {t("imap.title")}
+          {isGmail ? t("imap.title.gmail") : t("imap.title")}
         </h4>
         {configured && (
           <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
@@ -260,9 +285,15 @@ export function ImapConnectSection({
         />
       </label>
 
+      {slotTakenByOther && (
+        <p className="rounded-lg bg-high-soft px-3 py-2 text-[11px] leading-relaxed text-high">
+          {t("imap.gmail.slotTaken").replace("{host}", imap.host)}
+        </p>
+      )}
+
       {isGmail && (
         <p className="rounded-lg bg-accent-soft px-3 py-2 text-[11px] leading-relaxed text-fg-muted">
-          {t("imap.gmail.detected")}{" "}
+          {domainGmail ? t("imap.gmail.detected") : t("imap.gmail.workspace")}{" "}
           <a
             href="https://support.google.com/accounts/answer/185833"
             target="_blank"
