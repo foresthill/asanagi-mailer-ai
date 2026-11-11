@@ -155,11 +155,29 @@ fn ensure_node(resource_dir: &Path, data_dir: Option<&Path>) -> PathBuf {
     dest
 }
 
+/// On Windows the app binary is a GUI ("windows") subsystem process with no
+/// console (see main.rs), so spawning a console-subsystem child (node.exe) makes
+/// Windows allocate and show a new console window — the stray "next-server" window
+/// users were seeing. CREATE_NO_WINDOW suppresses it. No-op on macOS/Linux.
+fn hide_console(cmd: &mut std::process::Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    let _ = cmd;
+}
+
 /// Does this `node` binary actually run here? Runs `node --version` and logs the
 /// result — turns a silent "server never started" into a diagnosable line
 /// (e.g. a GLIBC/arch error on stderr) in the app log.
 fn node_works(bin: &Path) -> bool {
-    match std::process::Command::new(bin).arg("--version").output() {
+    let mut cmd = std::process::Command::new(bin);
+    cmd.arg("--version");
+    hide_console(&mut cmd); // don't flash a console window on Windows
+    match cmd.output() {
         Ok(o) if o.status.success() => {
             log::info!(
                 "node OK: {} {}",
@@ -258,6 +276,10 @@ fn start_server(handle: &tauri::AppHandle) {
             }
         }
     }
+
+    // Windows: suppress the console window the spawned node.exe would otherwise
+    // pop up (the app itself is a GUI subsystem with no console to inherit).
+    hide_console(&mut cmd);
 
     match cmd.spawn() {
         Ok(_) => log::info!(
