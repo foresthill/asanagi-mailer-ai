@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Check, AlertCircle, Unplug } from "lucide-react";
+import { useState } from "react";
+import { Loader2, Check, AlertCircle } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { deriveSmtpHost } from "@/lib/email/smtp-host";
 
@@ -13,23 +13,42 @@ const noAutoFix = {
   spellCheck: false,
 } as const;
 
-export interface ImapView {
-  fromName: string;
-  host: string;
-  port: string;
-  secure: string;
-  user: string;
-  archiveFolder: string;
-  trashFolder: string;
-  sentFolder: string;
-  smtpHost: string;
-  smtpPort: string;
-  smtpSecure: string;
-  smtpUser: string;
-  smtpFrom: string;
-  passwordSet: boolean;
-  smtpPasswordSet: boolean;
-  envConfigured: boolean;
+const inputCls =
+  "rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent";
+
+const GMAIL_DOMAINS = ["gmail.com", "googlemail.com"];
+function gmailPreset(email: string): { host: string; smtpHost: string } | null {
+  const dom = email.split("@")[1]?.trim().toLowerCase();
+  return dom && GMAIL_DOMAINS.includes(dom)
+    ? { host: "imap.gmail.com", smtpHost: "smtp.gmail.com" }
+    : null;
+}
+
+/** Masked IMAP account fields served by GET /api/settings/accounts. */
+export interface AccountImapView {
+  id: string;
+  type: "imap";
+  label: string;
+  address: string;
+  connected: boolean;
+  imap: {
+    fromName: string;
+    host: string;
+    port: string;
+    secure: string;
+    user: string;
+    archiveFolder: string;
+    trashFolder: string;
+    sentFolder: string;
+    smtpHost: string;
+    smtpPort: string;
+    smtpSecure: string;
+    smtpUser: string;
+    smtpFrom: string;
+    inboxCutoff: string;
+    passwordSet: boolean;
+    smtpPasswordSet: boolean;
+  };
 }
 
 interface TestResult {
@@ -38,74 +57,56 @@ interface TestResult {
   smtp: { ok: boolean; error?: string };
 }
 
-const inputCls =
-  "rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent";
+const EMPTY_IMAP: AccountImapView["imap"] = {
+  fromName: "",
+  host: "",
+  port: "",
+  secure: "",
+  user: "",
+  archiveFolder: "",
+  trashFolder: "",
+  sentFolder: "",
+  smtpHost: "",
+  smtpPort: "",
+  smtpSecure: "",
+  smtpUser: "",
+  smtpFrom: "",
+  inboxCutoff: "",
+  passwordSet: false,
+  smtpPasswordSet: false,
+};
 
-const GMAIL_DOMAINS = ["gmail.com", "googlemail.com"];
 /**
- * Gmail addresses use fixed IMAP/SMTP hosts, so the user never needs to know
- * them — detect the domain and we fill host/smtpHost for them (ports/secure
- * already default to 993/465/TLS server-side). Returns null for other domains.
+ * Add/edit one IMAP account. Posts to /api/settings/accounts (POST=new,
+ * PATCH=edit). Credentials are saved locally (.data); blank SMTP fields fall
+ * back to the IMAP values. On save it calls onSaved with the refreshed list.
  */
-function gmailPreset(email: string): { host: string; smtpHost: string } | null {
-  const dom = email.split("@")[1]?.trim().toLowerCase();
-  return dom && GMAIL_DOMAINS.includes(dom)
-    ? { host: "imap.gmail.com", smtpHost: "smtp.gmail.com" }
-    : null;
-}
-
-/**
- * Generic IMAP/SMTP connect (e.g. company mail). Credentials are saved
- * locally (.data); blank SMTP fields fall back to the IMAP values.
- * View state lives in EmailConnectSection.
- */
-const GMAIL_SERVERS = { host: "imap.gmail.com", smtpHost: "smtp.gmail.com" };
-
-export function ImapConnectSection({
-  imap,
-  gmailChoice = false,
-  onRefresh,
+export function AccountImapForm({
+  account,
+  onSaved,
+  onCancel,
 }: {
-  imap: ImapView;
-  /** 接続方法で「Gmail / Google Workspace」を選んでいる。独自ドメイン
-   *  (例: you@yourco.com の Workspace) でも Gmail サーバを前提にする。 */
-  gmailChoice?: boolean;
-  onRefresh: () => Promise<void>;
+  account?: AccountImapView;
+  onSaved: () => Promise<void> | void;
+  onCancel: () => void;
 }) {
   const { t } = useI18n();
-  const [form, setForm] = useState({ ...imap, password: "", smtpPassword: "" });
+  const base = account?.imap ?? EMPTY_IMAP;
+  const [label, setLabel] = useState(account?.label ?? "");
+  const [form, setForm] = useState({ ...base, password: "", smtpPassword: "" });
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<TestResult | null>(null);
-
-  useEffect(() => {
-    // Refresh editable fields when the server view changes (e.g. after save).
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync form with server view
-    setForm((f) => ({ ...f, ...imap, password: "", smtpPassword: "" }));
-  }, [imap]);
-
-  useEffect(() => {
-    // 「Gmail / Google Workspace」を選んだら、空のサーバ欄を Gmail に前詰め。
-    // Workspace の独自ドメインはアドレスから判定できないので、選択をもって
-    // Gmail サーバと確定する。既存の別サーバ(例: 会社IMAP)は上書きしない。
-    if (!gmailChoice) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- derive from choice
-    setForm((f) =>
-      f.host
-        ? f
-        : { ...f, host: GMAIL_SERVERS.host, smtpHost: f.smtpHost || GMAIL_SERVERS.smtpHost },
-    );
-  }, [gmailChoice]);
+  const [error, setError] = useState<string | null>(null);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  // Typing a Gmail address (or having chosen Gmail/Workspace) fills the servers
-  // so the user only supplies address + app password. Don't clobber a host the
-  // user set to something non-Gmail.
+  // Typing a Gmail address fills the servers so the user only supplies
+  // address + app password. Don't clobber a non-Gmail host the user set.
   const onUserChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const user = e.target.value;
     setForm((f) => {
-      const preset = gmailPreset(user) ?? (gmailChoice ? GMAIL_SERVERS : null);
+      const preset = gmailPreset(user);
       const autofill =
         preset && (!f.host || f.host === "imap.gmail.com")
           ? { host: preset.host, smtpHost: preset.smtpHost }
@@ -113,17 +114,11 @@ export function ImapConnectSection({
       return { ...f, user, ...autofill };
     });
   };
-  const domainGmail = Boolean(gmailPreset(form.user));
-  const isGmail = domainGmail || gmailChoice;
+  const isGmail = Boolean(gmailPreset(form.user));
 
-  const configured = Boolean(imap.host && imap.user && imap.passwordSet);
-  // Gmail を選んだのに、既に別サーバ(会社IMAP等)が設定済み。今は1口のみなので
-  // クリアを促す（恒久対応は多アカウント対応 docs/11）。
-  const slotTakenByOther =
-    gmailChoice && configured && !/gmail\.com$/i.test(imap.host);
-
-  async function save(): Promise<void> {
-    const body: Record<string, string> = {
+  /** Save (POST new / PATCH edit) and return the resulting account id. */
+  async function save(): Promise<string | null> {
+    const imap: Record<string, string> = {
       fromName: form.fromName,
       host: form.host,
       port: form.port,
@@ -135,23 +130,41 @@ export function ImapConnectSection({
       smtpPort: form.smtpPort,
       smtpUser: form.smtpUser,
       smtpFrom: form.smtpFrom,
+      inboxCutoff: form.inboxCutoff,
     };
     // Only send passwords the user actually typed (blank would clear them).
-    if (form.password.trim()) body.password = form.password.trim();
-    if (form.smtpPassword.trim()) body.smtpPassword = form.smtpPassword.trim();
-    await fetch("/api/settings/email", {
-      method: "POST",
+    if (form.password.trim()) imap.password = form.password.trim();
+    if (form.smtpPassword.trim()) imap.smtpPassword = form.smtpPassword.trim();
+
+    const res = await fetch("/api/settings/accounts", {
+      method: account ? "PATCH" : "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ imap: body }),
+      body: JSON.stringify({
+        ...(account ? { id: account.id } : {}),
+        type: "imap",
+        label,
+        address: form.user,
+        imap,
+      }),
     });
-    await onRefresh();
+    const data = (await res.json().catch(() => ({}))) as {
+      id?: string;
+      error?: string;
+    };
+    if (!res.ok) {
+      setError(data.error ?? `HTTP ${res.status}`);
+      return null;
+    }
+    return account?.id ?? data.id ?? null;
   }
 
   async function handleSave() {
     setBusy(true);
+    setError(null);
     setTest(null);
     try {
-      await save();
+      const id = await save();
+      if (id) await onSaved();
     } finally {
       setBusy(false);
     }
@@ -159,37 +172,30 @@ export function ImapConnectSection({
 
   async function handleTest() {
     setBusy(true);
+    setError(null);
     setTest(null);
     try {
-      await save();
-      const res = await fetch("/api/settings/email/test", { method: "POST" });
+      const id = await save();
+      if (!id) return;
+      const res = await fetch("/api/settings/accounts/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
       const raw = await res.text();
       try {
-        // Normal path: the route returns JSON (200 ok / 502 with per-protocol
-        // reasons it already logged server-side).
         setTest(JSON.parse(raw) as TestResult);
       } catch {
-        // The route 500'd before it could return JSON (e.g. a crash on import).
-        // Surface the raw status + body AND push it into the 動作ログ so the
-        // reason is never invisible, even in this failure mode.
-        const detail = `HTTP ${res.status} ${raw.slice(0, 500) || "(本文なし)"}`;
+        const detail = `HTTP ${res.status} ${raw.slice(0, 300) || "(本文なし)"}`;
         setTest({
           ok: false,
           imap: { ok: false, error: detail },
           smtp: { ok: false, error: detail },
         });
-        void fetch("/api/logs", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            scope: "imap",
-            message: `接続テストが応答を返せませんでした: ${detail}`,
-          }),
-        }).catch(() => {});
       }
+      await onSaved();
     } catch (e) {
-      // Network-level failure reaching our own route (not the mail server).
-      const detail = e instanceof Error ? e.message : t("imap.test.failed");
+      const detail = e instanceof Error ? e.message : "error";
       setTest({
         ok: false,
         imap: { ok: false, error: detail },
@@ -200,72 +206,47 @@ export function ImapConnectSection({
     }
   }
 
-  async function disconnect() {
-    setBusy(true);
-    setTest(null);
-    try {
-      await fetch("/api/settings/email", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ disconnect: "imap" }),
-      });
-      await onRefresh();
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <h4 className="text-[11px] font-semibold text-fg-muted">
-          {isGmail ? t("imap.title.gmail") : t("imap.title")}
-        </h4>
-        {configured && (
-          <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
-            {t("imap.configured")
-              .replace("{user}", imap.user)
-              .replace("{host}", imap.host)}
-          </span>
-        )}
-        {imap.envConfigured && !configured && (
-          <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-subtle">
-            {t("imap.envConfigured")}
-          </span>
-        )}
-        {configured && (
-          <button
-            onClick={disconnect}
-            disabled={busy}
-            className="ml-auto flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-fg-muted hover:text-high disabled:opacity-50"
-          >
-            <Unplug className="size-3" />
-            {t("imap.clear")}
-          </button>
-        )}
-      </div>
+      <button
+        onClick={onCancel}
+        className="self-start text-[11px] text-fg-subtle hover:text-fg"
+      >
+        {t("accounts.back")}
+      </button>
 
-      <p className="text-[11px] leading-relaxed text-fg-subtle">
-        {t("imap.intro")}
-      </p>
+      <h4 className="text-[11px] font-semibold text-fg-muted">
+        {account ? t("accounts.editImap") : t("accounts.newImap")}
+      </h4>
 
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-fg-muted">
-          {t("imap.user")}
+          {t("accounts.labelField")}
         </span>
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder={t("accounts.labelPlaceholder")}
+          className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-fg-muted">{t("imap.user")}</span>
         <input
           value={form.user}
           onChange={onUserChange}
           placeholder="you@example.com"
           autoComplete="off"
-          {...noAutoFix} className={inputCls}
+          {...noAutoFix}
+          className={inputCls}
         />
       </label>
 
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-fg-muted">
           {t("imap.password")}
-          {imap.passwordSet && (
+          {form.passwordSet && (
             <span className="ml-2 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
               {t("imap.set")}
             </span>
@@ -276,24 +257,19 @@ export function ImapConnectSection({
           value={form.password}
           onChange={set("password")}
           placeholder={
-            imap.passwordSet
+            form.passwordSet
               ? t("imap.placeholder.changeOnly")
               : t("imap.placeholder.appPassword")
           }
           autoComplete="off"
-          {...noAutoFix} className={inputCls}
+          {...noAutoFix}
+          className={inputCls}
         />
       </label>
 
-      {slotTakenByOther && (
-        <p className="rounded-lg bg-high-soft px-3 py-2 text-[11px] leading-relaxed text-high">
-          {t("imap.gmail.slotTaken").replace("{host}", imap.host)}
-        </p>
-      )}
-
       {isGmail && (
         <p className="rounded-lg bg-accent-soft px-3 py-2 text-[11px] leading-relaxed text-fg-muted">
-          {domainGmail ? t("imap.gmail.detected") : t("imap.gmail.workspace")}{" "}
+          {t("imap.gmail.detected")}{" "}
           <a
             href="https://support.google.com/accounts/answer/185833"
             target="_blank"
@@ -315,9 +291,18 @@ export function ImapConnectSection({
           placeholder={t("imap.fromName.placeholder")}
           className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
         />
-        <span className="text-[11px] text-fg-subtle">
-          {t("imap.fromName.note")}
+      </label>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-fg-muted">
+          {t("email.cutoff.title")}
         </span>
+        <input
+          type="date"
+          value={form.inboxCutoff}
+          onChange={set("inboxCutoff")}
+          className="rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+        />
       </label>
 
       <details className="rounded-lg bg-surface-2 px-3 py-2">
@@ -327,25 +312,23 @@ export function ImapConnectSection({
         <div className="mt-3 flex flex-col gap-2">
           <div className="grid grid-cols-3 gap-2">
             <label className="col-span-2 flex flex-col gap-1">
-              <span className="text-[11px] text-fg-muted">
-                {t("imap.host")}
-              </span>
+              <span className="text-[11px] text-fg-muted">{t("imap.host")}</span>
               <input
                 value={form.host}
                 onChange={set("host")}
                 placeholder="imap.example.com"
-                {...noAutoFix} className={inputCls}
+                {...noAutoFix}
+                className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] text-fg-muted">
-                {t("imap.port")}
-              </span>
+              <span className="text-[11px] text-fg-muted">{t("imap.port")}</span>
               <input
                 value={form.port}
                 onChange={set("port")}
                 placeholder="993"
-                {...noAutoFix} className={inputCls}
+                {...noAutoFix}
+                className={inputCls}
               />
             </label>
           </div>
@@ -358,7 +341,8 @@ export function ImapConnectSection({
                 value={form.smtpHost}
                 onChange={set("smtpHost")}
                 placeholder={deriveSmtpHost(form.host) || "smtp.example.com"}
-                {...noAutoFix} className={inputCls}
+                {...noAutoFix}
+                className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -369,7 +353,8 @@ export function ImapConnectSection({
                 value={form.smtpPort}
                 onChange={set("smtpPort")}
                 placeholder="465"
-                {...noAutoFix} className={inputCls}
+                {...noAutoFix}
+                className={inputCls}
               />
             </label>
           </div>
@@ -382,13 +367,14 @@ export function ImapConnectSection({
                 value={form.smtpUser}
                 onChange={set("smtpUser")}
                 placeholder={t("imap.placeholder.sameAsImap")}
-                {...noAutoFix} className={inputCls}
+                {...noAutoFix}
+                className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[11px] text-fg-muted">
                 {t("imap.smtpPassword")}
-                {imap.smtpPasswordSet ? t("imap.setParen") : ""}
+                {form.smtpPasswordSet ? t("imap.setParen") : ""}
               </span>
               <input
                 type="password"
@@ -396,7 +382,8 @@ export function ImapConnectSection({
                 onChange={set("smtpPassword")}
                 placeholder={t("imap.placeholder.sameAsImap")}
                 autoComplete="off"
-                {...noAutoFix} className={inputCls}
+                {...noAutoFix}
+                className={inputCls}
               />
             </label>
           </div>
@@ -409,7 +396,8 @@ export function ImapConnectSection({
                 value={form.smtpFrom}
                 onChange={set("smtpFrom")}
                 placeholder={t("imap.placeholder.sameAsUser")}
-                {...noAutoFix} className={inputCls}
+                {...noAutoFix}
+                className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -420,7 +408,8 @@ export function ImapConnectSection({
                 value={form.archiveFolder}
                 onChange={set("archiveFolder")}
                 placeholder="Archive"
-                {...noAutoFix} className={inputCls}
+                {...noAutoFix}
+                className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -431,7 +420,8 @@ export function ImapConnectSection({
                 value={form.trashFolder}
                 onChange={set("trashFolder")}
                 placeholder="Trash"
-                {...noAutoFix} className={inputCls}
+                {...noAutoFix}
+                className={inputCls}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -442,41 +432,35 @@ export function ImapConnectSection({
                 value={form.sentFolder}
                 onChange={set("sentFolder")}
                 placeholder="Sent"
-                {...noAutoFix} className={inputCls}
+                {...noAutoFix}
+                className={inputCls}
               />
             </label>
           </div>
         </div>
       </details>
 
+      {error && (
+        <p className="rounded-lg bg-high-soft px-3 py-2 text-[11px] text-high">
+          {error}
+        </p>
+      )}
+
       {test && (
         <div
           className={`flex flex-col gap-1 rounded-lg px-3 py-2 text-xs ${
-            test.ok
-              ? "bg-emerald-500/10 text-emerald-600"
-              : "bg-high-soft text-high"
+            test.ok ? "bg-emerald-500/10 text-emerald-600" : "bg-high-soft text-high"
           }`}
         >
           <span className="flex items-center gap-2">
-            {test.imap.ok ? (
-              <Check className="size-3.5" />
-            ) : (
-              <AlertCircle className="size-3.5" />
-            )}
+            {test.imap.ok ? <Check className="size-3.5" /> : <AlertCircle className="size-3.5" />}
             IMAP:{" "}
             {test.imap.ok
-              ? t("imap.test.imapOk").replace(
-                  "{n}",
-                  String(test.imap.total ?? "?"),
-                )
+              ? t("imap.test.imapOk").replace("{n}", String(test.imap.total ?? "?"))
               : test.imap.error}
           </span>
           <span className="flex items-center gap-2">
-            {test.smtp.ok ? (
-              <Check className="size-3.5" />
-            ) : (
-              <AlertCircle className="size-3.5" />
-            )}
+            {test.smtp.ok ? <Check className="size-3.5" /> : <AlertCircle className="size-3.5" />}
             SMTP: {test.smtp.ok ? t("imap.test.smtpOk") : test.smtp.error}
           </span>
         </div>
@@ -485,10 +469,7 @@ export function ImapConnectSection({
       <div className="flex items-center gap-2">
         <button
           onClick={handleTest}
-          disabled={
-            busy ||
-            !(form.host && form.user && (form.password || imap.passwordSet))
-          }
+          disabled={busy || !(form.host && form.user && (form.password || form.passwordSet))}
           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2 disabled:opacity-50"
         >
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
@@ -496,7 +477,7 @@ export function ImapConnectSection({
         </button>
         <button
           onClick={handleSave}
-          disabled={busy}
+          disabled={busy || !(form.user && (form.password || form.passwordSet))}
           className="ml-auto rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
         >
           {t("imap.save")}

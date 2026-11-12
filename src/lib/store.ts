@@ -5,6 +5,9 @@ import type {
   AIProvider,
   AISettings,
   EmailSettings,
+  MailAccount,
+  GmailAccountSettings,
+  ImapAccountSettings,
   ImportanceSignal,
   Importance,
   Project,
@@ -144,6 +147,185 @@ export async function saveEmailSettings(
     }
   }
 
+  await writeJson(EMAIL_SETTINGS, next);
+  return next;
+}
+
+// ---------------------------------------------------------------------------
+// Multi-account (docs/11). `settings.accounts[]` is authoritative once present;
+// otherwise it is derived from the legacy singular gmail/imap slots. Migration
+// keeps the derived ids as "gmail"/"imap" so existing cache rows (`asanagi.db`
+// account column), drafts and scheduled sends — all keyed by `{account}/…` —
+// stay valid. The add-account UI (Phase 2) is what first persists `accounts[]`;
+// from then on that array is the source of truth. The legacy slots are left in
+// place for read compatibility and retired later (expand-contract).
+// ---------------------------------------------------------------------------
+
+/**
+ * Clear-on-blank merge of one account's credential sub-object, mirroring the
+ * `saveEmailSettings` semantics: a blank string clears that field (e.g.
+ * disconnect = { refreshToken: "" }), and the key is dropped entirely.
+ */
+function mergeAccountCreds(
+  cur: Record<string, string | undefined> | undefined,
+  patch: Record<string, string | undefined> | undefined,
+): Record<string, string | undefined> {
+  const merged: Record<string, string | undefined> = {
+    ...(cur ?? {}),
+    ...(patch ?? {}),
+  };
+  for (const k of Object.keys(merged)) {
+    const v = merged[k];
+    if (typeof v !== "string" || !v.trim()) delete merged[k];
+    else merged[k] = v.trim();
+  }
+  return merged;
+}
+
+/**
+ * Derive accounts[] from the legacy singular slots using STORED creds only (no
+ * env fallback — env-configured mail has nothing editable to migrate and keeps
+ * working through the Phase 1 resolution fallback). Ids follow "gmail"/"imap".
+ */
+function deriveAccountsFromLegacy(s: EmailSettings): MailAccount[] {
+  const out: MailAccount[] = [];
+  const g = s.gmail;
+  if (g?.clientId && g?.clientSecret && g?.refreshToken) {
+    out.push({
+      id: "gmail",
+      type: "gmail",
+      label: "Gmail",
+      address: g.address,
+      gmail: { ...g },
+    });
+  }
+  const i = s.imap;
+  if (i?.host && i?.user && i?.password) {
+    out.push({
+      id: "imap",
+      type: "imap",
+      label: i.fromName?.trim() || i.user || "IMAP",
+      address: i.user,
+      imap: { ...i },
+    });
+  }
+  return out;
+}
+
+/**
+ * The configured accounts (persisted `accounts[]` when present, else derived
+ * from the legacy stored slots). Read-only — does not persist the migration.
+ * Returns [] when nothing is stored (caller/UI falls back to mock/env).
+ */
+export async function listMailAccounts(): Promise<MailAccount[]> {
+  const s = await getEmailSettings();
+  if (s.accounts?.length) return s.accounts;
+  return deriveAccountsFromLegacy(s);
+}
+
+/** Stable id for a new account; "{type}-{base36 time}{rand}" avoids collisions. */
+function newAccountId(type: "gmail" | "imap"): string {
+  return `${type}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/**
+ * Persist the accounts array. This is the write that makes `accounts[]`
+ * authoritative; the legacy slots are intentionally left untouched for read
+ * compatibility (deriveAccounts prefers accounts[], so they are inert).
+ */
+async function writeAccounts(accounts: MailAccount[]): Promise<EmailSettings> {
+  const cur = await getEmailSettings();
+  const next: EmailSettings = { ...cur, accounts };
+  await writeJson(EMAIL_SETTINGS, next);
+  return next;
+}
+
+/** Add a new account (migrating legacy slots into accounts[] on first write). */
+export async function addMailAccount(input: {
+  type: "gmail" | "imap";
+  label?: string;
+  address?: string;
+  gmail?: Partial<GmailAccountSettings>;
+  imap?: Partial<ImapAccountSettings>;
+}): Promise<MailAccount> {
+  const accounts = [...(await listMailAccounts())];
+  const account: MailAccount = {
+    id: newAccountId(input.type),
+    type: input.type,
+    label: input.label?.trim() || (input.type === "gmail" ? "Gmail" : "IMAP"),
+    address: input.address?.trim() || undefined,
+    ...(input.type === "gmail"
+      ? {
+          gmail: mergeAccountCreds(
+            undefined,
+            input.gmail as Record<string, string | undefined>,
+          ) as GmailAccountSettings,
+        }
+      : {
+          imap: mergeAccountCreds(
+            undefined,
+            input.imap as Record<string, string | undefined>,
+          ) as ImapAccountSettings,
+        }),
+  };
+  accounts.push(account);
+  await writeAccounts(accounts);
+  return account;
+}
+
+/** Merge a patch into one account by id (blank fields clear). */
+export async function updateMailAccount(
+  id: string,
+  patch: {
+    label?: string;
+    address?: string;
+    gmail?: Partial<GmailAccountSettings>;
+    imap?: Partial<ImapAccountSettings>;
+  },
+): Promise<MailAccount | undefined> {
+  const accounts = [...(await listMailAccounts())];
+  const idx = accounts.findIndex((a) => a.id === id);
+  if (idx === -1) return undefined;
+  const a = accounts[idx];
+  const next: MailAccount = { ...a };
+  if (patch.label !== undefined && patch.label.trim()) next.label = patch.label.trim();
+  if (patch.address !== undefined) next.address = patch.address.trim() || undefined;
+  if (patch.gmail)
+    next.gmail = mergeAccountCreds(
+      a.gmail as Record<string, string | undefined> | undefined,
+      patch.gmail as Record<string, string | undefined>,
+    ) as GmailAccountSettings;
+  if (patch.imap)
+    next.imap = mergeAccountCreds(
+      a.imap as Record<string, string | undefined> | undefined,
+      patch.imap as Record<string, string | undefined>,
+    ) as ImapAccountSettings;
+  accounts[idx] = next;
+  await writeAccounts(accounts);
+  return next;
+}
+
+/** Remove an account by id. Its cached rows are pruned lazily by retention. */
+export async function removeMailAccount(id: string): Promise<void> {
+  const accounts = await listMailAccounts();
+  await writeAccounts(accounts.filter((a) => a.id !== id));
+}
+
+/**
+ * Which account the mailbox shows: an account id, or "all" (unified) — the
+ * successor to the legacy single `active` pin (docs/11). "all"/blank clears it.
+ */
+export async function setActiveAccountId(id: string): Promise<EmailSettings> {
+  // Persist the migration too: once the user picks an active account they are
+  // in multi-account mode, where listAccounts honors activeAccountId and the
+  // legacy `active` pin is ignored. Without this the selection would be inert
+  // while the derived (non-persisted) accounts still ran in legacy mode.
+  const accounts = await listMailAccounts();
+  const cur = await getEmailSettings();
+  const next: EmailSettings = { ...cur, accounts };
+  const v = id.trim();
+  if (!v || v === "all") delete next.activeAccountId;
+  else next.activeAccountId = v;
   await writeJson(EMAIL_SETTINGS, next);
   return next;
 }

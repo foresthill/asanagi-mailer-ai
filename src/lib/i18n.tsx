@@ -783,6 +783,34 @@ const ja: Dict = {
   "email.cutoff.gmail": "Gmail",
   "email.cutoff.imap": "IMAP（会社メール）",
   "email.cutoff.clear": "解除",
+
+  // Multi-account list (AccountsSection / docs/11 Phase 2)
+  "accounts.title": "メールアカウント",
+  "accounts.note":
+    "複数のメールアカウント（会社メール複数・Gmail 併用など）を追加できます。各アカウントの情報はこの端末内（.data）にのみ保存されます。",
+  "accounts.add": "アカウントを追加",
+  "accounts.empty":
+    "まだアカウントがありません。「アカウントを追加」から接続してください。",
+  "accounts.addChoose": "追加する種類を選んでください",
+  "accounts.typeImap": "メール（アドレス＋パスワード / 会社メール・Gmail等）",
+  "accounts.typeGmail": "Gmail（OAuth・上級者向け）",
+  "accounts.edit": "編集",
+  "accounts.delete": "削除",
+  "accounts.deleteConfirm":
+    "「{label}」を一覧から削除します。サーバのメールは消えません（この端末の接続情報だけを削除）。よろしいですか？",
+  "accounts.connected": "接続済み",
+  "accounts.notConnected": "未接続",
+  "accounts.show": "表示するアカウント（受信箱）",
+  "accounts.showAll": "すべて（統合表示）",
+  "accounts.back": "← 一覧へ戻る",
+  "accounts.labelField": "表示名（任意）",
+  "accounts.labelPlaceholder": "例: 会社(Acme) / 個人Gmail",
+  "accounts.newImap": "メールアカウントを追加",
+  "accounts.editImap": "メールアカウントを編集",
+  "accounts.newGmail": "Gmail アカウントを追加（OAuth）",
+  "accounts.editGmail": "Gmail アカウントを編集（OAuth）",
+  "accounts.gmailNote":
+    "自分の Google Cloud OAuth クライアント（クライアントID/シークレット）で接続します。難しい場合は「メール（アドレス＋パスワード）」から Gmail のアプリパスワードで接続できます。",
   "email.cutoff.note":
     "この日付より前のメールは受信箱に表示しません（サーバからは消えません）。数万通の過去メールを遡らずに「受信箱ゼロ」に到達できます。",
 
@@ -1640,6 +1668,33 @@ const en: Dict = {
   "email.cutoff.gmail": "Gmail",
   "email.cutoff.imap": "IMAP (company mail)",
   "email.cutoff.clear": "Clear",
+
+  // Multi-account list (AccountsSection / docs/11 Phase 2)
+  "accounts.title": "Mail accounts",
+  "accounts.note":
+    "Add multiple mail accounts (several company mailboxes, Gmail alongside, etc.). Each account's details are stored only on this device (.data).",
+  "accounts.add": "Add account",
+  "accounts.empty": "No accounts yet. Use “Add account” to connect.",
+  "accounts.addChoose": "Choose what to add",
+  "accounts.typeImap": "Mail (address + password / company mail, Gmail, etc.)",
+  "accounts.typeGmail": "Gmail (OAuth, advanced)",
+  "accounts.edit": "Edit",
+  "accounts.delete": "Delete",
+  "accounts.deleteConfirm":
+    "Remove “{label}” from the list. Your mail on the server is not deleted (only this device's connection details). Continue?",
+  "accounts.connected": "Connected",
+  "accounts.notConnected": "Not connected",
+  "accounts.show": "Shown account (inbox)",
+  "accounts.showAll": "All (unified)",
+  "accounts.back": "← Back to list",
+  "accounts.labelField": "Display name (optional)",
+  "accounts.labelPlaceholder": "e.g. Work (Acme) / Personal Gmail",
+  "accounts.newImap": "Add mail account",
+  "accounts.editImap": "Edit mail account",
+  "accounts.newGmail": "Add Gmail account (OAuth)",
+  "accounts.editGmail": "Edit Gmail account (OAuth)",
+  "accounts.gmailNote":
+    "Connect with your own Google Cloud OAuth client (client ID/secret). If that's too much, connect Gmail via an app password under “Mail (address + password)”.",
   "email.cutoff.note":
     "Emails before this date won't appear in the inbox (they aren't deleted from the server). You can reach \"inbox zero\" without wading through tens of thousands of old emails.",
 
@@ -2525,6 +2580,35 @@ const fr: Dict = {
   "email.cutoff.gmail": "Gmail",
   "email.cutoff.imap": "IMAP (messagerie d'entreprise)",
   "email.cutoff.clear": "Effacer",
+
+  // Multi-account list (AccountsSection / docs/11 Phase 2)
+  "accounts.title": "Comptes de messagerie",
+  "accounts.note":
+    "Ajoutez plusieurs comptes de messagerie (plusieurs boîtes d'entreprise, Gmail en parallèle, etc.). Les détails de chaque compte sont stockés uniquement sur cet appareil (.data).",
+  "accounts.add": "Ajouter un compte",
+  "accounts.empty":
+    "Aucun compte pour l'instant. Utilisez « Ajouter un compte » pour vous connecter.",
+  "accounts.addChoose": "Choisissez quoi ajouter",
+  "accounts.typeImap":
+    "Messagerie (adresse + mot de passe / mail d'entreprise, Gmail, etc.)",
+  "accounts.typeGmail": "Gmail (OAuth, avancé)",
+  "accounts.edit": "Modifier",
+  "accounts.delete": "Supprimer",
+  "accounts.deleteConfirm":
+    "Retirer « {label} » de la liste. Vos messages sur le serveur ne sont pas supprimés (seules les informations de connexion de cet appareil). Continuer ?",
+  "accounts.connected": "Connecté",
+  "accounts.notConnected": "Non connecté",
+  "accounts.show": "Compte affiché (boîte)",
+  "accounts.showAll": "Tous (unifié)",
+  "accounts.back": "← Retour à la liste",
+  "accounts.labelField": "Nom affiché (facultatif)",
+  "accounts.labelPlaceholder": "ex. Travail (Acme) / Gmail perso",
+  "accounts.newImap": "Ajouter un compte de messagerie",
+  "accounts.editImap": "Modifier le compte de messagerie",
+  "accounts.newGmail": "Ajouter un compte Gmail (OAuth)",
+  "accounts.editGmail": "Modifier le compte Gmail (OAuth)",
+  "accounts.gmailNote":
+    "Connectez-vous avec votre propre client OAuth Google Cloud (ID/secret client). Si c'est trop compliqué, connectez Gmail via un mot de passe d'application sous « Messagerie (adresse + mot de passe) ».",
   "email.cutoff.note":
     "Les e-mails antérieurs à cette date n'apparaîtront pas dans la boîte de réception (ils ne sont pas supprimés du serveur). Vous pouvez atteindre le « zéro e-mail » sans remonter des dizaines de milliers d'anciens messages.",
 
@@ -3324,6 +3408,33 @@ const zh: Dict = {
   "email.cutoff.gmail": "Gmail",
   "email.cutoff.imap": "IMAP（公司邮箱）",
   "email.cutoff.clear": "清除",
+
+  // Multi-account list (AccountsSection / docs/11 Phase 2)
+  "accounts.title": "邮件账户",
+  "accounts.note":
+    "可添加多个邮件账户（多个公司邮箱、同时使用 Gmail 等）。每个账户的信息仅保存在本设备（.data）。",
+  "accounts.add": "添加账户",
+  "accounts.empty": "还没有账户。点击「添加账户」进行连接。",
+  "accounts.addChoose": "请选择要添加的类型",
+  "accounts.typeImap": "邮箱（地址＋密码 / 公司邮箱、Gmail 等）",
+  "accounts.typeGmail": "Gmail（OAuth・高级）",
+  "accounts.edit": "编辑",
+  "accounts.delete": "删除",
+  "accounts.deleteConfirm":
+    "将从列表中移除「{label}」。服务器上的邮件不会被删除（仅删除本设备的连接信息）。确定吗？",
+  "accounts.connected": "已连接",
+  "accounts.notConnected": "未连接",
+  "accounts.show": "显示的账户（收件箱）",
+  "accounts.showAll": "全部（合并显示）",
+  "accounts.back": "← 返回列表",
+  "accounts.labelField": "显示名称（可选）",
+  "accounts.labelPlaceholder": "例：公司(Acme) / 个人 Gmail",
+  "accounts.newImap": "添加邮件账户",
+  "accounts.editImap": "编辑邮件账户",
+  "accounts.newGmail": "添加 Gmail 账户（OAuth）",
+  "accounts.editGmail": "编辑 Gmail 账户（OAuth）",
+  "accounts.gmailNote":
+    "使用你自己的 Google Cloud OAuth 客户端（客户端ID/密钥）连接。若觉得复杂，可在「邮箱（地址＋密码）」下用 Gmail 应用专用密码连接。",
   "email.cutoff.note":
     "早于此日期的邮件不会显示在收件箱中（不会从服务器删除）。无需翻查数万封旧邮件即可实现「收件箱清零」。",
 
