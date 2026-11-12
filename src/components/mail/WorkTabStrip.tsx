@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail, PenLine, X, XCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Mail, PenLine, X, XCircle } from "lucide-react";
 
 import { useI18n } from "@/lib/i18n";
 
@@ -17,6 +17,10 @@ export function WorkTabStrip({
   onActivate,
   onClose,
   onCloseAll,
+  onBack,
+  onForward,
+  canBack,
+  canForward,
 }: {
   tabs: WorkTab[];
   activeId: string | null;
@@ -24,13 +28,44 @@ export function WorkTabStrip({
   onClose: (id: string) => void;
   /** Close every open tab at once (confirms if any compose tab is unsent). */
   onCloseAll?: () => void;
+  /** ブラウザ戻る/進む: move focus along the tab history (never closes a tab). */
+  onBack?: () => void;
+  onForward?: () => void;
+  canBack?: boolean;
+  canForward?: boolean;
 }) {
   const { t } = useI18n();
+  const navBtn =
+    "grid size-7 shrink-0 place-items-center self-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-30";
   return (
     <div
       role="tablist"
       className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-border bg-surface px-2 py-1.5"
     >
+      {(onBack || onForward) && (
+        <div className="flex shrink-0 items-center gap-0.5 pr-1">
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={!canBack}
+            aria-label={t("tabs.back")}
+            title={t("tabs.back")}
+            className={navBtn}
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onForward}
+            disabled={!canForward}
+            aria-label={t("tabs.forward")}
+            title={t("tabs.forward")}
+            className={navBtn}
+          >
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+      )}
       {tabs.map((tab) => {
         const active = tab.id === activeId;
         const Icon = tab.kind === "compose" ? PenLine : Mail;
