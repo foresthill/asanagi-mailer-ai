@@ -61,8 +61,22 @@ export async function listAccounts(): Promise<AccountInfo[]> {
     address: a.address,
   }));
 
-  // `active` (legacy singular selector) still narrows to one backend when set to
-  // a concrete id. Phase 2 replaces this with activeAccountId ("all" = unified).
+  // Multi-account mode (accounts[] persisted): the view is unified by default
+  // and narrowed only by `activeAccountId` ("all"/unset = all). The legacy
+  // single `active` pin is intentionally ignored here — it was a single-slot
+  // workaround that no longer makes sense once accounts are explicit (docs/11).
+  if (s.accounts?.length) {
+    const sel = s.activeAccountId;
+    if (sel && sel !== "all") {
+      const chosen = infos.filter((a) => a.key === sel);
+      if (chosen.length) return chosen;
+    }
+    return infos;
+  }
+
+  // Legacy mode (derived from singular slots): `active` still narrows to one
+  // backend when set to a concrete id — current single/dual-account behavior
+  // is unchanged until the user migrates via the add-account UI.
   const choice =
     (s.active && s.active !== "auto" ? s.active : "") ||
     (process.env.EMAIL_PROVIDER ?? "").toLowerCase();

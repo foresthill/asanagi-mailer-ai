@@ -80,7 +80,7 @@ export const DraftEditor = forwardRef<
           "min-h-full whitespace-pre-wrap text-[15px] leading-6 outline-none",
         // macOS WKWebView の既定テキスト置換（自動修正＝語尾スペース挿入・
         // スマート引用符・自動大文字化）を無効化。メール本文で「勝手にスペース/
-        // 大文字が入る」のを防ぐ。RecipientFields / ImapConnectSection と同方針。
+        // 大文字が入る」のを防ぐ。RecipientFields / AccountImapForm と同方針。
         spellcheck: "false",
         autocorrect: "off",
         autocapitalize: "off",

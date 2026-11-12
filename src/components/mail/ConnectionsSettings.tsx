@@ -22,7 +22,7 @@ import {
   ensureNotifyPermission,
   notifySupported,
 } from "@/lib/notify-prefs";
-import { EmailConnectSection } from "./EmailConnectSection";
+import { AccountsSection } from "./AccountsSection";
 import { ReplySignatureSection } from "./ReplySignatureSection";
 import { WritingNoteSection } from "./WritingNoteSection";
 import { WritingSamplesSection } from "./WritingSamplesSection";
@@ -418,8 +418,9 @@ export function ConnectionsSettings({
           </div>
         ) : (
           <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto px-5 py-6">
-            {/* メール設定を最上部に（まずメールを繋ぐ→次にAI）。 */}
-            <EmailConnectSection />
+            {/* メール設定を最上部に（まずメールを繋ぐ→次にAI）。多アカウント
+                対応（docs/11 Phase 2）: アカウント一覧＋追加/削除。 */}
+            <AccountsSection />
             <div className="flex items-center gap-2 border-t border-border pt-4">
               <Sparkles className="size-4 text-accent" />
               <h3 className="text-xs font-semibold">{t("conn.byok")}</h3>
