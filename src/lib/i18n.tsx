@@ -424,6 +424,13 @@ const ja: Dict = {
   "notify.desc":
     "期限を過ぎた TODO をデスクトップの通知で知らせます（端末内のみ）。ONにすると通知の許可を求めます。macOSの「リマインダー」アプリ登録ではありません。",
   "notify.denied": "通知が許可されていません。OSの通知設定で許可してください。",
+  "download.ask": "保存するたびに保存先を選ぶ",
+  "download.askDesc":
+    "オフにすると、下の既定フォルダにそのまま保存します（毎回の確認なし）。",
+  "download.dir": "既定の保存先",
+  "download.dirDefault": "（OS のダウンロードフォルダ）",
+  "download.pick": "フォルダを選択",
+  "download.reset": "既定に戻す",
   "conn.sweep.title": "朝の一凪の自動表示",
   "conn.sweep.desc":
     "受信箱を開いたときに片付け提案を自動で出すか。急ぎのときは「表示しない」、朝の習慣にするなら「朝だけ」。いつでも画面上部のボタンから手動で開けます。",
@@ -1309,6 +1316,13 @@ const en: Dict = {
   "notify.desc":
     "Notify you on the desktop when a TODO is overdue (this device only). Turning it on asks for notification permission. This is not the macOS Reminders app.",
   "notify.denied": "Notifications are blocked. Allow them in your OS settings.",
+  "download.ask": "Choose where to save each time",
+  "download.askDesc":
+    "When off, files are saved straight to the default folder below (no prompt).",
+  "download.dir": "Default save location",
+  "download.dirDefault": "(OS Downloads folder)",
+  "download.pick": "Choose folder",
+  "download.reset": "Reset to default",
   "conn.sweep.title": "Morning sweep auto-popup",
   "conn.sweep.desc":
     "Whether the cleanup suggestion opens automatically when you open the inbox. Choose “Off” when you're in a hurry, or “Morning only” to make it a ritual. You can always open it manually from the button at the top.",
@@ -2210,6 +2224,13 @@ const fr: Dict = {
   "notify.desc":
     "Vous alerter sur le bureau quand une tâche est en retard (cet appareil). L'activer demande l'autorisation. Ce n'est pas l'app Rappels de macOS.",
   "notify.denied": "Notifications bloquées. Autorisez-les dans les réglages du système.",
+  "download.ask": "Choisir où enregistrer à chaque fois",
+  "download.askDesc":
+    "Désactivé, les fichiers sont enregistrés directement dans le dossier par défaut ci-dessous (sans confirmation).",
+  "download.dir": "Emplacement d'enregistrement par défaut",
+  "download.dirDefault": "(Dossier Téléchargements du système)",
+  "download.pick": "Choisir un dossier",
+  "download.reset": "Réinitialiser",
   "conn.sweep.title": "Affichage auto du tri du matin",
   "conn.sweep.desc":
     "Ouvrir automatiquement la suggestion de tri à l'ouverture de la boîte de réception. Choisissez « Désactivé » si vous êtes pressé, ou « Le matin seulement » pour en faire un rituel. Vous pouvez toujours l'ouvrir manuellement depuis le bouton en haut.",
@@ -3081,6 +3102,12 @@ const zh: Dict = {
   "notify.desc":
     "当 TODO 逾期时在桌面通知你（仅本设备）。开启会请求通知权限。这不是 macOS 的「提醒事项」应用。",
   "notify.denied": "通知被阻止。请在系统通知设置中允许。",
+  "download.ask": "每次保存时选择保存位置",
+  "download.askDesc": "关闭后，文件将直接保存到下面的默认文件夹（不再询问）。",
+  "download.dir": "默认保存位置",
+  "download.dirDefault": "（系统下载文件夹）",
+  "download.pick": "选择文件夹",
+  "download.reset": "恢复默认",
   "conn.sweep.title": "晨间整理自动弹出",
   "conn.sweep.desc":
     "打开收件箱时是否自动弹出整理建议。赶时间就选「关闭」，想作为晨间习惯就选「仅早晨」。随时可从顶部按钮手动打开。",

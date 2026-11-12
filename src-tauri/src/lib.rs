@@ -696,7 +696,6 @@ async fn check_for_update(handle: tauri::AppHandle) {
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Save attachment bytes to a user-chosen path via the native Save dialog.
 /// Needed because the desktop WebView (WKWebView) ignores blob `<a download>`
 /// clicks unless a download handler is registered, so AttachmentList's browser
@@ -726,6 +725,67 @@ async fn save_file_dialog(
     }
 }
 
+/// Save attachment bytes directly into a folder (no dialog) — used when the user
+/// turned off "ask every time". `dir` empty = the OS Downloads folder. Avoids
+/// clobbering: if the name exists, append " (1)", " (2)", … Returns the path.
+#[tauri::command]
+async fn save_file_to_dir(
+    app: tauri::AppHandle,
+    dir: String,
+    filename: String,
+    bytes: Vec<u8>,
+) -> Result<String, String> {
+    use tauri::Manager;
+    let base = if dir.trim().is_empty() {
+        app.path().download_dir().map_err(|e| e.to_string())?
+    } else {
+        std::path::PathBuf::from(dir)
+    };
+    std::fs::create_dir_all(&base).map_err(|e| e.to_string())?;
+    let target = unique_path(&base, &filename);
+    std::fs::write(&target, &bytes).map_err(|e| e.to_string())?;
+    Ok(target.to_string_lossy().into_owned())
+}
+
+/// Pick a folder (for the "default save location" setting). None = cancelled.
+#[tauri::command]
+async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = app.dialog().file().blocking_pick_folder();
+    match picked {
+        Some(fp) => Ok(Some(
+            fp.into_path()
+                .map_err(|e| e.to_string())?
+                .to_string_lossy()
+                .into_owned(),
+        )),
+        None => Ok(None),
+    }
+}
+
+/// A non-clobbering path inside `base` for `filename`: "doc.pdf" → "doc (1).pdf".
+fn unique_path(base: &std::path::Path, filename: &str) -> std::path::PathBuf {
+    let first = base.join(filename);
+    if !first.exists() {
+        return first;
+    }
+    let p = std::path::Path::new(filename);
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or(filename);
+    let ext = p.extension().and_then(|s| s.to_str());
+    for n in 1..10_000 {
+        let name = match ext {
+            Some(e) => format!("{stem} ({n}).{e}"),
+            None => format!("{stem} ({n})"),
+        };
+        let cand = base.join(name);
+        if !cand.exists() {
+            return cand;
+        }
+    }
+    first
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri_plugin_deep_link::DeepLinkExt;
     tauri::Builder::default()
@@ -733,7 +793,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(log_plugin())
-        .invoke_handler(tauri::generate_handler![save_file_dialog])
+        .invoke_handler(tauri::generate_handler![
+            save_file_dialog,
+            save_file_to_dir,
+            pick_folder
+        ])
         .manage(MailtoQueue::default())
         .setup(|app| {
             // Native Help menu (log access) — available in both dev and release.
