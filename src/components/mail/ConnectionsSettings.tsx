@@ -417,9 +417,12 @@ export function ConnectionsSettings({
             <Loader2 className="size-5 animate-spin" />
           </div>
         ) : (
-          <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto px-5 py-6">
-            {/* メール設定を最上部に（まずメールを繋ぐ→次にAI）。多アカウント
-                対応（docs/11 Phase 2）: アカウント一覧＋追加/削除。 */}
+          // 広い画面では2カラム（左=接続: メール＋AI、右=動作/通知/署名/文体/連携）、
+          // lg 未満では1カラムに自動フォールバック。items-start で左右を上揃え。
+          <div className="mx-auto grid min-h-0 w-full max-w-5xl flex-1 grid-cols-1 gap-x-8 gap-y-4 overflow-y-auto px-5 py-6 lg:grid-cols-2 lg:items-start">
+            {/* 左カラム: 接続（まずメールを繋ぐ→次にAI）。多アカウント対応
+                （docs/11 Phase 2）: アカウント一覧＋追加/削除。 */}
+            <div className="flex min-w-0 flex-col gap-4">
             <AccountsSection />
             <div className="flex items-center gap-2 border-t border-border pt-4">
               <Sparkles className="size-4 text-accent" />
@@ -858,7 +861,10 @@ export function ConnectionsSettings({
                 </span>
               </span>
             </label>
+            </div>
 
+            {/* 右カラム: 動作・通知・使用量・署名・文体・連携。 */}
+            <div className="flex min-w-0 flex-col gap-4">
             <SweepAutoSection />
 
             <NotifySection />
@@ -876,6 +882,7 @@ export function ConnectionsSettings({
             <DevlogSection />
 
             <NextcloudSection />
+            </div>
           </div>
         )}
 
