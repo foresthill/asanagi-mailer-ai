@@ -697,6 +697,35 @@ async fn check_for_update(handle: tauri::AppHandle) {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Save attachment bytes to a user-chosen path via the native Save dialog.
+/// Needed because the desktop WebView (WKWebView) ignores blob `<a download>`
+/// clicks unless a download handler is registered, so AttachmentList's browser
+/// save path silently no-ops in the app. The web UI fetches the bytes
+/// (local-first: never cached) and hands them here; we seed a Save dialog with
+/// the filename and write the file. Returns true if saved, false if cancelled.
+#[tauri::command]
+async fn save_file_dialog(
+    app: tauri::AppHandle,
+    filename: String,
+    bytes: Vec<u8>,
+) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    // blocking_* is safe here: async commands run off the main thread.
+    let picked = app
+        .dialog()
+        .file()
+        .set_file_name(&filename)
+        .blocking_save_file();
+    match picked {
+        Some(fp) => {
+            let path = fp.into_path().map_err(|e| e.to_string())?;
+            std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
 pub fn run() {
     use tauri_plugin_deep_link::DeepLinkExt;
     tauri::Builder::default()
@@ -704,6 +733,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(log_plugin())
+        .invoke_handler(tauri::generate_handler![save_file_dialog])
         .manage(MailtoQueue::default())
         .setup(|app| {
             // Native Help menu (log access) — available in both dev and release.
