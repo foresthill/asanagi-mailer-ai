@@ -22,14 +22,23 @@ const nextId = () => `c${Date.now().toString(36)}${(seq++).toString(36)}`;
  *
  * Reader tabs are keyed by email id (reopening the same mail re-focuses its
  * tab). Compose tabs are always fresh instances so several drafts can live at
- * once. `goBack` focuses the previously-active tab (ブラウザ戻る); going forward
- * is just clicking the tab, which always stays in the strip.
+ * once.
+ *
+ * Navigation is browser-style (戻る/進む): `goBack`/`goForward` only move focus
+ * between still-open tabs — they never close a tab (closing is the separate
+ * ✕/⌘W action). A *new* navigation (clicking a tab, opening a reader/compose,
+ * or going to the list view) truncates the forward history, exactly like a
+ * browser. `backStack`/`fwdStack` hold ids, most-recent last.
  */
 export function useWorkTabs() {
   const [tabs, setTabs] = useState<WorkTab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  // Previously-active ids, most-recent last. Used by 戻る only.
+  // Previously-active ids (戻る) and un-done ids (進む), most-recent last.
   const backStack = useRef<string[]>([]);
+  const fwdStack = useRef<string[]>([]);
+  // Reactive mirrors so the toolbar can enable/disable the 戻る/進む buttons.
+  const [canBack, setCanBack] = useState(false);
+  const [canForward, setCanForward] = useState(false);
 
   // Committed mirrors so the callbacks below can stay synchronous and
   // dependency-free (they read current values without re-creating on change).
@@ -39,11 +48,21 @@ export function useWorkTabs() {
   useEffect(() => {
     tabsRef.current = tabs;
     activeRef.current = activeId;
-  });
+    // Recompute 戻る/進む availability from the (post-commit) tabs/active. Runs
+    // after every render; setState bails when unchanged, so no render loop.
+    const open = (id: string) => id !== activeId && tabs.some((t) => t.id === id);
+    setCanBack(backStack.current.some(open));
+    setCanForward(fwdStack.current.some(open));
+    // Every stack mutation co-occurs with a tabs/activeId change, so these deps
+    // cover all history changes (and keep the ref mirrors in sync each commit).
+  }, [tabs, activeId]);
 
+  /** Direct navigation (user clicked a tab / opened one): record history and
+   *  truncate the forward stack, browser-style. */
   const activate = useCallback((id: string) => {
     if (!id || id === activeRef.current) return;
     if (activeRef.current) backStack.current.push(activeRef.current);
+    fwdStack.current = [];
     setActiveId(id);
   }, []);
 
@@ -92,6 +111,7 @@ export function useWorkTabs() {
     const next = cur.filter((t) => t.id !== id);
     setTabs(next);
     backStack.current = backStack.current.filter((x) => x !== id);
+    fwdStack.current = fwdStack.current.filter((x) => x !== id);
     if (activeRef.current === id) {
       // Focus the most-recent still-open tab, else the neighbour, else nothing.
       let fallback: string | null = null;
@@ -108,24 +128,42 @@ export function useWorkTabs() {
     }
   }, []);
 
-  /** Deactivate every tab (list-only view) without closing any. */
+  /** Deactivate every tab (list-only view) without closing any. A navigation,
+   *  so it truncates the forward history too. */
   const clearActive = useCallback(() => {
     if (activeRef.current) backStack.current.push(activeRef.current);
+    fwdStack.current = [];
     setActiveId(null);
   }, []);
 
   /** Close every tab at once (used by single-tab mode before opening a new one). */
   const closeAll = useCallback(() => {
     backStack.current = [];
+    fwdStack.current = [];
     setTabs([]);
     setActiveId(null);
   }, []);
 
-  /** ブラウザ戻る: focus the previously-active still-open tab. */
+  /** ブラウザ戻る: focus the previously-active still-open tab. Pushes the tab we
+   *  leave onto the forward stack so 進む can return. Never closes a tab. */
   const goBack = useCallback((): boolean => {
     while (backStack.current.length) {
       const cand = backStack.current.pop()!;
       if (cand !== activeRef.current && tabsRef.current.some((t) => t.id === cand)) {
+        if (activeRef.current) fwdStack.current.push(activeRef.current);
+        setActiveId(cand);
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
+  /** ブラウザ進む: redo a 戻る. Mirror of goBack via the forward stack. */
+  const goForward = useCallback((): boolean => {
+    while (fwdStack.current.length) {
+      const cand = fwdStack.current.pop()!;
+      if (cand !== activeRef.current && tabsRef.current.some((t) => t.id === cand)) {
+        if (activeRef.current) backStack.current.push(activeRef.current);
         setActiveId(cand);
         return true;
       }
@@ -147,5 +185,8 @@ export function useWorkTabs() {
     activate,
     clearActive,
     goBack,
+    goForward,
+    canBack,
+    canForward,
   };
 }

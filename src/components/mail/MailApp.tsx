@@ -275,6 +275,9 @@ export function MailApp({
     activate: activateTab,
     clearActive,
     goBack: tabsGoBack,
+    goForward: tabsGoForward,
+    canBack: tabsCanBack,
+    canForward: tabsCanForward,
   } = useWorkTabs();
   // The compose tabs (all mounted so their drafts survive tab/view switches).
   const composeTabs = tabs.filter(
@@ -2412,6 +2415,10 @@ export function MailApp({
           onActivate={activateTab}
           onClose={closeComposeTab}
           onCloseAll={closeAllTabsWithConfirm}
+          onBack={tabsGoBack}
+          onForward={tabsGoForward}
+          canBack={tabsCanBack}
+          canForward={tabsCanForward}
         />
       )}
       {view === "contacts" && (
