@@ -27,7 +27,7 @@
     "@huggingface/transformers": "^3.8.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@openrouter/ai-sdk-provider": "^2.9.0",
-    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/api": "2.11.1",
     "@tiptap/core": "^3.25.0",
     "@tiptap/extension-bold": "3.25.0",
     "@tiptap/extension-document": "^3.25.0",
