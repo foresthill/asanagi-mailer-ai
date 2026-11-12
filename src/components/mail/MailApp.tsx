@@ -1414,6 +1414,19 @@ export function MailApp({
     setTimeout(() => setToast(null), 2600);
   };
 
+  // App-wide toast bus: deep children (e.g. AttachmentList) emit
+  // `asanagi:toast` instead of prop-drilling a callback through the reader.
+  useEffect(() => {
+    const onToast = (e: Event) => {
+      const msg = (e as CustomEvent<string>).detail;
+      if (typeof msg !== "string") return;
+      setToast(msg);
+      setTimeout(() => setToast(null), 2600);
+    };
+    window.addEventListener("asanagi:toast", onToast);
+    return () => window.removeEventListener("asanagi:toast", onToast);
+  }, []);
+
   // Widen the current search to the providers' full history (#40).
   // Manual memoization is intentional (deps are the value inputs; setState setters
   // are stable), so opt out of the React Compiler's preserve-memoization check.

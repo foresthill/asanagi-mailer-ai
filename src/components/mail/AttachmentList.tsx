@@ -3,10 +3,17 @@
 import { useState } from "react";
 import { Download, DownloadCloud, Loader2, Paperclip } from "lucide-react";
 import type { Attachment } from "@/lib/types";
+import { getDownloadAsk, getDownloadDir } from "@/lib/download-prefs";
 
 /** True inside the Tauri desktop app (where blob `<a download>` is a no-op). */
 function isDesktopApp(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+/** Emit an app-wide toast (MailApp listens for `asanagi:toast`). */
+function toast(msg: string) {
+  if (typeof window !== "undefined")
+    window.dispatchEvent(new CustomEvent("asanagi:toast", { detail: msg }));
 }
 
 /** Human-readable file size. */
@@ -38,7 +45,8 @@ export function AttachmentList({
    *  cached locally). Browser: fetch+Blob anchor (embedded-app safe). Desktop
    *  (Tauri): the WebView ignores blob `<a download>`, so hand the bytes to the
    *  native Save dialog instead. */
-  async function saveOne(att: Attachment) {
+  /** Returns true if the file was saved, false if the user cancelled. */
+  async function saveOne(att: Attachment): Promise<boolean> {
     const url = `/api/emails/${encodeURIComponent(emailId)}/attachment/${encodeURIComponent(att.id)}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(await res.text().catch(() => "ダウンロードに失敗しました"));
@@ -47,9 +55,20 @@ export function AttachmentList({
     if (isDesktopApp()) {
       const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
       const { invoke } = await import("@tauri-apps/api/core");
+      if (!getDownloadAsk()) {
+        // Direct-save to the default folder (no dialog). Returns the saved path.
+        await invoke<string>("save_file_to_dir", {
+          dir: getDownloadDir(),
+          filename: att.filename,
+          bytes,
+        });
+        return true;
+      }
       // Returns false if the user cancelled the Save dialog — not an error.
-      await invoke<boolean>("save_file_dialog", { filename: att.filename, bytes });
-      return;
+      return await invoke<boolean>("save_file_dialog", {
+        filename: att.filename,
+        bytes,
+      });
     }
 
     const objectUrl = URL.createObjectURL(blob);
@@ -60,12 +79,13 @@ export function AttachmentList({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(objectUrl);
+    return true;
   }
 
   async function download(att: Attachment) {
     setBusy(att.id);
     try {
-      await saveOne(att);
+      if (await saveOne(att)) toast(`「${att.filename}」を保存しました`);
     } catch (e) {
       alert(e instanceof Error ? e.message : "ダウンロードに失敗しました");
     } finally {
@@ -78,15 +98,17 @@ export function AttachmentList({
   async function downloadAll() {
     setBusy("*");
     const failed: string[] = [];
+    let saved = 0;
     for (const att of attachments) {
       try {
-        await saveOne(att);
+        if (await saveOne(att)) saved++;
         await new Promise((r) => setTimeout(r, 250));
       } catch {
         failed.push(att.filename);
       }
     }
     setBusy(null);
+    if (saved > 0) toast(`${saved}件の添付を保存しました`);
     if (failed.length) alert(`一部の添付を取得できませんでした:\n${failed.join("\n")}`);
   }
 
