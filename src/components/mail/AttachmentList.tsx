@@ -4,6 +4,11 @@ import { useState } from "react";
 import { Download, DownloadCloud, Loader2, Paperclip } from "lucide-react";
 import type { Attachment } from "@/lib/types";
 
+/** True inside the Tauri desktop app (where blob `<a download>` is a no-op). */
+function isDesktopApp(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 /** Human-readable file size. */
 function fmtSize(bytes?: number): string {
   if (!bytes) return "";
@@ -29,12 +34,24 @@ export function AttachmentList({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
 
-  /** Save one attachment's bytes as a file (fetch+Blob — embedded-app safe). */
+  /** Save one attachment's bytes as a file. Bytes are fetched on demand (never
+   *  cached locally). Browser: fetch+Blob anchor (embedded-app safe). Desktop
+   *  (Tauri): the WebView ignores blob `<a download>`, so hand the bytes to the
+   *  native Save dialog instead. */
   async function saveOne(att: Attachment) {
     const url = `/api/emails/${encodeURIComponent(emailId)}/attachment/${encodeURIComponent(att.id)}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(await res.text().catch(() => "ダウンロードに失敗しました"));
     const blob = await res.blob();
+
+    if (isDesktopApp()) {
+      const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+      const { invoke } = await import("@tauri-apps/api/core");
+      // Returns false if the user cancelled the Save dialog — not an error.
+      await invoke<boolean>("save_file_dialog", { filename: att.filename, bytes });
+      return;
+    }
+
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = objectUrl;
