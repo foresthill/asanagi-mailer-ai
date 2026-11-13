@@ -6,6 +6,7 @@
  */
 
 const KEY = "asanagi:os-notify";
+const MAIL_KEY = "asanagi:mail-notify";
 
 export function getOsNotify(): boolean {
   try {
@@ -18,6 +19,23 @@ export function getOsNotify(): boolean {
 export function setOsNotify(on: boolean): void {
   try {
     localStorage.setItem(KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 新着メールの OS 通知（期限TODOのリマインドとは別トグル）。 */
+export function getMailNotify(): boolean {
+  try {
+    return localStorage.getItem(MAIL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setMailNotify(on: boolean): void {
+  try {
+    localStorage.setItem(MAIL_KEY, on ? "1" : "0");
   } catch {
     /* ignore */
   }
@@ -40,13 +58,19 @@ export async function ensureNotifyPermission(): Promise<boolean> {
   }
 }
 
-/** 設定ON＆権限ありのときだけ OS 通知を出す。失敗は握りつぶす。 */
-export function fireNotification(title: string, body?: string): void {
-  if (!getOsNotify() || !notifySupported()) return;
+/** 対応＆権限ありのとき OS 通知を出す低レベル関数（トグル判定は呼び出し側）。 */
+export function notify(title: string, body?: string): void {
+  if (!notifySupported()) return;
   try {
     if (Notification.permission !== "granted") return;
     new Notification(title, body ? { body } : undefined);
   } catch {
     /* ignore — the in-app reminder banner still shows */
   }
+}
+
+/** 期限TODOリマインドの OS 通知（設定ONのときだけ）。失敗は握りつぶす。 */
+export function fireNotification(title: string, body?: string): void {
+  if (!getOsNotify()) return;
+  notify(title, body);
 }

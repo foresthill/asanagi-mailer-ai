@@ -19,6 +19,8 @@ import {
 import {
   getOsNotify,
   setOsNotify,
+  getMailNotify,
+  setMailNotify,
   ensureNotifyPermission,
   notifySupported,
 } from "@/lib/notify-prefs";
@@ -870,6 +872,8 @@ export function ConnectionsSettings({
 
             <NotifySection />
 
+            <MailNotifySection />
+
             <DownloadSection />
 
             <AiUsageSection />
@@ -942,6 +946,45 @@ function NotifySection() {
         <span className="font-medium">{t("notify.title")}</span>
         <span className="text-[11px] leading-relaxed text-fg-subtle">
           {t("notify.desc")}
+        </span>
+        {denied && (
+          <span className="text-[11px] text-high">{t("notify.denied")}</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * 新着メールの OS 通知（アプリを開いている間、受信箱に新着が来たら通知）。期限TODOの
+ * リマインドとは別トグル。端末ごとの好みなので localStorage（@/lib/notify-prefs）。
+ */
+function MailNotifySection() {
+  const { t } = useI18n();
+  const [on, setOn] = useState<boolean>(getMailNotify);
+  const [denied, setDenied] = useState(false);
+  if (!notifySupported()) return null;
+  return (
+    <div className="flex items-start gap-2 rounded-xl border border-border bg-bg px-3 py-2.5">
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={async (e) => {
+          const next = e.target.checked;
+          if (next) {
+            const ok = await ensureNotifyPermission();
+            setDenied(!ok);
+            if (!ok) return; // 権限が無ければ ON にしない
+          }
+          setMailNotify(next);
+          setOn(next);
+        }}
+        className="mt-0.5 size-4 accent-[var(--accent,#6d5ae6)]"
+      />
+      <span className="flex flex-col gap-0.5 text-xs">
+        <span className="font-medium">{t("mailNotify.title")}</span>
+        <span className="text-[11px] leading-relaxed text-fg-subtle">
+          {t("mailNotify.desc")}
         </span>
         {denied && (
           <span className="text-[11px] text-high">{t("notify.denied")}</span>
