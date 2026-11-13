@@ -864,6 +864,26 @@ export function ConnectionsSettings({
                 </span>
               </span>
             </label>
+
+            {/* AI(BYOK) の操作: 接続テスト＋この AI 設定の保存（このブロック専用）。 */}
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={handleTest}
+                disabled={loading || saving || testing}
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2 disabled:opacity-50"
+              >
+                {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                {t("conn.test.btn")}
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={loading || saving || testing}
+                className="ml-auto flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                {t("conn.save")}
+              </button>
+            </div>
             </div>
 
             {/* 右カラム: 動作・通知・使用量・署名・文体・連携。 */}
@@ -895,20 +915,12 @@ export function ConnectionsSettings({
 
         <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3">
           <button
-            onClick={handleTest}
-            disabled={loading || saving || testing}
-            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2 disabled:opacity-50"
-          >
-            {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {t("conn.test.btn")}
-          </button>
-          <button
             onClick={handleSave}
             disabled={loading || saving || testing}
             className="ml-auto flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {t("conn.save")}
+            {t("conn.saveAll")}
           </button>
         </div>
       </div>

@@ -1466,6 +1466,28 @@ export function MailApp({
     return () => window.removeEventListener("asanagi:toast", onToast);
   }, []);
 
+  // Desktop (Tauri): external links (`target="_blank"` / other-origin http(s))
+  // do nothing in the WebView, so intercept their clicks app-wide and open them
+  // in the OS browser. Internal (same-origin) links fall through to the router.
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      const a = (e.target as HTMLElement | null)?.closest?.("a[href]") as
+        | HTMLAnchorElement
+        | null;
+      if (!a) return;
+      if (!/^https?:\/\//i.test(a.href)) return; // only http(s)
+      if (a.hostname === window.location.hostname) return; // internal
+      e.preventDefault();
+      void import("@tauri-apps/api/core").then(({ invoke }) =>
+        invoke("open_external", { url: a.href }).catch(() => {}),
+      );
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
   // Widen the current search to the providers' full history (#40).
   // Manual memoization is intentional (deps are the value inputs; setState setters
   // are stable), so opt out of the React Compiler's preserve-memoization check.
