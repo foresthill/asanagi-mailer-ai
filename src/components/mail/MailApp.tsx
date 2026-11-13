@@ -57,7 +57,7 @@ import {
   threadTodoId,
 } from "@/lib/todo-keys";
 import { getSweepAutoMode, sweepAutoAllowed } from "@/lib/sweep-prefs";
-import { fireNotification } from "@/lib/notify-prefs";
+import { fireNotification, getMailNotify, notify } from "@/lib/notify-prefs";
 import type { GroupAxis } from "./EmailList";
 import type { SearchDigest } from "@/app/api/ai/search-digest/route";
 
@@ -1075,6 +1075,45 @@ export function MailApp({
       /* ignore */
     }
   }, [nowMs, todos]);
+
+  // 新着メールの OS 通知（設定ONのときだけ）。受信箱の最新日時(watermark)を基準に、
+  // それより新しい未読が増えたら通知。初回は watermark を置くだけで鳴らさない＝
+  // 既存メールやフォルダ移動では鳴らない。アプリを開いている間のポーリング(再取得)で
+  // 発火する。重複回避は watermark の前進で担保（端末ごとの状態なので localStorage）。
+  useEffect(() => {
+    if (folder !== "inbox" || emails.length === 0 || !getMailNotify()) return;
+    const WM = "asanagi:mail-watermark";
+    let watermark = 0;
+    try {
+      watermark = Number(localStorage.getItem(WM) ?? 0) || 0;
+    } catch {
+      /* ignore */
+    }
+    const times = emails
+      .map((e) => +new Date(e.date))
+      .filter((n) => !Number.isNaN(n));
+    const newest = times.length ? Math.max(...times) : 0;
+    if (!newest) return;
+    const save = () => {
+      try {
+        localStorage.setItem(WM, String(newest));
+      } catch {
+        /* ignore */
+      }
+    };
+    if (!watermark) {
+      save(); // 初回シード: 通知しない
+      return;
+    }
+    const fresh = emails.filter((e) => +new Date(e.date) > watermark && !e.read);
+    if (fresh.length === 1) {
+      notify(fresh[0].from.name || fresh[0].from.email, fresh[0].subject || "");
+    } else if (fresh.length > 1) {
+      notify(`新着メール ${fresh.length}件`);
+    }
+    if (newest > watermark) save();
+  }, [emails, folder]);
+
   // スレッドTODO / メールTODO を別集合に分け、会話単位でも「済み」を判定する。
   const { threadTodoKeys, messageTodoIds } = splitTodoKeys(todos);
   const isSelectedTodo = selected
