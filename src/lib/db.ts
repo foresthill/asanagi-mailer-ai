@@ -356,6 +356,19 @@ export function removeCached(account: string, id: string): void {
   getDb().prepare("DELETE FROM messages WHERE account = ? AND id = ?").run(account, id);
 }
 
+/** Drop optimistic `pending:` sent rows whose real server copy (same message_id)
+ *  has now arrived, so 送信済み doesn't show the just-sent mail twice. */
+export function prunePendingSent(account: string, messageIds: string[]): void {
+  const ids = messageIds.filter(Boolean);
+  if (!ids.length) return;
+  const placeholders = ids.map(() => "?").join(",");
+  getDb()
+    .prepare(
+      `DELETE FROM messages WHERE account = ? AND id LIKE 'pending:%' AND message_id IN (${placeholders})`,
+    )
+    .run(account, ...ids);
+}
+
 /**
  * Full-text-ish search over the cache: subject, body, sender AND recipients
  * (To/Cc) — across accounts and folders. Case-insensitive substring match per
