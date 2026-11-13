@@ -26,6 +26,19 @@ interface SweepItem {
   action: SweepAction;
   reason: string;
   source: "learned" | "heuristic" | "ai";
+  /** 0–1 判定の確信度（確信度でさばく用。未提供=要判断扱い）。 */
+  confidence?: number;
+}
+
+/** 確信度のティア（確信度でさばく）: auto=高確信・自動候補 / check=要確認 /
+ *  human=要判断。learned は確定扱い。しきい値は控えめ（誤片付けより取りこぼし優先）。 */
+type SweepTier = "auto" | "check" | "human";
+function tierOf(i: SweepItem): SweepTier {
+  if (i.source === "learned") return "auto";
+  const c = i.confidence ?? 0;
+  if (c >= 0.85) return "auto";
+  if (c >= 0.6) return "check";
+  return "human";
 }
 
 // setAll (header) offers the 3 safe dispositions; "spam" is per-row only —
@@ -259,6 +272,19 @@ export function SweepDialog({
       const next = { ...prev };
       for (const i of pageItems)
         if ((prev[i.id] ?? i.action) === from) next[i.id] = to;
+      return next;
+    });
+
+  // 確信度でさばく: 高確信(auto)で片付け推奨の行数（ボタン表示の判断）。
+  const trustHighCount = pageItems.filter(
+    (i) => tierOf(i) === "auto" && i.action !== "keep",
+  ).length;
+  /** 高確信の提案だけ採用し、要確認/要判断は「残す」に倒す（確信度でさばく）。 */
+  const trustHighConf = () =>
+    setActions((prev) => {
+      const next = { ...prev };
+      for (const i of pageItems)
+        next[i.id] = tierOf(i) === "auto" ? i.action : "keep";
       return next;
     });
 
@@ -514,6 +540,18 @@ export function SweepDialog({
                     )}
                   </button>
                 )}
+                {/* 確信度でさばく: 高確信の提案だけ採用し、要確認/要判断は「残す」に倒す
+                    → 実行すると確信の高い片付けだけが走る（不確かな分は人が後で判断）。 */}
+                {trustHighCount > 0 && (
+                  <button
+                    onClick={trustHighConf}
+                    title={t("sweep.trustHigh.title")}
+                    className="flex items-center gap-1 rounded-md border border-accent/60 px-2 py-0.5 text-accent hover:bg-accent-soft"
+                  >
+                    <Sparkles className="size-3" />
+                    {t("sweep.trustHigh").replace("{n}", String(trustHighCount))}
+                  </button>
+                )}
               </div>
               <div className="flex flex-col gap-0.5">
                 {pageItems.slice(0, revealed).map((i) => {
@@ -526,6 +564,7 @@ export function SweepDialog({
                     (mail ? displayName(mail.from) : "");
                   const subject = i.subject ?? mail?.subject ?? "";
                   const cur = actions[i.id] ?? i.action;
+                  const tier = tierOf(i);
                   // どのメールアカウント（gmail / imap 等）のメールかを示すバッジ。
                   const acct = mail?.account;
                   const acctLabel =
@@ -563,6 +602,19 @@ export function SweepDialog({
                         </span>
                         {/* 2行目: 判定理由 ・ 日付 ・ アカウント（小さく・次の行に逃がす）。 */}
                         <span className="mt-0.5 flex items-center gap-2 text-[10px] text-fg-subtle">
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full px-1.5 py-px text-[9px] font-medium",
+                              tier === "auto"
+                                ? "bg-accent-soft text-accent"
+                                : tier === "check"
+                                  ? "bg-surface-2 text-fg-muted"
+                                  : "bg-high-soft text-high",
+                            )}
+                            title={t(`sweep.tier.${tier}.title`)}
+                          >
+                            {t(`sweep.tier.${tier}`)}
+                          </span>
                           <span className="min-w-0 truncate">{i.reason}</span>
                           {mail?.date && (
                             <span className="shrink-0 tabular-nums">
