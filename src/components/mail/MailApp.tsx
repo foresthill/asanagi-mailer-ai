@@ -365,6 +365,12 @@ export function MailApp({
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
   const selectToken = useRef(0);
+  // Set by openEmail when the USER explicitly opens a mail, so selectEmail only
+  // auto-follows the list to that mail's folder for real opens — NOT when the
+  // reader-sync effect re-selects a fallback tab after closing one (e.g. archive
+  // closing the open reader → focus a previously-open 送信済み tab would otherwise
+  // yank the list to 送信箱).
+  const explicitOpenRef = useRef<string | null>(null);
 
   const loadStorage = useCallback(async () => {
     try {
@@ -1769,7 +1775,14 @@ export function MailApp({
         // 開く」でアーカイブ済みを開いた）別フォルダに属するなら、左の一覧を
         // そのフォルダへ切り替える（選択はそのまま＝行が現れてハイライト＋
         // 自動スクロール）。検索中はクロスフォルダ表示なので触らない。
+        // Only follow the list to the mail's folder on an EXPLICIT open (user
+        // clicked it) — not when the reader-sync effect re-selects a fallback
+        // tab after a close (archive/trash), which would jump the list to that
+        // tab's folder (e.g. 送信箱) unexpectedly.
+        const explicit = explicitOpenRef.current === id;
+        explicitOpenRef.current = null; // one-shot: consume the explicit-open flag
         if (
+          explicit &&
           searchResults === null &&
           data.email.state !== folder &&
           !emailsRef.current.some((e) => e.id === id)
@@ -1802,6 +1815,7 @@ export function MailApp({
     (id: string) => {
       if (!makeRoomIfSingle()) return;
       setView("mail");
+      explicitOpenRef.current = id; // user open → allow folder-follow in selectEmail
       const e = emailsRef.current.find((x) => x.id === id);
       openReader(id, e ? tabTitleForEmail(e) : "メール");
     },
@@ -1845,8 +1859,10 @@ export function MailApp({
         return next.size === prev.size ? prev : next;
       });
       if (selectedId && set.has(selectedId)) {
-        // The open mail was archived/trashed → drop its reader tab and pane.
-        closeTab(`r:${selectedId}`);
+        // The open mail was archived/trashed → drop its reader tab and pane,
+        // and return to the list (受信箱) instead of falling back to whatever
+        // tab was open before (e.g. a 送信済み mail that would jump the list).
+        closeTab(`r:${selectedId}`, { toList: true });
         setSelectedId(null);
         setSelected(null);
         setThread(null);

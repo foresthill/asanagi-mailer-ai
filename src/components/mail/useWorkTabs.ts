@@ -104,7 +104,10 @@ export function useWorkTabs() {
     [activate],
   );
 
-  const closeTab = useCallback((id: string) => {
+  // `toList`: close without re-focusing another tab — go straight to the list
+  // view (activeId=null). Used by archive/trash so さばいた直後は一覧（受信箱）に
+  // 戻る（直前に見ていた送信済み等のタブへ飛ばない）。
+  const closeTab = useCallback((id: string, opts?: { toList?: boolean }) => {
     const cur = tabsRef.current;
     const idx = cur.findIndex((t) => t.id === id);
     if (idx < 0) return;
@@ -113,6 +116,10 @@ export function useWorkTabs() {
     backStack.current = backStack.current.filter((x) => x !== id);
     fwdStack.current = fwdStack.current.filter((x) => x !== id);
     if (activeRef.current === id) {
+      if (opts?.toList) {
+        setActiveId(null); // 一覧ビューへ（フォールバックしない）
+        return;
+      }
       // Focus the most-recent still-open tab, else the neighbour, else nothing.
       let fallback: string | null = null;
       while (backStack.current.length) {
