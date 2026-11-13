@@ -42,8 +42,12 @@ export interface EmailProvider {
 
   /** Send a message now. Returns the provider message id when available.
    *  `warning` = sent OK but a follow-up step failed (e.g. 控えの保存) —
-   *  must be surfaced to the user, never swallowed. */
-  send(message: OutgoingMessage): Promise<{ messageId?: string; warning?: string }>;
+   *  must be surfaced to the user, never swallowed.
+   *  `sent` = an optimistic Sent-folder copy to cache immediately so 送信済み
+   *  reflects the mail at once, before the (background) server copy lands. */
+  send(
+    message: OutgoingMessage,
+  ): Promise<{ messageId?: string; warning?: string; sent?: Email }>;
 
   /**
    * All messages of a conversation, oldest first — across folders (inbox,

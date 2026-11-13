@@ -29,7 +29,12 @@ export async function POST(req: Request) {
     const provider = message.account
       ? await getProviderFor(message.account)
       : await getProvider();
-    const result = await provider.send(message);
+    const { sent, ...result } = await provider.send(message);
+
+    // Optimistic Sent reflection: cache the just-sent copy now (local, instant)
+    // so 送信済み shows it immediately — the real server copy lands via the
+    // background append + the after() re-list below (which dedupes by message_id).
+    if (sent) upsertEmails(provider.name, [sent]);
 
     // Refresh the sent-folder cache right away (after the response) so the
     // just-sent reply joins its thread and the ↩ replied marker appears

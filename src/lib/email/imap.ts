@@ -673,7 +673,9 @@ export class ImapProvider implements EmailProvider {
     }
   }
 
-  async send(message: OutgoingMessage): Promise<{ messageId?: string; warning?: string }> {
+  async send(
+    message: OutgoingMessage,
+  ): Promise<{ messageId?: string; warning?: string; sent?: Email }> {
     // Build the RFC822 message once so the copy saved to the Sent folder is
     // byte-identical to what went out. SMTP itself never stores sent mail —
     // without the IMAP APPEND below, sent messages would simply vanish.
@@ -755,7 +757,27 @@ export class ImapProvider implements EmailProvider {
     // (send route's after()) and normal polling reconcile the real 送信箱.
     void this.appendToSent(stored);
 
-    return { messageId: info.messageId };
+    // Optimistic Sent copy: cache it immediately so 送信済み shows the mail at
+    // once (the real server copy lands via the background append + the sent
+    // re-list). id is marked `pending:` so the live sent list can dedupe it by
+    // messageId once the real UID-keyed copy arrives (see prunePendingSent).
+    const sent: Email = {
+      id: `pending:${info.messageId ?? Date.now().toString(36)}`,
+      threadId: message.threadId ?? info.messageId ?? "",
+      from: { name: this.creds.smtp.name ?? "", email: this.creds.smtp.from },
+      to: message.to,
+      cc: message.cc,
+      bcc: message.bcc,
+      subject: message.subject,
+      snippet: (message.body ?? "").slice(0, 140),
+      body: message.body ?? "",
+      html: message.html,
+      date: new Date().toISOString(),
+      read: true,
+      state: "sent",
+      messageId: info.messageId,
+    };
+    return { messageId: info.messageId, sent };
   }
 
   /** Append a sent copy to the Sent folder (best-effort, background). Bounded so

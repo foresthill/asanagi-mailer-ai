@@ -4,6 +4,7 @@ import {
   cachedList,
   cachedStarred,
   existingIds,
+  prunePendingSent,
   repliedThreadIds,
   threadCounts,
   upsertEmails,
@@ -151,6 +152,14 @@ export async function GET(req: Request) {
           const provider = await getProviderFor(a.key);
           const live = await provider.list(state);
           upsertEmails(a.key, live); // write-through (raw provider ids)
+          // Sent: drop optimistic `pending:` copies now that the real server
+          // copy (same message_id) is in — avoids showing the sent mail twice.
+          if (state === "sent") {
+            prunePendingSent(
+              a.key,
+              live.map((e) => e.messageId ?? "").filter(Boolean),
+            );
+          }
           // Merge the local cache so inbox mail older than the provider's fetch
           // window (Gmail newest-50) stays visible. Live is authoritative for
           // the freshest slice → it overrides any stale cached copy; the cache
