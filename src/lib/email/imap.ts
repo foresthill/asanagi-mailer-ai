@@ -745,10 +745,22 @@ export class ImapProvider implements EmailProvider {
         ]);
       }
     }
-    // The copy must land in the server's REAL sent folder (special-use
-    // detection) — and a failure must be VISIBLE, not swallowed: an empty
-    // 送信箱 after sending erodes all trust in the client.
-    let warning: string | undefined;
+    // Save the copy to the Sent folder OFF the critical path. The mail already
+    // went out (SMTP returned above = irreversible success), so the user must
+    // NOT wait on this slow/variable IMAP step (connect→append→logout). It used
+    // to run synchronously here, making 送信 spin for tens of seconds and even
+    // exceed the client timeout — so a SUCCESSFUL send looked failed and the tab
+    // never closed (same「後片付けをクリティカルパスに置かない」lesson as #371,
+    // server-side this time). Fire-and-forget + logged; the sent-cache refresh
+    // (send route's after()) and normal polling reconcile the real 送信箱.
+    void this.appendToSent(stored);
+
+    return { messageId: info.messageId };
+  }
+
+  /** Append a sent copy to the Sent folder (best-effort, background). Bounded so
+   *  a stalled IMAP connection can't linger; failures are logged, never thrown. */
+  private async appendToSent(stored: Buffer): Promise<void> {
     try {
       const c = this.connection();
       await c.connect();
@@ -759,11 +771,7 @@ export class ImapProvider implements EmailProvider {
         await c.logout();
       }
     } catch (e) {
-      warning = `送信は完了しましたが、送信箱への控えの保存に失敗しました（${
-        e instanceof Error ? e.message : "IMAP append failed"
-      }）`;
+      recordLog("warn", "send", `送信箱への控え保存に失敗（送信は成功）: ${errMsg(e)}`);
     }
-
-    return { messageId: info.messageId, warning };
   }
 }
