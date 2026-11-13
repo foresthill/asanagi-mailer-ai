@@ -785,6 +785,29 @@ fn unique_path(base: &std::path::Path, filename: &str) -> std::path::PathBuf {
     first
 }
 
+/// Open an external http(s) URL in the OS default browser. The desktop WebView
+/// does not open `target="_blank"` / external links itself (they silently do
+/// nothing), so the frontend intercepts external-link clicks and routes them
+/// here. Only http/https are allowed (no file://, javascript:, custom schemes).
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    let u = url.trim();
+    if !(u.starts_with("https://") || u.starts_with("http://")) {
+        return Err("unsupported url scheme".into());
+    }
+    #[cfg(target_os = "linux")]
+    let prog = "xdg-open";
+    #[cfg(target_os = "macos")]
+    let prog = "open";
+    #[cfg(target_os = "windows")]
+    let prog = "explorer";
+    std::process::Command::new(prog)
+        .arg(u)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri_plugin_deep_link::DeepLinkExt;
@@ -796,7 +819,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             save_file_dialog,
             save_file_to_dir,
-            pick_folder
+            pick_folder,
+            open_external
         ])
         .manage(MailtoQueue::default())
         .setup(|app| {
