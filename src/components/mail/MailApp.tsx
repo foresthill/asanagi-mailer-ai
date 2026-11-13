@@ -1859,8 +1859,10 @@ export function MailApp({
         return next.size === prev.size ? prev : next;
       });
       if (selectedId && set.has(selectedId)) {
-        // The open mail was archived/trashed → drop its reader tab and pane.
-        closeTab(`r:${selectedId}`);
+        // The open mail was archived/trashed → drop its reader tab and pane,
+        // and return to the list (受信箱) instead of falling back to whatever
+        // tab was open before (e.g. a 送信済み mail that would jump the list).
+        closeTab(`r:${selectedId}`, { toList: true });
         setSelectedId(null);
         setSelected(null);
         setThread(null);
