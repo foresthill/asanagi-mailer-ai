@@ -5,7 +5,7 @@ import { Clock, X } from "lucide-react";
 
 function presets(): { label: string; date: Date }[] {
   const now = new Date();
-  const inHour = new Date(now.getTime() + 60 * 60 * 1000);
+  const afterMin = (m: number) => new Date(now.getTime() + m * 60 * 1000);
 
   const tomorrow9 = new Date(now);
   tomorrow9.setDate(now.getDate() + 1);
@@ -16,8 +16,11 @@ function presets(): { label: string; date: Date }[] {
   monday9.setDate(now.getDate() + daysUntilMon);
   monday9.setHours(9, 0, 0, 0);
 
+  // 短い「寝かせ」を上に: 即レス感を避けて少し置いてから送る用途（5分/15分）。
   return [
-    { label: "1時間後", date: inHour },
+    { label: "5分後", date: afterMin(5) },
+    { label: "15分後", date: afterMin(15) },
+    { label: "1時間後", date: afterMin(60) },
     { label: "明日の朝 9:00", date: tomorrow9 },
     { label: "月曜の朝 9:00", date: monday9 },
   ];
