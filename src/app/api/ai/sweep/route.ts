@@ -31,6 +31,9 @@ export interface SweepItem {
   action: SweepAction;
   reason: string;
   source: "learned" | "heuristic" | "ai";
+  /** 0–1 判定の確信度（確信度でさばく用）。learned=1、Jev=実値、
+   *  heuristic / LLMフォールバックは未提供（undefined=要判断扱い）。 */
+  confidence?: number;
 }
 
 const schema = z.object({
@@ -104,6 +107,7 @@ export async function POST(req: Request) {
         action: act,
         reason: act === "trash" ? "学習済み: ゴミ箱" : "学習済み: 低",
         source: "learned",
+        confidence: 1,
       });
     } else if (learned) {
       items.push({
@@ -112,6 +116,7 @@ export async function POST(req: Request) {
         action: "keep",
         reason: "学習済みの相手",
         source: "learned",
+        confidence: 1,
       });
     } else {
       undecided.push(e);
@@ -148,6 +153,7 @@ export async function POST(req: Request) {
             action: r.disposition,
             reason: `Jev・確信度 ${Math.round(r.confidence * 100)}%`,
             source: "ai",
+            confidence: r.confidence,
           });
         }
       }
