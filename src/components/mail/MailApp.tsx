@@ -57,7 +57,12 @@ import {
   threadTodoId,
 } from "@/lib/todo-keys";
 import { getSweepAutoMode, sweepAutoAllowed } from "@/lib/sweep-prefs";
-import { fireNotification, getMailNotify, notify } from "@/lib/notify-prefs";
+import {
+  fireNotification,
+  getMailNotify,
+  getImportantOnly,
+  notify,
+} from "@/lib/notify-prefs";
 import type { GroupAxis } from "./EmailList";
 import type { SearchDigest } from "@/app/api/ai/search-digest/route";
 
@@ -1106,13 +1111,52 @@ export function MailApp({
       return;
     }
     const fresh = emails.filter((e) => +new Date(e.date) > watermark && !e.read);
-    if (fresh.length === 1) {
-      notify(fresh[0].from.name || fresh[0].from.email, fresh[0].subject || "");
-    } else if (fresh.length > 1) {
-      notify(`新着メール ${fresh.length}件`);
+    save(); // 各新着は一度だけ評価（前進させて重複通知を防ぐ）
+    if (fresh.length === 0) return;
+    const notifyMany = (list: Email[], manyLabel: string) => {
+      if (list.length === 1)
+        notify(list[0].from.name || list[0].from.email, list[0].subject || "");
+      else if (list.length > 1) notify(manyLabel);
+    };
+    if (!getImportantOnly()) {
+      notifyMany(fresh, `新着メール ${fresh.length}件`);
+      return;
     }
-    if (newest > watermark) save();
-  }, [emails, folder]);
+    // D(a): 重要だけ通知 — Jev(なければLLM/ヒューリスティック)で分類し high のみ通知。
+    // 連打を避け先頭数件に限定。判定結果は emails にも書き戻す（開封時の再分類を防ぎ、
+    // 一覧の重要度バッジにも反映）。best-effort（失敗は黙殺）。
+    void (async () => {
+      const targets = fresh.slice(0, 8);
+      const high: Email[] = [];
+      const patches = new Map<string, Partial<Email>>();
+      for (const m of targets) {
+        try {
+          const res = await fetch("/api/ai/classify", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email: m, locale }),
+          });
+          const data = await res.json();
+          patches.set(m.id, {
+            importance: data.importance as Importance,
+            importanceReason: data.reason,
+            threat: (data.threat as Email["threat"]) ?? undefined,
+          });
+          if (data?.importance === "high") high.push(m);
+        } catch {
+          /* best-effort */
+        }
+      }
+      if (patches.size) {
+        setEmails((list) =>
+          list.map((e) =>
+            patches.has(e.id) ? { ...e, ...patches.get(e.id) } : e,
+          ),
+        );
+      }
+      notifyMany(high, `重要な新着メール ${high.length}件`);
+    })();
+  }, [emails, folder, locale]);
 
   // スレッドTODO / メールTODO を別集合に分け、会話単位でも「済み」を判定する。
   const { threadTodoKeys, messageTodoIds } = splitTodoKeys(todos);

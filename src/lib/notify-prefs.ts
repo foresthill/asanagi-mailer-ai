@@ -41,6 +41,25 @@ export function setMailNotify(on: boolean): void {
   }
 }
 
+const MAIL_IMPORTANT_KEY = "asanagi:mail-notify-important";
+
+/** 新着通知を「AI(Jev)が重要と判定したメールだけ」に絞るか。既定OFF。 */
+export function getImportantOnly(): boolean {
+  try {
+    return localStorage.getItem(MAIL_IMPORTANT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setImportantOnly(on: boolean): void {
+  try {
+    localStorage.setItem(MAIL_IMPORTANT_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
 export function notifySupported(): boolean {
   return typeof window !== "undefined" && "Notification" in window;
 }

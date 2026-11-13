@@ -427,6 +427,9 @@ const ja: Dict = {
   "mailNotify.title": "新着メール通知",
   "mailNotify.desc":
     "アプリを開いている間、受信箱に新着が届いたらデスクトップ通知で知らせます（端末内のみ）。ONにすると通知の許可を求めます。",
+  "mailNotify.importantTitle": "重要なメールだけ通知",
+  "mailNotify.importantDesc":
+    "AI（Jev）が「重要」と判定した新着だけ通知します。新着をAIで判定するため、わずかに処理が増えます。",
   "download.ask": "保存するたびに保存先を選ぶ",
   "download.askDesc":
     "オフにすると、下の既定フォルダにそのまま保存します（毎回の確認なし）。",
@@ -1323,6 +1326,9 @@ const en: Dict = {
   "mailNotify.title": "New mail notifications",
   "mailNotify.desc":
     "While the app is open, get a desktop notification when new mail arrives in the inbox (on this device only). Turning it on asks for notification permission.",
+  "mailNotify.importantTitle": "Only notify for important mail",
+  "mailNotify.importantDesc":
+    "Only notify for new mail the AI (Jev) judges \u201cimportant\u201d. New mail is classified by the AI, so this adds a little processing.",
   "download.ask": "Choose where to save each time",
   "download.askDesc":
     "When off, files are saved straight to the default folder below (no prompt).",
@@ -2235,6 +2241,9 @@ const fr: Dict = {
   "mailNotify.title": "Notifications de nouveaux messages",
   "mailNotify.desc":
     "Tant que l'app est ouverte, une notification du bureau s'affiche à l'arrivée d'un nouveau message (sur cet appareil uniquement). L'activer demande l'autorisation de notification.",
+  "mailNotify.importantTitle": "Notifier uniquement les messages importants",
+  "mailNotify.importantDesc":
+    "Ne notifier que les nouveaux messages jugés « importants » par l'IA (Jev). Les nouveaux messages sont classés par l'IA, ce qui ajoute un léger traitement.",
   "download.ask": "Choisir où enregistrer à chaque fois",
   "download.askDesc":
     "Désactivé, les fichiers sont enregistrés directement dans le dossier par défaut ci-dessous (sans confirmation).",
@@ -3117,6 +3126,9 @@ const zh: Dict = {
   "mailNotify.title": "新邮件通知",
   "mailNotify.desc":
     "在应用打开期间，收件箱有新邮件时通过桌面通知提醒（仅限本设备）。开启时会请求通知权限。",
+  "mailNotify.importantTitle": "仅通知重要邮件",
+  "mailNotify.importantDesc":
+    "仅对 AI（Jev）判定为“重要”的新邮件进行通知。新邮件会经过 AI 判定，因此会略微增加处理。",
   "download.ask": "每次保存时选择保存位置",
   "download.askDesc": "关闭后，文件将直接保存到下面的默认文件夹（不再询问）。",
   "download.dir": "默认保存位置",

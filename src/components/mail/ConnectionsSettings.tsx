@@ -21,6 +21,8 @@ import {
   setOsNotify,
   getMailNotify,
   setMailNotify,
+  getImportantOnly,
+  setImportantOnly,
   ensureNotifyPermission,
   notifySupported,
 } from "@/lib/notify-prefs";
@@ -974,34 +976,56 @@ function NotifySection() {
 function MailNotifySection() {
   const { t } = useI18n();
   const [on, setOn] = useState<boolean>(getMailNotify);
+  const [important, setImportant] = useState<boolean>(getImportantOnly);
   const [denied, setDenied] = useState(false);
   if (!notifySupported()) return null;
   return (
-    <div className="flex items-start gap-2 rounded-xl border border-border bg-bg px-3 py-2.5">
-      <input
-        type="checkbox"
-        checked={on}
-        onChange={async (e) => {
-          const next = e.target.checked;
-          if (next) {
-            const ok = await ensureNotifyPermission();
-            setDenied(!ok);
-            if (!ok) return; // 権限が無ければ ON にしない
-          }
-          setMailNotify(next);
-          setOn(next);
-        }}
-        className="mt-0.5 size-4 accent-[var(--accent,#6d5ae6)]"
-      />
-      <span className="flex flex-col gap-0.5 text-xs">
-        <span className="font-medium">{t("mailNotify.title")}</span>
-        <span className="text-[11px] leading-relaxed text-fg-subtle">
-          {t("mailNotify.desc")}
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-bg px-3 py-2.5">
+      <label className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={async (e) => {
+            const next = e.target.checked;
+            if (next) {
+              const ok = await ensureNotifyPermission();
+              setDenied(!ok);
+              if (!ok) return; // 権限が無ければ ON にしない
+            }
+            setMailNotify(next);
+            setOn(next);
+          }}
+          className="mt-0.5 size-4 accent-[var(--accent,#6d5ae6)]"
+        />
+        <span className="flex flex-col gap-0.5 text-xs">
+          <span className="font-medium">{t("mailNotify.title")}</span>
+          <span className="text-[11px] leading-relaxed text-fg-subtle">
+            {t("mailNotify.desc")}
+          </span>
+          {denied && (
+            <span className="text-[11px] text-high">{t("notify.denied")}</span>
+          )}
         </span>
-        {denied && (
-          <span className="text-[11px] text-high">{t("notify.denied")}</span>
-        )}
-      </span>
+      </label>
+      {on && (
+        <label className="flex items-start gap-2 pl-6">
+          <input
+            type="checkbox"
+            checked={important}
+            onChange={(e) => {
+              setImportantOnly(e.target.checked);
+              setImportant(e.target.checked);
+            }}
+            className="mt-0.5 size-4 accent-[var(--accent,#6d5ae6)]"
+          />
+          <span className="flex flex-col gap-0.5 text-xs">
+            <span className="font-medium">{t("mailNotify.importantTitle")}</span>
+            <span className="text-[11px] leading-relaxed text-fg-subtle">
+              {t("mailNotify.importantDesc")}
+            </span>
+          </span>
+        </label>
+      )}
     </div>
   );
 }
