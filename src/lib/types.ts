@@ -622,6 +622,19 @@ export interface NextcloudCalendar {
   name: string;
 }
 
+// ---------------------------------------------------------------------------
+// Obsidian 連携（インテグレーション） — 開いているメールを、ユーザーの Obsidian
+// vault（ただのローカルフォルダ）内に Markdown ノートとして保存する。プラグイン不要・
+// ネットワーク不要で、同じ端末上のフォルダに書き込むだけ。接続情報（vault パス・保存先
+// サブフォルダ）はローカルのみ（.data/obsidian-settings.json）。本文は端末外に出ない。
+// ---------------------------------------------------------------------------
+export interface ObsidianSettings {
+  /** vault のルート絶対パス（例 /Users/you/Documents/MyVault）。端末内のみ。 */
+  vaultPath?: string;
+  /** vault 内の保存先サブフォルダ（既定: Asanagi）。 */
+  folder?: string;
+}
+
 /** devlog の issue（pull 表示用・読み取り専用の最小フィールド）。 */
 export interface DevlogIssue {
   /** issue key（例 PJERP-123）。 */
