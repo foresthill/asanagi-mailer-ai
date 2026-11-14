@@ -9,6 +9,8 @@ import {
   Sparkles,
   EyeOff,
   Network,
+  List,
+  LayoutGrid,
 } from "lucide-react";
 import type { Project, ProjectHub } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -19,7 +21,11 @@ import { ProjectPartyGraph } from "./ProjectPartyGraph";
 const STATUS_KEY: Record<string, string> = {
   進行中: "active",
   要確認: "check",
+  完了: "done",
 };
+
+/** ボード（docs/12 Phase C）の列順＝案件ステータス。 */
+const BOARD_COLUMNS = ["進行中", "要確認", "完了"] as const;
 const PRIO_KEY: Record<string, string> = { 高: "high", 中: "mid", 低: "low" };
 
 type StatusFilter = "all" | "進行中" | "要確認";
@@ -74,6 +80,68 @@ function WaitingBadge({ w }: { w: NonNullable<Project["waiting"]> }) {
   );
 }
 
+/** ボードの1枚（docs/12 Phase C・読み取り専用の簡易カード）。列＝ステータスなので
+ *  ステータスバッジは出さず、優先度・誰待ち・進捗・次アクションを縦に並べる。 */
+function BoardCard({
+  p,
+  onOpenEmail,
+  onExclude,
+}: {
+  p: Project;
+  onOpenEmail?: (id: string) => void;
+  onExclude: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="group relative rounded-lg border border-border bg-surface px-3 py-2.5">
+      <button
+        onClick={() => onExclude(p.id)}
+        title={t("projects.exclude")}
+        className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-md text-fg-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-high group-hover:opacity-100"
+      >
+        <EyeOff className="size-3" />
+      </button>
+      <div className="pr-5 text-[13px] font-semibold">{p.name}</div>
+      <div className="mt-1 flex flex-wrap items-center gap-1">
+        <PrioBadge p={p.priority} />
+        {p.waiting && <WaitingBadge w={p.waiting} />}
+      </div>
+      {p.parties.length > 0 && (
+        <div className="mt-1 text-[11.5px] text-fg-muted">
+          {p.parties
+            .map((pt) => (pt.person ? `${pt.org} / ${pt.person}` : pt.org))
+            .join("、")}
+        </div>
+      )}
+      <div className="mt-1.5 text-[11px] font-medium">{p.statusLabel}</div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+        <div
+          className={cn("h-full rounded-full", barClass(p))}
+          style={{ width: `${p.pct}%` }}
+        />
+      </div>
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        {p.due ? (
+          <span className="rounded bg-high-soft px-1.5 py-0.5 text-[10px] font-semibold text-high">
+            {p.due}
+          </span>
+        ) : (
+          <span />
+        )}
+        {p.anchorId && onOpenEmail && (
+          <button
+            onClick={() => onOpenEmail(p.anchorId!)}
+            className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-accent hover:underline"
+          >
+            {t("projects.openLatest")}
+            <ArrowUpRight className="size-3" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Which fields the client-side search scans. */
 function haystack(p: Project): string {
   return [
@@ -112,6 +180,8 @@ export function ProjectsView({
   const [prioF, setPrioF] = useState<PrioFilter>("all");
   // 関係者マップ（docs/12 Phase B）を展開中の案件id（1件ずつ・on-demand）。
   const [graphId, setGraphId] = useState<string | null>(null);
+  // 表示モード（docs/12 Phase C）: リスト / ボード（status列の読み取り専用カンバン）。
+  const [viewMode, setViewMode] = useState<"list" | "board">("list");
 
   useEffect(() => {
     let alive = true;
@@ -190,6 +260,14 @@ export function ProjectsView({
         (!kw || haystack(p).includes(kw)),
     );
   }, [projects, q, statusF, prioF]);
+
+  // ボード用: filtered をステータス列に振り分け（ボード時 statusF は all に倒すので
+  // 全列が出る）。読み取り専用＝ここで並べ替え/状態変更はしない（原本非複製・docs/12）。
+  const boardCols = useMemo(() => {
+    const g: Record<string, Project[]> = { 進行中: [], 要確認: [], 完了: [] };
+    for (const p of filtered) (g[p.status] ??= []).push(p);
+    return g;
+  }, [filtered]);
 
   const kpi = {
     total: projects.length,
@@ -287,22 +365,56 @@ export function ProjectsView({
 
         {/* Filters */}
         <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[12px]">
-          {(["all", "進行中", "要確認"] as StatusFilter[]).map((s) => (
+          {/* ボードでは列＝ステータスなのでステータス絞り込みは隠す（statusF は all 固定）。 */}
+          {viewMode === "list" &&
+            (["all", "進行中", "要確認"] as StatusFilter[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusF(s)}
+                className={cn(
+                  "rounded-full border px-3 py-1",
+                  statusF === s
+                    ? "border-accent bg-accent text-accent-fg"
+                    : "border-border text-fg-muted hover:border-accent hover:text-accent",
+                )}
+              >
+                {s === "all"
+                  ? t("projects.filter.all")
+                  : t(`projects.status.${STATUS_KEY[s] ?? "active"}`)}
+              </button>
+            ))}
+          {/* 表示モード切替（リスト / ボード）。ボードへ移るとき statusF を all に倒す。 */}
+          <div className="flex items-center gap-0.5 rounded-full border border-border p-0.5">
             <button
-              key={s}
-              onClick={() => setStatusF(s)}
+              onClick={() => setViewMode("list")}
+              title={t("projects.view.list")}
+              aria-pressed={viewMode === "list"}
               className={cn(
-                "rounded-full border px-3 py-1",
-                statusF === s
-                  ? "border-accent bg-accent text-accent-fg"
-                  : "border-border text-fg-muted hover:border-accent hover:text-accent",
+                "flex items-center gap-1 rounded-full px-2 py-0.5",
+                viewMode === "list"
+                  ? "bg-accent text-accent-fg"
+                  : "text-fg-muted hover:text-accent",
               )}
             >
-              {s === "all"
-                ? t("projects.filter.all")
-                : t(`projects.status.${STATUS_KEY[s] ?? "active"}`)}
+              <List className="size-3.5" />
             </button>
-          ))}
+            <button
+              onClick={() => {
+                setStatusF("all");
+                setViewMode("board");
+              }}
+              title={t("projects.view.board")}
+              aria-pressed={viewMode === "board"}
+              className={cn(
+                "flex items-center gap-1 rounded-full px-2 py-0.5",
+                viewMode === "board"
+                  ? "bg-accent text-accent-fg"
+                  : "text-fg-muted hover:text-accent",
+              )}
+            >
+              <LayoutGrid className="size-3.5" />
+            </button>
+          </div>
           <span className="flex-1" />
           {(["all", "高", "中"] as PrioFilter[]).map((p) => (
             <button
@@ -336,6 +448,39 @@ export function ProjectsView({
           <div className="grid place-items-center gap-2 py-16 text-center text-sm text-fg-subtle">
             <Sparkles className="size-8 opacity-40" />
             <p>{t("projects.empty")}</p>
+          </div>
+        ) : viewMode === "board" ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {BOARD_COLUMNS.map((st) => (
+              <div
+                key={st}
+                className="flex flex-col rounded-xl border border-border bg-surface-2/40"
+              >
+                <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                  <span className="text-xs font-semibold">
+                    {t(`projects.status.${STATUS_KEY[st] ?? "active"}`)}
+                  </span>
+                  <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-muted">
+                    {boardCols[st].length}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2 p-2">
+                  {boardCols[st].map((p) => (
+                    <BoardCard
+                      key={p.id}
+                      p={p}
+                      onOpenEmail={onOpenEmail}
+                      onExclude={exclude}
+                    />
+                  ))}
+                  {boardCols[st].length === 0 && (
+                    <div className="px-2 py-8 text-center text-[11px] text-fg-subtle">
+                      {t("projects.board.empty")}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-border">
