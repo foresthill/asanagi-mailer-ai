@@ -64,6 +64,8 @@ const ja: Dict = {
   "projects.excludedCount": "除外 {n} 件",
   "projects.excludedReset": "リセット",
   "projects.openLatest": "最新メールを開く",
+  "projects.waiting.them": "相手待ち {n}日",
+  "projects.waiting.me": "自分待ち・要返信",
   "projects.genFailed": "生成に失敗しました",
   "nav.projects.title": "メール履歴から抽出した案件の進捗・次アクション",
   "nav.triage": "仕分けレビュー",

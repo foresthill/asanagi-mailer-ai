@@ -410,6 +410,12 @@ export interface Project {
   updated: string;
   /** この案件の最新メールの id（account/xxx）— 一覧から本文へ飛ぶ用。 */
   anchorId?: string;
+  /**
+   * 誰待ち（docs/12）: 案件が「今どちらの行動待ちか」。決定論で GET 時に算出し、
+   * 保存はしない（pull型）。`side="them"`=相手待ち / `side="me"`=自分待ち（要返信）、
+   * `days`=最後の動きからの滞留日数。判定不能（最新メール不明）なら省略/null。
+   */
+  waiting?: { side: "them" | "me"; days: number } | null;
 }
 
 export interface ProjectHub {

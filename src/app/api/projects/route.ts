@@ -8,8 +8,9 @@ import {
   langDirective,
 } from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
-import { cachedList, logAiUsage } from "@/lib/db";
+import { cachedList, cachedGet, cachedThread, logAiUsage } from "@/lib/db";
 import { listAccounts } from "@/lib/email/accounts";
+import { computeWaiting } from "@/lib/projects/waiting";
 import {
   getProjectHub,
   saveProjectHub,
@@ -26,9 +27,36 @@ async function withCount(hub: ProjectHub) {
   return { ...hub, excludedCount: (await listExcludedProjects()).length };
 }
 
+/**
+ * 誰待ち（docs/12）を各案件に付与する。決定論・GET 時に算出し、保存はしない（pull型）。
+ * 案件の anchor（最新メール）からスレッドをフォルダ横断で引き、最新メールの方向＋経過日数で
+ * 判定する（computeWaiting）。キャッシュに無い等で判定できなければ waiting は付けない。
+ */
+async function withWaiting(hub: ProjectHub): Promise<ProjectHub> {
+  const accounts = await listAccounts();
+  const myAddrs = new Set(
+    accounts
+      .map((a) => a.address?.trim().toLowerCase())
+      .filter((x): x is string => !!x),
+  );
+  const projects = hub.projects.map((p) => {
+    const anchor = p.anchorId;
+    if (!anchor) return { ...p, waiting: null };
+    const slash = anchor.indexOf("/");
+    if (slash <= 0) return { ...p, waiting: null }; // account 修飾が無い＝引けない
+    const account = anchor.slice(0, slash);
+    const id = anchor.slice(slash + 1);
+    const email = cachedGet(account, id);
+    const thread = email ? cachedThread(account, email.threadId) : [];
+    const basis = thread.length ? thread : email ? [email] : [];
+    return { ...p, waiting: computeWaiting(basis, myAddrs) };
+  });
+  return { ...hub, projects };
+}
+
 /** GET → the saved project hub (pull型: generated on demand, not per view). */
 export async function GET() {
-  return NextResponse.json(await withCount(await getProjectHub()));
+  return NextResponse.json(await withCount(await withWaiting(await getProjectHub())));
 }
 
 /**
@@ -212,8 +240,8 @@ export async function POST(req: Request) {
     // 学習済みの除外を確実に反映（生成後フィルタ）。除外した案件・相手先は出さない。
     const kept = projects.filter((p) => !isProjectExcluded(p, excluded));
     const hub: ProjectHub = { projects: kept, generatedAt };
-    await saveProjectHub(hub);
-    return NextResponse.json(await withCount(hub));
+    await saveProjectHub(hub); // 保存は waiting 抜き（pull型・算出は返却時のみ）
+    return NextResponse.json(await withCount(await withWaiting(hub)));
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "生成に失敗しました" },
