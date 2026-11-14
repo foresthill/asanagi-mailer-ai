@@ -3,7 +3,8 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import { REFINE_SYSTEM, emailContext, writingNoteBlock } from "@/lib/ai/prompts";
-import { getWritingNote } from "@/lib/store";
+import { getWritingNote, getTeamRulesSettings } from "@/lib/store";
+import { readTeamRules } from "@/lib/integrations/team-rules";
 import { logAiUsage } from "@/lib/db";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import type { Email } from "@/lib/types";
@@ -69,10 +70,11 @@ export async function POST(req: Request) {
         ].join("\n")
       : "下書き全体を対象に、指示に関係する箇所のみ最小限で修正してください。";
     const writingNote = await getWritingNote();
+    const teamRules = await readTeamRules(await getTeamRulesSettings());
     const prompt = [
       "以下のメール下書きを、指示に従って修正してください。",
       scope,
-      writingNoteBlock(writingNote),
+      writingNoteBlock(writingNote, teamRules),
       "",
       `指示: ${instruction}`,
       ...(needSubject

@@ -8,6 +8,7 @@ import {
   CalendarDays,
   CalendarClock,
   BookText,
+  Users,
   Check,
   Settings2,
   RefreshCw,
@@ -73,6 +74,14 @@ const INTEGRATIONS: IntegDef[] = [
     icon: BookText,
     endpoint: "/api/integrations/obsidian",
     descKey: "integrations.desc.note",
+  },
+  {
+    id: "team-rules",
+    name: "チーム共有ルール",
+    nameKey: "tr.title",
+    icon: Users,
+    endpoint: "/api/integrations/team-rules",
+    descKey: "integrations.desc.teamRules",
   },
 ];
 
