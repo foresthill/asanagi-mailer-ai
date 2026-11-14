@@ -23,6 +23,7 @@ import type {
   OpenProjectSettings,
   DevlogSettings,
   NextcloudSettings,
+  ObsidianSettings,
 } from "@/lib/types";
 import type { ThreatSenders } from "./threat";
 
@@ -1184,6 +1185,35 @@ export async function saveNextcloudSettings(
   merge("calendarUrl", patch.calendarUrl);
   merge("calendarName", patch.calendarName);
   await writeJson(NEXTCLOUD_SETTINGS, next);
+  return next;
+}
+
+// ── Obsidian 連携設定 ───────────────────────────────────────────────
+// vault の絶対パスと保存先サブフォルダ。資格情報ではないが端末内の情報なので
+// .data のみに保存する（端末外には出さない）。
+const OBSIDIAN_SETTINGS = "obsidian-settings.json";
+
+export async function getObsidianSettings(): Promise<ObsidianSettings> {
+  return readJson<ObsidianSettings>(OBSIDIAN_SETTINGS, {});
+}
+
+/**
+ * Merge a patch into stored Obsidian settings. A blank string clears that field
+ * (e.g. disconnect = { vaultPath: "" }); undefined leaves it untouched.
+ */
+export async function saveObsidianSettings(
+  patch: ObsidianSettings,
+): Promise<ObsidianSettings> {
+  const cur = await getObsidianSettings();
+  const next: ObsidianSettings = { ...cur };
+  const merge = (k: keyof ObsidianSettings, v: string | undefined) => {
+    if (v === undefined) return;
+    if (v.trim()) next[k] = v.trim();
+    else delete next[k];
+  };
+  merge("vaultPath", patch.vaultPath);
+  merge("folder", patch.folder);
+  await writeJson(OBSIDIAN_SETTINGS, next);
   return next;
 }
 

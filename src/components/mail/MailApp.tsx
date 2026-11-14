@@ -362,6 +362,8 @@ export function MailApp({
   const [nextcloudEnabled, setNextcloudEnabled] = useState(false);
   // Google カレンダー連携（既存 Gmail OAuth 再利用）。TODO 期限→予定。
   const [gcalEnabled, setGcalEnabled] = useState(false);
+  // Obsidian 連携（ローカル vault への Markdown 書き出し）。設定済みなら本文に保存ボタン。
+  const [obsidianEnabled, setObsidianEnabled] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const classifyToken = useRef(0);
   const selectToken = useRef(0);
@@ -673,6 +675,39 @@ export function MailApp({
   };
 
   // メール本文から起票（reader）。差出人・受信日時・本文抜粋を description に。
+  // ── Obsidian 連携 ─────────────────────────────────────────────────
+  // 設定済み（vault パス実在）かを起動時に確認（本文の保存ボタン表示切替）。
+  const loadObsidianStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/integrations/obsidian");
+      const d = (await res.json()) as { configured?: boolean };
+      setObsidianEnabled(!!d.configured);
+    } catch {
+      /* 連携は任意機能 */
+    }
+  }, []);
+  useEffect(() => {
+    // async loader — setState only after the fetch resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadObsidianStatus();
+  }, [loadObsidianStatus]);
+
+  // 開いているメールを Obsidian vault に Markdown ノートとして保存（ローカル書き込みのみ）。
+  const saveEmailToObsidian = async (email: Email) => {
+    showToast(t("obsidian.saving"));
+    try {
+      const res = await fetch("/api/integrations/obsidian/add", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const d = (await res.json()) as { ok: boolean; error?: string };
+      showToast(d.ok ? t("obsidian.saved") : (d.error ?? t("obsidian.fail")));
+    } catch {
+      showToast(t("obsidian.fail"));
+    }
+  };
+
   const sendEmailToOpenProject = async (email: Email) => {
     const excerpt = (email.body ?? email.snippet ?? "").slice(0, 2000);
     const desc = [
@@ -2485,6 +2520,7 @@ export function MailApp({
           : undefined
       }
       issueTargets={emailIssueTargets}
+      onSaveToObsidian={obsidianEnabled ? saveEmailToObsidian : undefined}
       openProjectLink={opLink}
       onNoteSaved={loadNoteIds}
       highlight={searchResults !== null ? searchQuery : undefined}

@@ -298,6 +298,26 @@ const ja: Dict = {
   "gc.adding": "Google カレンダーに登録中…",
   "gc.added": "Google カレンダーに登録しました。",
   "gc.fail": "Google カレンダーへの登録に失敗しました。",
+  // Obsidian 連携（ローカル vault への Markdown 書き出し）
+  "ob.title": "Obsidian 連携",
+  "ob.intro":
+    "開いているメールを、お使いの Obsidian vault に Markdown ノートとして保存します（プラグイン不要・端末内で完結）。",
+  "ob.connected": "接続済み",
+  "ob.vaultPath": "Vault のパス",
+  "ob.vaultPath.note":
+    "Obsidian の vault フォルダの絶対パス（例 /Users/you/Documents/MyVault）。端末内にのみ保存されます。",
+  "ob.folder": "保存先フォルダ（vault 内）",
+  "ob.folder.note": "空欄のときは「Asanagi」フォルダに保存します。",
+  "ob.notFound": "指定のフォルダが見つかりません。パスを確認してください。",
+  "ob.save": "保存",
+  "ob.saved": "保存しました。",
+  "ob.disconnect": "連携を解除",
+  "ob.disconnected": "連携を解除しました。",
+  "obsidian.save": "Obsidian に保存",
+  "obsidian.saving": "Obsidian に保存中…",
+  "obsidian.saved": "Obsidian に保存しました。",
+  "obsidian.fail": "Obsidian への保存に失敗しました。",
+  "integrations.desc.note": "メールを Markdown ノートとして vault に保存",
   "drafts.empty":
     "下書きはありません。作成画面の「下書き保存」で保存できます。",
   "drafts.open.title": "この下書きを開いて続きを書く",

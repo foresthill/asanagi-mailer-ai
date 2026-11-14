@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import {
   Archive,
+  BookText,
   Trash2,
   Mail,
   RotateCcw,
@@ -90,6 +91,7 @@ export function EmailReader({
   horizontal,
   hasNote,
   onAddTodoDue,
+  onSaveToObsidian,
 }: {
   email: Email | null;
   /** Conversation containing the email (oldest first); null while loading. */
@@ -151,6 +153,8 @@ export function EmailReader({
   hasNote?: boolean;
   /** 会議カードの「TODOに追加（期限付き）」。期限は会議開始 ISO。 */
   onAddTodoDue?: (dueIso: string) => void;
+  /** このメールを Obsidian vault に Markdown ノートとして保存（連携が設定済みのときだけ渡る）。 */
+  onSaveToObsidian?: (email: Email) => void;
 }) {
   const { t } = useI18n();
   // Session-sticky preference: rich HTML (default) vs plain text.
@@ -376,6 +380,13 @@ export function EmailReader({
               active: false,
               onSelect: () => tg.onSend(email),
             }))}
+          />
+        )}
+        {onSaveToObsidian && (
+          <IconBtn
+            icon={BookText}
+            title={t("obsidian.save")}
+            onClick={() => onSaveToObsidian(email)}
           />
         )}
         {folder !== "archived" && folder !== "sent" && (

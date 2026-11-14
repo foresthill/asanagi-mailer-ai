@@ -7,6 +7,7 @@ import {
   ScrollText,
   CalendarDays,
   CalendarClock,
+  BookText,
   Check,
   Settings2,
   RefreshCw,
@@ -65,6 +66,13 @@ const INTEGRATIONS: IntegDef[] = [
     icon: CalendarClock,
     endpoint: "/api/calendar/status",
     descKey: "integrations.desc.calendar",
+  },
+  {
+    id: "obsidian",
+    name: "Obsidian",
+    icon: BookText,
+    endpoint: "/api/integrations/obsidian",
+    descKey: "integrations.desc.note",
   },
 ];
 
