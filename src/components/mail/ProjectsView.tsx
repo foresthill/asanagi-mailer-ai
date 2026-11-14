@@ -8,10 +8,12 @@ import {
   Search,
   Sparkles,
   EyeOff,
+  Network,
 } from "lucide-react";
 import type { Project, ProjectHub } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { ProjectPartyGraph } from "./ProjectPartyGraph";
 
 /** Map AI-generated JP status/priority values → i18n keys (data stays JP). */
 const STATUS_KEY: Record<string, string> = {
@@ -108,6 +110,8 @@ export function ProjectsView({
   const [q, setQ] = useState("");
   const [statusF, setStatusF] = useState<StatusFilter>("all");
   const [prioF, setPrioF] = useState<PrioFilter>("all");
+  // 関係者マップ（docs/12 Phase B）を展開中の案件id（1件ずつ・on-demand）。
+  const [graphId, setGraphId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -336,13 +340,8 @@ export function ProjectsView({
         ) : (
           <div className="overflow-hidden rounded-xl border border-border">
             {filtered.map((p, i) => (
-              <div
-                key={p.id}
-                className={cn(
-                  "group relative grid grid-cols-1 gap-2 px-4 py-3.5 pr-9 text-sm sm:grid-cols-[1.4fr_1.2fr_1fr_2fr] sm:gap-4",
-                  i > 0 && "border-t border-border",
-                )}
-              >
+              <div key={p.id} className={cn(i > 0 && "border-t border-border")}>
+                <div className="group relative grid grid-cols-1 gap-2 px-4 py-3.5 pr-9 text-sm sm:grid-cols-[1.4fr_1.2fr_1fr_2fr] sm:gap-4">
                 {/* 無関係な案件を除外（＋学習）。 */}
                 <button
                   onClick={() => exclude(p.id)}
@@ -386,6 +385,20 @@ export function ProjectsView({
                       )}
                     </div>
                   ))}
+                  {p.parties.length > 0 && (
+                    <button
+                      onClick={() =>
+                        setGraphId((id) => (id === p.id ? null : p.id))
+                      }
+                      aria-expanded={graphId === p.id}
+                      className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-accent hover:underline"
+                    >
+                      <Network className="size-3" />
+                      {graphId === p.id
+                        ? t("projects.graph.hide")
+                        : t("projects.graph.show")}
+                    </button>
+                  )}
                 </div>
                 {/* Progress */}
                 <div className="min-w-[110px]">
@@ -414,6 +427,15 @@ export function ProjectsView({
                     </div>
                   )}
                 </div>
+                </div>
+                {graphId === p.id && p.parties.length > 0 && (
+                  <div className="border-t border-border bg-surface-2 px-4 py-3">
+                    <div className="mb-1.5 text-[11px] font-medium text-fg-muted">
+                      {t("projects.graph.title")}
+                    </div>
+                    <ProjectPartyGraph parties={p.parties} />
+                  </div>
+                )}
               </div>
             ))}
             {filtered.length === 0 && (
