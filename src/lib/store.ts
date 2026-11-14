@@ -12,6 +12,7 @@ import type {
   Importance,
   Project,
   ProjectHub,
+  ProjectsSettings,
   ExcludedProject,
   ScheduledSend,
   SavedDraft,
@@ -510,6 +511,35 @@ export async function getProjectHub(): Promise<ProjectHub> {
 
 export async function saveProjectHub(hub: ProjectHub): Promise<void> {
   await writeJson(PROJECTS, hub);
+}
+
+// プロジェクト表示設定（誰待ちの強調しきい値など）。local-first・端末内のみ。
+const PROJECTS_SETTINGS = "projects-settings.json";
+/** 誰待ち強調しきい値の既定（日）と範囲。 */
+export const STALLED_DAYS_DEFAULT = 3;
+const STALLED_DAYS_MIN = 1;
+const STALLED_DAYS_MAX = 60;
+
+/** 滞留日数を既定込みで正規化（1〜60の整数、未設定/不正は既定）。 */
+export function normalizeStalledDays(v: unknown): number {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return STALLED_DAYS_DEFAULT;
+  return Math.max(STALLED_DAYS_MIN, Math.min(STALLED_DAYS_MAX, n));
+}
+
+export async function getProjectsSettings(): Promise<Required<ProjectsSettings>> {
+  const s = await readJson<ProjectsSettings>(PROJECTS_SETTINGS, {});
+  return { stalledDays: normalizeStalledDays(s.stalledDays) };
+}
+
+export async function saveProjectsSettings(
+  patch: ProjectsSettings,
+): Promise<Required<ProjectsSettings>> {
+  const next: ProjectsSettings = {
+    stalledDays: normalizeStalledDays(patch.stalledDays),
+  };
+  await writeJson(PROJECTS_SETTINGS, next);
+  return { stalledDays: next.stalledDays! };
 }
 
 // 除外した案件の学習（無関係な案件を今後の生成から弾く）。

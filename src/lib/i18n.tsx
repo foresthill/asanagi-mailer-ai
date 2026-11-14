@@ -73,6 +73,10 @@ const ja: Dict = {
   "projects.view.list": "リスト表示",
   "projects.view.board": "ボード表示",
   "projects.board.empty": "この状態の案件はありません。",
+  "projects.stalled.label": "滞留強調",
+  "projects.stalled.unit": "日〜",
+  "projects.stalled.hint":
+    "相手待ちがこの日数以上で強調色になります（表示だけの設定・判定は変わりません）。",
   "projects.genFailed": "生成に失敗しました",
   "nav.projects.title": "メール履歴から抽出した案件の進捗・次アクション",
   "nav.triage": "仕分けレビュー",
