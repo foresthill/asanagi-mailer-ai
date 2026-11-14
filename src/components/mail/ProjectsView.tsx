@@ -47,6 +47,31 @@ function PrioBadge({ p }: { p: Project["priority"] }) {
   );
 }
 
+/** 誰待ちチップ（docs/12）: 相手待ち（滞留日数つき・7日以上は強調）/ 自分待ち（要返信）。 */
+function WaitingBadge({ w }: { w: NonNullable<Project["waiting"]> }) {
+  const { t } = useI18n();
+  if (w.side === "me") {
+    return (
+      <span className="rounded-full bg-high-soft px-2 py-0.5 text-[10px] font-semibold text-high">
+        {t("projects.waiting.me")}
+      </span>
+    );
+  }
+  const stalled = w.days >= 7;
+  return (
+    <span
+      className={cn(
+        "rounded-full px-2 py-0.5 text-[10px] font-medium",
+        stalled
+          ? "bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300"
+          : "bg-surface-2 text-fg-muted",
+      )}
+    >
+      {t("projects.waiting.them").replace("{n}", String(w.days))}
+    </span>
+  );
+}
+
 /** Which fields the client-side search scans. */
 function haystack(p: Project): string {
   return [
@@ -339,6 +364,7 @@ export function ProjectsView({
                       </span>
                     )}
                     <PrioBadge p={p.priority} />
+                    {p.waiting && <WaitingBadge w={p.waiting} />}
                   </div>
                   {p.anchorId && onOpenEmail && (
                     <button
