@@ -198,13 +198,26 @@ export function profileBlock(profile: string): string {
  * Inject the user's writing-style rules (文章作成メモ) into a reply/refine
  * prompt. User-authored文体ルール (e.g. "絵文字は使わない") — sent as-is (not
  * PII masked, like profileBlock) and must override generic phrasing habits.
+ *
+ * `teamRules`（集合的無意識 / docs/10 Phase 2）は、チームで共有する抽象ルール行。
+ * あくまで既定値として個人ルールの「下」に注入し、矛盾時は個人を優先させる（§4.3）。
+ * チームルールも固有名詞を含まない一般則のみ（本文・PIIは共有しない）。
  */
-export function writingNoteBlock(note: string): string {
+export function writingNoteBlock(note: string, teamRules?: string[]): string {
   const n = note.trim();
-  if (!n) return "";
-  return ["", "## 文章作成のルール（ユーザー指定・最優先で守る）", n].join(
-    "\n",
-  );
+  const team = (teamRules ?? []).map((r) => r.trim()).filter(Boolean);
+  const parts: string[] = [];
+  if (n) {
+    parts.push("", "## 文章作成のルール（ユーザー指定・最優先で守る）", n);
+  }
+  if (team.length) {
+    parts.push(
+      "",
+      "## チーム共有のルール（既定。上のユーザー指定と矛盾する場合はユーザー指定を優先）",
+      team.map((r) => `- ${r}`).join("\n"),
+    );
+  }
+  return parts.join("\n");
 }
 
 // 返信文体の差分から「文体ルール」を一般化する（昇格UI用）。書き換えではなく

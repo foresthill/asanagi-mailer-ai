@@ -34,6 +34,7 @@ import { OpenProjectSection } from "./OpenProjectSection";
 import { DevlogSection } from "./DevlogSection";
 import { NextcloudSection } from "./NextcloudSection";
 import { ObsidianSection } from "./ObsidianSection";
+import { TeamRulesSection } from "./TeamRulesSection";
 import { DownloadSection } from "./DownloadSection";
 import { JevPlayground } from "./JevPlayground";
 import { AI_STATUS_REFRESH_EVENT } from "./AiStatusChip";
@@ -914,6 +915,8 @@ export function ConnectionsSettings({
             <NextcloudSection />
 
             <ObsidianSection />
+
+            <TeamRulesSection />
             </div>
           </div>
         )}

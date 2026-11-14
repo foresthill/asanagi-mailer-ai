@@ -635,6 +635,18 @@ export interface ObsidianSettings {
   folder?: string;
 }
 
+// ---------------------------------------------------------------------------
+// チーム共有ルール（集合的無意識 / docs/10 Phase 2・案A） — 返信文体の「抽象ルール行」
+// だけをチームで共有する。共有の実体は同期フォルダ（Nextcloud/iCloud 等）に置いた
+// team-rules.json というただのファイル。本文・生の差分・PII は一切共有しない。読み込みは
+// マージ（プロンプトは個人ルール > チームルール）、書き戻しは opt-in の「チームに提案」のみ。
+// 共有ファイルのパスはローカルのみ（.data/team-rules-settings.json）。
+// ---------------------------------------------------------------------------
+export interface TeamRulesSettings {
+  /** 共有する team-rules.json の絶対パス（同期フォルダ内）。端末内のみ。 */
+  filePath?: string;
+}
+
 /** devlog の issue（pull 表示用・読み取り専用の最小フィールド）。 */
 export interface DevlogIssue {
   /** issue key（例 PJERP-123）。 */

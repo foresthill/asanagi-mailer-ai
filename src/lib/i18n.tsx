@@ -318,6 +318,30 @@ const ja: Dict = {
   "obsidian.saved": "Obsidian に保存しました。",
   "obsidian.fail": "Obsidian への保存に失敗しました。",
   "integrations.desc.note": "メールを Markdown ノートとして vault に保存",
+  // チーム共有ルール（集合的無意識 / docs/10 Phase 2・案A）
+  "tr.title": "チーム共有ルール",
+  "tr.intro":
+    "返信文体の「抽象ルール行」だけをチームで共有します。共有ファイル（同期フォルダ内の team-rules.json）を読み込み、返信生成時に『個人ルール＞チームルール』で合成します。メール本文・生の差分・PII は共有しません。",
+  "tr.connected": "接続済み",
+  "tr.filePath": "共有ファイルのパス（team-rules.json）",
+  "tr.filePath.note":
+    "Nextcloud・iCloud 等の同期フォルダ内に置いた team-rules.json の絶対パス。パスは端末内にのみ保存されます。ファイルが無くても「チームに提案」で作成されます。",
+  "tr.current": "いま共有されているルール（{n} 件・返信生成に既定として反映）",
+  "tr.empty": "共有ルールはまだありません。",
+  "tr.noFileYet":
+    "共有ファイルはまだ作成されていません（「チームに提案」で作成されます）。",
+  "tr.propose": "チームに提案（opt-in）",
+  "tr.propose.placeholder": "例: 結論を先に書く / 過剰な敬語を避ける",
+  "tr.propose.note":
+    "一般化できる文体ルールを1行だけ。固有名詞（人名・社名・案件名・金額など）や本文は含めないでください。内容を確認してから提案します。",
+  "tr.propose.btn": "この1行をチームに提案",
+  "tr.proposed": "チームに提案しました（共有ファイルに追記）。",
+  "tr.save": "保存",
+  "tr.saved": "保存しました。",
+  "tr.disconnect": "共有を解除",
+  "tr.disconnected": "共有を解除しました。",
+  "tr.fail": "処理に失敗しました。",
+  "integrations.desc.teamRules": "返信文体の抽象ルールをチームで共有",
   "drafts.empty":
     "下書きはありません。作成画面の「下書き保存」で保存できます。",
   "drafts.open.title": "この下書きを開いて続きを書く",

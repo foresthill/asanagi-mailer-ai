@@ -24,6 +24,7 @@ import type {
   DevlogSettings,
   NextcloudSettings,
   ObsidianSettings,
+  TeamRulesSettings,
 } from "@/lib/types";
 import type { ThreatSenders } from "./threat";
 
@@ -1214,6 +1215,34 @@ export async function saveObsidianSettings(
   merge("vaultPath", patch.vaultPath);
   merge("folder", patch.folder);
   await writeJson(OBSIDIAN_SETTINGS, next);
+  return next;
+}
+
+// ── チーム共有ルール設定（集合的無意識 / docs/10 Phase 2・案A）────────────
+// 共有 team-rules.json のパスだけをローカルに保存する。共有ファイル本体の読み書きは
+// lib/integrations/team-rules.ts（.data 外の同期フォルダを触るため store には置かない）。
+const TEAM_RULES_SETTINGS = "team-rules-settings.json";
+
+export async function getTeamRulesSettings(): Promise<TeamRulesSettings> {
+  return readJson<TeamRulesSettings>(TEAM_RULES_SETTINGS, {});
+}
+
+/**
+ * Merge a patch into stored team-rules settings. A blank string clears the field
+ * (disconnect = { filePath: "" }); undefined leaves it untouched.
+ */
+export async function saveTeamRulesSettings(
+  patch: TeamRulesSettings,
+): Promise<TeamRulesSettings> {
+  const cur = await getTeamRulesSettings();
+  const next: TeamRulesSettings = { ...cur };
+  const merge = (k: keyof TeamRulesSettings, v: string | undefined) => {
+    if (v === undefined) return;
+    if (v.trim()) next[k] = v.trim();
+    else delete next[k];
+  };
+  merge("filePath", patch.filePath);
+  await writeJson(TEAM_RULES_SETTINGS, next);
   return next;
 }
 

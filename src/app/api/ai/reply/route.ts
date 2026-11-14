@@ -9,7 +9,13 @@ import {
   replyPerspective,
   writingNoteBlock,
 } from "@/lib/ai/prompts";
-import { getReplySignature, getEmailSettings, getWritingNote } from "@/lib/store";
+import {
+  getReplySignature,
+  getEmailSettings,
+  getWritingNote,
+  getTeamRulesSettings,
+} from "@/lib/store";
+import { readTeamRules } from "@/lib/integrations/team-rules";
 import { logAiUsage } from "@/lib/db";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import type { DraftRequest } from "@/lib/types";
@@ -82,6 +88,7 @@ export async function POST(req: Request) {
     const maskedHistory = cfg.piiMask ? history?.map((m) => masker.maskEmail(m)) : history;
     const pSignature = nerOn && signature ? masker.mask(signature) : signature;
     const writingNote = await getWritingNote();
+    const teamRules = await readTeamRules(await getTeamRulesSettings());
     const prompt = [
       mode === "followup"
         ? "以下は、あなたが既に送信したメールです。同じ宛先への追加連絡（フォローアップ／リマインド）の下書きを作成してください。相手からの返信を書くのではありません。"
@@ -92,7 +99,7 @@ export async function POST(req: Request) {
         mode,
         signature: pSignature,
       }),
-      writingNoteBlock(writingNote),
+      writingNoteBlock(writingNote, teamRules),
       guidance ? `補足の指示: ${guidance}` : "",
       // Conversation so far — agreed dates, open questions, tone.
       ...(maskedHistory?.length
