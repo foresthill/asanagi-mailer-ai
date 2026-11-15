@@ -17,14 +17,22 @@ import {
   listExcludedProjects,
   addExcludedProject,
   isProjectExcluded,
+  getProjectsSettings,
 } from "@/lib/store";
 import type { Email, Project, ProjectHub } from "@/lib/types";
 
 export const maxDuration = 60;
 
-/** Hub + how many projects are currently learned as "excluded" (for the reset UI). */
+/**
+ * Hub + how many projects are currently learned as "excluded" (for the reset UI)
+ * + 誰待ちの強調しきい値（表示設定・docs/12）。どちらも返却時に付けるだけで保存はしない。
+ */
 async function withCount(hub: ProjectHub) {
-  return { ...hub, excludedCount: (await listExcludedProjects()).length };
+  return {
+    ...hub,
+    excludedCount: (await listExcludedProjects()).length,
+    stalledDays: (await getProjectsSettings()).stalledDays,
+  };
 }
 
 /**

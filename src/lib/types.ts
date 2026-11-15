@@ -425,6 +425,16 @@ export interface ProjectHub {
 }
 
 /**
+ * プロジェクト・ハブの表示設定（local-first・.data/projects-settings.json）。
+ * いまは誰待ち（docs/12）の「相手待ちを強調するまでの滞留日数」だけ。表示の閾値であって
+ * 判定ロジック（computeWaiting）は変えない。
+ */
+export interface ProjectsSettings {
+  /** 相手待ちを強調色にするまでの滞留日数（既定 3・範囲 1〜60）。 */
+  stalledDays?: number;
+}
+
+/**
  * 除外した案件の学習データ。プロジェクト・ハブは AI 抽出（pull型）なので、無関係な
  * 案件（bitcoin 等のOSS通知・自分のビジネスと無関係な営業）を除外したら、その特徴を
  * 憶えて次回以降の生成から弾く（プロンプト依存にせず生成後に post-filter で確実に）。

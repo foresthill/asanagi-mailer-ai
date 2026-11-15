@@ -55,8 +55,15 @@ function PrioBadge({ p }: { p: Project["priority"] }) {
   );
 }
 
-/** 誰待ちチップ（docs/12）: 相手待ち（滞留日数つき・7日以上は強調）/ 自分待ち（要返信）。 */
-function WaitingBadge({ w }: { w: NonNullable<Project["waiting"]> }) {
+/** 誰待ちチップ（docs/12）: 相手待ち（滞留日数つき・しきい値以上は強調）/ 自分待ち（要返信）。
+ *  強調しきい値 stalledDays は表示設定（.data）から渡る（既定3日・1〜60）。 */
+function WaitingBadge({
+  w,
+  stalledDays,
+}: {
+  w: NonNullable<Project["waiting"]>;
+  stalledDays: number;
+}) {
   const { t } = useI18n();
   if (w.side === "me") {
     return (
@@ -65,7 +72,7 @@ function WaitingBadge({ w }: { w: NonNullable<Project["waiting"]> }) {
       </span>
     );
   }
-  const stalled = w.days >= 7;
+  const stalled = w.days >= stalledDays;
   return (
     <span
       className={cn(
@@ -84,10 +91,12 @@ function WaitingBadge({ w }: { w: NonNullable<Project["waiting"]> }) {
  *  ステータスバッジは出さず、優先度・誰待ち・進捗・次アクションを縦に並べる。 */
 function BoardCard({
   p,
+  stalledDays,
   onOpenEmail,
   onExclude,
 }: {
   p: Project;
+  stalledDays: number;
   onOpenEmail?: (id: string) => void;
   onExclude: (id: string) => void;
 }) {
@@ -104,7 +113,7 @@ function BoardCard({
       <div className="pr-5 text-[13px] font-semibold">{p.name}</div>
       <div className="mt-1 flex flex-wrap items-center gap-1">
         <PrioBadge p={p.priority} />
-        {p.waiting && <WaitingBadge w={p.waiting} />}
+        {p.waiting && <WaitingBadge w={p.waiting} stalledDays={stalledDays} />}
       </div>
       {p.parties.length > 0 && (
         <div className="mt-1 text-[11.5px] text-fg-muted">
@@ -182,6 +191,8 @@ export function ProjectsView({
   const [graphId, setGraphId] = useState<string | null>(null);
   // 表示モード（docs/12 Phase C）: リスト / ボード（status列の読み取り専用カンバン）。
   const [viewMode, setViewMode] = useState<"list" | "board">("list");
+  // 誰待ちの強調しきい値（滞留日数・表示設定／既定3日）。GET /api/projects に同梱で届く。
+  const [stalledDays, setStalledDays] = useState(3);
 
   useEffect(() => {
     let alive = true;
@@ -191,6 +202,7 @@ export function ProjectsView({
         if (!alive) return;
         setHub(d);
         setExcludedCount(d?.excludedCount ?? 0);
+        if (typeof d?.stalledDays === "number") setStalledDays(d.stalledDays);
       })
       .catch(() => {})
       .finally(() => {
@@ -200,6 +212,22 @@ export function ProjectsView({
       alive = false;
     };
   }, []);
+
+  // 誰待ちの強調しきい値を保存（表示設定・.data のみ）。1〜60 にクランプしてローカル即時反映＋
+  // サーバ保存。判定ロジック（computeWaiting）は変えず、色の閾値だけ。
+  async function saveStalledDays(v: number) {
+    const n = Math.max(1, Math.min(60, Math.round(v)));
+    setStalledDays(n);
+    try {
+      await fetch("/api/projects/settings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ stalledDays: n }),
+      });
+    } catch {
+      /* best-effort; 次回 GET で整合する */
+    }
+  }
 
   // 無関係な案件を除外（＝ハブから外し、今後も出さないよう学習）。
   async function exclude(id: string) {
@@ -416,6 +444,22 @@ export function ProjectsView({
             </button>
           </div>
           <span className="flex-1" />
+          {/* 誰待ちの強調しきい値（滞留日数・表示設定／既定3日）。色の閾値だけを変える。 */}
+          <label
+            className="flex items-center gap-1 text-[11px] text-fg-muted"
+            title={t("projects.stalled.hint")}
+          >
+            {t("projects.stalled.label")}
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={stalledDays}
+              onChange={(e) => saveStalledDays(Number(e.target.value))}
+              className="w-12 rounded-md border border-border bg-bg px-1.5 py-0.5 text-center text-[12px] outline-none focus:border-accent"
+            />
+            {t("projects.stalled.unit")}
+          </label>
           {(["all", "高", "中"] as PrioFilter[]).map((p) => (
             <button
               key={p}
@@ -469,6 +513,7 @@ export function ProjectsView({
                     <BoardCard
                       key={p.id}
                       p={p}
+                      stalledDays={stalledDays}
                       onOpenEmail={onOpenEmail}
                       onExclude={exclude}
                     />
@@ -508,7 +553,9 @@ export function ProjectsView({
                       </span>
                     )}
                     <PrioBadge p={p.priority} />
-                    {p.waiting && <WaitingBadge w={p.waiting} />}
+                    {p.waiting && (
+                      <WaitingBadge w={p.waiting} stalledDays={stalledDays} />
+                    )}
                   </div>
                   {p.anchorId && onOpenEmail && (
                     <button
