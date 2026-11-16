@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/remote-schema.json",
+  "identifier": "remote-localhost",
+  "description": "本体画面は Node サイドカー(http://127.0.0.1:<ランダムポート>)から配信されるリモートオリジン。既定では Tauri の IPC が注入されず、この画面からの invoke（添付の保存ダイアログ・外部リンクをOSブラウザで開く等）が無反応になる。dev(localhost:3100)と本番(127.0.0.1:任意ポート)のオリジンに main ウィンドウの自作コマンドを許可する。",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["http://localhost:*", "http://127.0.0.1:*"]
+  },
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "updater:default",
+    "deep-link:default"
+  ]
+}
