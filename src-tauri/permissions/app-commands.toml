@@ -1,0 +1,19 @@
+# Permission for the application's OWN commands (defined with #[tauri::command]
+# in src/lib.rs and registered in generate_handler!). Tauri auto-allows app
+# commands only for LOCAL content; a window that loads a REMOTE origin (our Node
+# sidecar at http://127.0.0.1:<random port>) can invoke them only when a
+# capability with `remote.urls` references a permission that lists them.
+# Without this, invoke("save_file_dialog" | "open_external" | ...) is denied by
+# the runtime authority before the Rust command body runs — the save dialog never
+# opens and the reply surfaces as "ダウンロードに失敗しました".
+# Referenced (without a plugin prefix, since these are the app's own) from
+# capabilities/remote.json. Docs: https://v2.tauri.app/security/permissions/
+[[permission]]
+identifier = "allow-app-commands"
+description = "朝凪本体画面(リモートオリジン配信)から、アプリ独自コマンド（添付の保存ダイアログ・保存・保存先選択・外部リンクをOSブラウザで開く）の invoke を許可する。"
+commands.allow = [
+    "save_file_dialog",
+    "save_file_to_dir",
+    "pick_folder",
+    "open_external",
+]

@@ -10,6 +10,7 @@
     "core:default",
     "dialog:default",
     "updater:default",
-    "deep-link:default"
+    "deep-link:default",
+    "allow-app-commands"
   ]
 }
