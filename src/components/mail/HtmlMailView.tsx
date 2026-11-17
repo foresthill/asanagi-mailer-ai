@@ -224,6 +224,35 @@ export function HtmlMailView({
     // 出る」を優先）。一致語は asanagi-hl のハイライトで示すだけに留める。
   };
 
+  // Open external links from the mail body in the OS browser. The body is a
+  // sandboxed iframe WITHOUT allow-scripts, and `<base target="_blank">` is a
+  // no-op in the desktop WebView (WKWebView makes no new window), so clicking a
+  // link would otherwise do nothing. `allow-same-origin` lets us listen for the
+  // click from the parent and route http(s) links through the `open_external`
+  // Tauri command. In a plain browser we leave `target="_blank"` to open a tab.
+  const onBodyLinkClick = (e: Event) => {
+    if (e.defaultPrevented) return;
+    const target = e.target as HTMLElement | null;
+    const a = target?.closest?.("a[href]") as HTMLAnchorElement | null;
+    if (!a) return;
+    const href = a.href; // resolved absolute
+    if (!/^https?:\/\//i.test(href)) return; // only http(s)
+    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+      e.preventDefault();
+      void import("@tauri-apps/api/core").then(({ invoke }) =>
+        invoke("open_external", { url: href }).catch(() => {}),
+      );
+    }
+  };
+
+  // Runs on every (re)load of the iframe document, which is a fresh document each
+  // time srcDoc changes; listeners on the old document go away with it.
+  const handleLoad = () => {
+    fit();
+    const doc = iframeRef.current?.contentDocument;
+    doc?.addEventListener("click", onBodyLinkClick);
+  };
+
   return (
     <div className={embedded ? "" : "mt-6"}>
       {blockedImages > 0 && (
@@ -260,7 +289,7 @@ export function HtmlMailView({
       <iframe
         ref={iframeRef}
         srcDoc={srcDoc}
-        onLoad={fit}
+        onLoad={handleLoad}
         sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         title="メール本文"
         className={
