@@ -396,6 +396,14 @@ export function EmailReader({
             onClick={onArchive}
           />
         )}
+        {/* アーカイブ中は「受信箱に戻す」を出す（ゴミ箱側は下で復元ボタンを出す）。 */}
+        {folder === "archived" && (
+          <IconBtn
+            icon={RotateCcw}
+            title={t("reader.restore")}
+            onClick={onRestore}
+          />
+        )}
         {/* 未読に戻す — 開くと既読になるので、後で読み直す印として戻せる。 */}
         {onMarkUnread && folder !== "sent" && email?.read && (
           <IconBtn

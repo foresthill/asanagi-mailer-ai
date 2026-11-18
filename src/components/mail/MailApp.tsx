@@ -2461,6 +2461,7 @@ export function MailApp({
       onCheckAll={() => setChecked(new Set(rows.map((r) => r.email.id)))}
       onClearChecked={() => setChecked(new Set())}
       onBulkArchive={() => bulkAct("archived", "一括アーカイブしました")}
+      onBulkRestore={() => bulkAct("inbox", "受信箱に戻しました")}
       onBulkTrash={() => bulkAct("trashed", "一括でゴミ箱に移動しました")}
       onBulkReportSpam={bulkReportSpam}
       onBulkImportance={bulkImportance}
@@ -2471,6 +2472,7 @@ export function MailApp({
       onSelect={openEmail}
       onLoadThreadMembers={loadThreadMembers}
       onArchive={archive}
+      onRestore={restore}
       onTrash={trash}
       onToggleStar={toggleStar}
       threadTodoKeys={threadTodoKeys}
