@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import {
   AlarmClock,
   Archive,
+  ArchiveRestore,
   Check,
   ChevronDown,
   ChevronRight,
@@ -205,6 +206,7 @@ export function EmailList({
   onCheckAll,
   onClearChecked,
   onBulkArchive,
+  onBulkRestore,
   onBulkTrash,
   onBulkReportSpam,
   onBulkImportance,
@@ -215,6 +217,7 @@ export function EmailList({
   onSelect,
   onLoadThreadMembers,
   onArchive,
+  onRestore,
   onTrash,
   onToggleStar,
   threadTodoKeys,
@@ -279,6 +282,8 @@ export function EmailList({
   onCheckAll: () => void;
   onClearChecked: () => void;
   onBulkArchive: () => void;
+  /** アーカイブ/ゴミ箱で選択中のメールを受信箱に戻す（一括）。 */
+  onBulkRestore: () => void;
   onBulkTrash: () => void;
   /** Report all checked mails as spam/phishing (learns per sender + trashes). */
   onBulkReportSpam: () => void;
@@ -295,6 +300,8 @@ export function EmailList({
   onLoadThreadMembers: (email: Email) => Promise<Email[]>;
   /** Thread-unit: every id of the row (1 element when not grouped). */
   onArchive: (ids: string[]) => void;
+  /** アーカイブ/ゴミ箱の行を受信箱に戻す（会話単位）。 */
+  onRestore: (ids: string[]) => void;
   onTrash: (ids: string[]) => void;
   onToggleStar: (id: string) => void;
   /** スレッドTODOの id 集合（`{account}/thread:{threadId}`）。会話単位の済み判定用。 */
@@ -473,6 +480,7 @@ export function EmailList({
             handleToggleCheck(row.email.id, shiftKey)
           }
           onArchive={() => onArchive(row.ids)}
+          onRestore={() => onRestore(row.ids)}
           onTrash={() => onTrash(row.ids)}
           onToggleStar={() => onToggleStar(row.email.id)}
           isTodo={isEmailOnTodo(
@@ -515,6 +523,10 @@ export function EmailList({
                         onClear={clearPicked}
                         onArchive={() => {
                           onArchive(picked.map((m) => m.id));
+                          clearPicked();
+                        }}
+                        onRestore={() => {
+                          onRestore(picked.map((m) => m.id));
                           clearPicked();
                         }}
                         onTrash={() => {
@@ -596,6 +608,16 @@ export function EmailList({
         </button>
       </span>
       <span className="ml-auto flex items-center gap-1">
+        {(folder === "archived" || folder === "trashed") && (
+          <button
+            onClick={onBulkRestore}
+            title={t("reader.restore")}
+            className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-accent"
+          >
+            <ArchiveRestore className="size-3.5" />
+            {t("reader.restore")}
+          </button>
+        )}
         {folder !== "archived" && folder !== "sent" && (
           <button
             onClick={onBulkArchive}
@@ -1169,6 +1191,7 @@ function SubActionBar({
   folder,
   onClear,
   onArchive,
+  onRestore,
   onTrash,
   onImportance,
 }: {
@@ -1176,6 +1199,7 @@ function SubActionBar({
   folder: FolderView;
   onClear: () => void;
   onArchive: () => void;
+  onRestore: () => void;
   onTrash: () => void;
   onImportance: (importance: Importance) => void;
 }) {
@@ -1217,6 +1241,15 @@ function SubActionBar({
         </button>
       </span>
       <span className="ml-auto flex items-center gap-0.5">
+        {(folder === "archived" || folder === "trashed") && (
+          <button
+            onClick={onRestore}
+            title={t("reader.restore")}
+            className="grid size-6 place-items-center rounded text-fg-muted hover:bg-accent-soft hover:text-accent"
+          >
+            <ArchiveRestore className="size-3.5" />
+          </button>
+        )}
         {folder !== "archived" && folder !== "sent" && (
           <button
             onClick={onArchive}
@@ -1405,6 +1438,7 @@ function EmailListItem({
   onSelect,
   onToggleCheck,
   onArchive,
+  onRestore,
   onTrash,
   onToggleStar,
   isTodo,
@@ -1445,6 +1479,8 @@ function EmailListItem({
   /** shiftKey は Shift+クリックの連続選択判定に使う。 */
   onToggleCheck: (shiftKey: boolean) => void;
   onArchive: () => void;
+  /** 受信箱に戻す（アーカイブ/ゴミ箱フォルダの行で表示）。 */
+  onRestore: () => void;
   onTrash: () => void;
   onToggleStar: () => void;
   /** このメールが TODO 登録済みか。 */
@@ -1662,6 +1698,18 @@ function EmailListItem({
               ) : (
                 <Square className="size-3.5" />
               )}
+            </button>
+          )}
+          {(folder === "archived" || folder === "trashed") && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRestore();
+              }}
+              title={`${t("reader.restore")}${threadActionHint}`}
+              className="grid size-6 place-items-center rounded-md text-fg-muted hover:bg-accent-soft hover:text-accent"
+            >
+              <ArchiveRestore className="size-3.5" />
             </button>
           )}
           {folder !== "archived" && email.state !== "archived" && (
@@ -1924,6 +1972,18 @@ function EmailListItem({
             ) : (
               <Square className="size-4" />
             )}
+          </button>
+        )}
+        {(folder === "archived" || folder === "trashed") && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRestore();
+            }}
+            title={`${t("reader.restore")}${threadActionHint}`}
+            className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-accent-soft hover:text-accent"
+          >
+            <ArchiveRestore className="size-4" />
           </button>
         )}
         {folder !== "archived" && (
