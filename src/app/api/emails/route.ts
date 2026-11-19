@@ -17,7 +17,7 @@ import {
 } from "@/lib/store";
 import { annotateImportance } from "@/lib/importance";
 import { detectThreat } from "@/lib/threat";
-import type { Email, FolderView } from "@/lib/types";
+import type { Email, FolderView, MailboxState } from "@/lib/types";
 import { recordLog, errMsg } from "@/lib/logbuf";
 
 export const dynamic = "force-dynamic";
@@ -128,16 +128,21 @@ export async function GET(req: Request) {
       return NextResponse.json({ emails, accounts, stale: [] });
     }
 
+    // "vip" is a client-side inbox filter (sender labeled 重要取引先); the client
+    // already maps it to "inbox" before fetching, but normalize defensively so a
+    // stray "vip" never reaches a provider that only knows mailbox states.
+    const mbox: MailboxState = state === "vip" ? "inbox" : state;
+
     // Cache-only fast path (?cached=1): serve the local SQLite instantly with
     // NO provider calls, so the UI can paint immediately and revalidate live
     // in the background (stale-while-revalidate). stale = all targets.
     if (url.searchParams.get("cached") === "1") {
       const lists = targets.map((a) =>
-        markReplied(a.key, cachedList([a.key], state)).map((e) =>
+        markReplied(a.key, cachedList([a.key], mbox)).map((e) =>
           tag(a.key, e),
         ),
       );
-      const emails = await finalize(lists, state);
+      const emails = await finalize(lists, mbox);
       return NextResponse.json({
         emails,
         accounts,
@@ -150,11 +155,11 @@ export async function GET(req: Request) {
       targets.map(async (a) => {
         try {
           const provider = await getProviderFor(a.key);
-          const live = await provider.list(state);
+          const live = await provider.list(mbox);
           upsertEmails(a.key, live); // write-through (raw provider ids)
           // Sent: drop optimistic `pending:` copies now that the real server
           // copy (same message_id) is in — avoids showing the sent mail twice.
-          if (state === "sent") {
+          if (mbox === "sent") {
             prunePendingSent(
               a.key,
               live.map((e) => e.messageId ?? "").filter(Boolean),
@@ -165,7 +170,7 @@ export async function GET(req: Request) {
           // the freshest slice → it overrides any stale cached copy; the cache
           // fills the older tail. Dedupe by raw provider id.
           const merged = new Map<string, Email>(
-            cachedList([a.key], state, LIST_CAP).map((e) => [e.id, e]),
+            cachedList([a.key], mbox, LIST_CAP).map((e) => [e.id, e]),
           );
           for (const e of live) merged.set(e.id, e);
           return markReplied(a.key, [...merged.values()]).map((e) =>
@@ -179,7 +184,7 @@ export async function GET(req: Request) {
             "fetch",
             `${a.key}: 取得失敗、キャッシュを表示: ${errMsg(err)}`,
           );
-          return markReplied(a.key, cachedList([a.key], state)).map((e) =>
+          return markReplied(a.key, cachedList([a.key], mbox)).map((e) =>
             tag(a.key, e),
           );
         }
@@ -218,7 +223,7 @@ export async function GET(req: Request) {
       });
     }
 
-    const emails = await finalize(lists, state);
+    const emails = await finalize(lists, mbox);
     return NextResponse.json({ emails, accounts, stale });
   } catch (err) {
     return NextResponse.json(
