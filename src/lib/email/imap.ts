@@ -120,17 +120,22 @@ function normId(s?: string | null): string | undefined {
  * Conversation root = the FIRST Message-ID of the References chain (ancestors are
  * listed oldest-first). mailparser usually returns `references` as an array, but
  * some senders pack ids with no spaces (`<a><b><c>`, common with Outlook /
- * groupware mailers) and it comes back as ONE string. Taking that whole string
- * as the id gave every reply a different, ever-growing threadId and shattered the
- * conversation into many list rows (the reader still bundled, because it walks
- * References server-side — the list looked split while the thread view didn't).
- * Always pull just the first id, array or string.
+ * groupware mailers). mailparser may hand that back as ONE string, OR — and this
+ * is the subtle case — as an ARRAY whose FIRST element is itself that packed
+ * string (`["<a><b><c>"]`). Either way, taking the whole thing as the id gives
+ * every reply a different, ever-growing threadId and shatters the conversation
+ * into many list rows (the reader still bundles, because it walks References
+ * server-side — the list looked split while the thread view didn't). So reduce to
+ * the first element, then extract just the first "<id>" token from it, whether
+ * the value is an array, a clean string, or a packed string.
  */
 export function firstReference(refs?: string[] | string | null): string | undefined {
   if (!refs) return undefined;
-  if (Array.isArray(refs)) return normId(refs[0]);
-  const m = refs.match(/<[^<>]+>/); // first "<id>" token when packed w/o spaces
-  return normId(m ? m[0] : refs.split(/[\s>]+/)[0]);
+  const first = Array.isArray(refs) ? refs[0] : refs; // may itself be packed "<a><b>"
+  if (first == null) return undefined;
+  const s = String(first);
+  const m = s.match(/<[^<>]+>/); // first "<id>" token, even when packed w/o spaces
+  return normId(m ? m[0] : s.split(/[\s>]+/)[0]);
 }
 
 export class ImapProvider implements EmailProvider {
