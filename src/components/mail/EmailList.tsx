@@ -182,6 +182,7 @@ export function EmailList({
   refreshing,
   searchError,
   selectedId,
+  selectedThreadId,
   searchQuery,
   searching,
   searchMode,
@@ -240,6 +241,10 @@ export function EmailList({
   /** The last search request failed (vs 0 hits) → show an error, not「該当なし」. */
   searchError?: boolean;
   selectedId: string | null;
+  /** 開いているメールの会話ID。一覧は「その会話の行」を点灯＆追従する（連動）。
+   *  開いた1通の id が一覧行の積載メンバーに無く（クロスフォルダ等）ても、会話単位で
+   *  当たるようにするため id 一致に加えて使う。 */
+  selectedThreadId?: string | null;
   /** Current search box value; non-empty switches the list to results. */
   searchQuery: string;
   /** True while the list shows search results instead of the folder. */
@@ -461,7 +466,18 @@ export function EmailList({
           dense={horizontal} // 上下表示の上ペインは1行の密行で件数を稼ぐ
           matchQuery={searching ? searchQuery : undefined}
           showLocation={searching} // 検索結果はフォルダ横断 → どこにあるかバッジ
-          active={selectedId != null && row.ids.includes(selectedId)}
+          active={
+            (selectedId != null && row.ids.includes(selectedId)) ||
+            // 会話単位の連動: 開いた1通が別フォルダのコピー等で行の積載メンバーに
+            // 無くても、同じ会話(threadId)の行を点灯＆スクロール追従させる。
+            //  - グルーピングON時だけ（1会話=1行なので点灯も1行）。OFFは1通=1行で
+            //    同一threadの全行が光ってしまうため id 一致のみにする。
+            //  - 検索中はフォルダ横断で同一threadの別ヒットを巻き込みうるので除外。
+            (grouping &&
+              !searching &&
+              selectedThreadId != null &&
+              row.email.threadId === selectedThreadId)
+          }
           folder={folder}
           hasNote={noteIds.has(row.email.id)}
           hasDraft={draftThreadIds.has(row.email.threadId)}
