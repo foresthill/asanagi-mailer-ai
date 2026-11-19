@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FolderKanban, ScrollText } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type {
@@ -1229,10 +1229,16 @@ export function MailApp({
         if (data.accounts) setAccounts(data.accounts);
         setCounts((c) => ({
           ...c,
-          [f]: list.filter((e) => !e.read || f !== "inbox").length,
+          // "vip" is an inbox filter (unread count is derived in render from the
+          // labels), so don't overwrite it from the unfiltered inbox list here.
+          ...(f === "vip" ? {} : { [f]: list.filter((e) => !e.read || f !== "inbox").length }),
         }));
       };
-      const base = `/api/emails?state=${f}&account=${encodeURIComponent(acct)}`;
+      // "vip" / "starred" are filtered VIEWS over the inbox — fetch the inbox and
+      // narrow it client-side (vip = sender labeled 重要取引先). "starred" keeps its
+      // own server path (\Flagged). Everything else maps 1:1 to a server folder.
+      const reqState: FolderView = f === "vip" ? "inbox" : f;
+      const base = `/api/emails?state=${reqState}&account=${encodeURIComponent(acct)}`;
       // Parse defensively: a broken/empty response (e.g. dev server mid-rebuild)
       // must never throw a runtime error or wipe the visible list.
       const readJson = async (res: Response) =>
@@ -2053,9 +2059,28 @@ export function MailApp({
   // 通常フォルダはトグルどおり会話グルーピング。検索は本文（引用含む）を対象にする
   // ため、同じスレッドの返信が軒並みヒットして同じ会話が何件も並ぶ。検索結果は常に
   // スレッドで束ねて1会話=1行にし、重複を解消する（クリックでそのスレッドを開く）。
+  // 重要な人ビュー: 受信箱メールを「差出人が重要取引先(VIP)」に絞る（ローカルの
+  // 連絡先ラベルで判定。サーバ概念は増やさない）。会話グルーピング前に絞るので、
+  // 残るのはVIP差出人のメールだけ＝「重要な人からのメール」一覧になる。
+  const viewEmails =
+    folder === "vip"
+      ? emails.filter((e) => contactLabel(e.from.email) === "vip")
+      : emails;
   const rows = buildRows(
-    searchResults ?? emails,
+    searchResults ?? viewEmails,
     searchResults !== null ? true : grouping,
+  );
+
+  // 重要な人バッジ: 受信箱メールが読み込まれている時だけ正確に出せる（他フォルダ表示
+  // 中は emails が別フォルダなので出さない）。未読のVIPメール数。
+  const vipUnread = useMemo(() => {
+    if (folder !== "inbox" && folder !== "vip") return undefined;
+    return emails.filter((e) => !e.read && contactLabel(e.from.email) === "vip")
+      .length;
+  }, [emails, folder, contactLabel]);
+  const displayCounts = useMemo(
+    () => (vipUnread == null ? counts : { ...counts, vip: vipUnread }),
+    [counts, vipUnread],
   );
 
   // Bulk selection: rows are checked by representative id; an action expands
@@ -2542,7 +2567,7 @@ export function MailApp({
       <Sidebar
         folder={folder}
         view={view}
-        counts={counts}
+        counts={displayCounts}
         scheduledCount={scheduledCount}
         draftsCount={draftsCount}
         failedDraftsCount={failedDraftsCount}

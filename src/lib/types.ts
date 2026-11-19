@@ -4,7 +4,9 @@ export type MailboxState = "inbox" | "archived" | "trashed" | "sent";
 
 /** What the folder pane can show: a real mailbox or the starred view
  *  (スター付き is a flag spanning folders, not a folder itself). */
-export type FolderView = MailboxState | "starred";
+// "starred" / "vip" are filtered VIEWS over the inbox, not server folders:
+// "starred" = \Flagged mail, "vip" = mail from senders labeled 重要取引先 in 連絡先.
+export type FolderView = MailboxState | "starred" | "vip";
 
 export type Importance = "high" | "normal" | "low";
 

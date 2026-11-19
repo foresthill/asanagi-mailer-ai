@@ -8,6 +8,7 @@ import {
   Sunrise,
   Send,
   Star,
+  UserCheck,
   Trash2,
   Sparkles,
   Clock,
@@ -40,6 +41,7 @@ import type { AccountInfo } from "@/lib/email/accounts";
 // label はロケール別に t(`folder.${key}`) で解決する。
 const FOLDERS: { key: FolderView; icon: typeof Inbox }[] = [
   { key: "inbox", icon: Inbox },
+  { key: "vip", icon: UserCheck },
   { key: "starred", icon: Star },
   { key: "sent", icon: Send },
   { key: "archived", icon: Archive },

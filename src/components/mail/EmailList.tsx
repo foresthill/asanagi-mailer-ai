@@ -912,9 +912,11 @@ export function EmailList({
                     ? serverSearched
                       ? t("empty.serverSearched")
                       : t("empty.searchLocal")
-                    : folder === "inbox"
-                      ? t("empty.inboxClean")
-                      : t("empty.folder")}
+                    : folder === "vip"
+                      ? t("empty.vip")
+                      : folder === "inbox"
+                        ? t("empty.inboxClean")
+                        : t("empty.folder")}
               </p>
               {searching && !serverSearched && (
                 <ServerSearchButton
