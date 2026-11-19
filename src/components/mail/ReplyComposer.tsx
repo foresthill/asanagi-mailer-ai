@@ -35,6 +35,7 @@ import type { OutgoingAttachment } from "@/lib/types";
 import { buildSegments, pendingCount } from "@/lib/diff";
 import { DraftEditor, type DraftEditorHandle } from "./tiptap/DraftEditor";
 import { RichEditor, type RichEditorHandle } from "./tiptap/RichEditor";
+import { createImeEnterGuard, type ImeEnterGuard } from "./tiptap/imeEnter";
 import { RecipientFields, type RecipientValues } from "./RecipientFields";
 import {
   composeTitle,
@@ -186,6 +187,11 @@ export function ReplyComposer({
   const [richProposal, setRichProposal] = useState<string | null>(null);
   const richEditorRef = useRef<RichEditorHandle>(null);
   const editorRef = useRef<DraftEditorHandle>(null);
+  // AI指示入力の Enter 判定: IME 変換確定の Enter で送信しない（WKWebView は
+  // isComposing=false で確定Enterが届くため自前追跡＋keyCode229も見る。imeEnter）。
+  const instrImeRef = useRef<ImeEnterGuard | null>(null);
+  if (instrImeRef.current === null) instrImeRef.current = createImeEnterGuard();
+  const instrIme = instrImeRef.current;
   // In-flight AI request — 中止 button aborts it (initial draft / suggest).
   const abortRef = useRef<AbortController | null>(null);
   // Tracks the draft id this composer owns (from reopening a saved draft, or
@@ -1329,11 +1335,14 @@ export function ReplyComposer({
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onCompositionStart={() => instrIme.onCompositionStart()}
+              onCompositionEnd={() => instrIme.onCompositionEnd()}
               onKeyDown={(e) => {
                 if (e.key !== "Enter") return;
-                // Never fire while the IME is composing (Japanese input:
-                // the conversion-confirm Enter must not send).
-                if (e.nativeEvent.isComposing) return;
+                // IMEの変換を確定する Enter では送信しない（日本語入力）。
+                // WKWebView は確定Enterを isComposing=false で送るため、自前の
+                // 変換追跡＋keyCode229 も併用して判定する（imeEnter 参照）。
+                if (instrIme.isImeConfirmEnter(e.nativeEvent)) return;
                 // enterToSend: Enter=送信 / Shift+Enter=改行。
                 // 既定: Shift/Cmd/Ctrl+Enter=送信 / Enter=改行。
                 const send = enterToSend

@@ -24,6 +24,7 @@ import {
   Link2,
 } from "lucide-react";
 import { handleLineNavKeyDown, handleTripleClickLine } from "./lineNav";
+import { createImeEnterGuard, type ImeEnterGuard } from "./imeEnter";
 
 export interface RichEditorHandle {
   getHtml: () => string;
@@ -100,6 +101,11 @@ export const RichEditor = forwardRef<
   });
   const editorRef = useRef<Editor | null>(null);
   const appliedRef = useRef<string | null>(null);
+  // IME-confirm Enter must only CONFIRM the 変換, never split a paragraph
+  // (WKWebView fires compositionend before the confirming keydown — see imeEnter).
+  const imeRef = useRef<ImeEnterGuard | null>(null);
+  if (imeRef.current === null) imeRef.current = createImeEnterGuard();
+  const ime = imeRef.current;
   // Bump on every transaction so toolbar active-states stay in sync.
   const [, force] = useState(0);
 
@@ -151,8 +157,23 @@ export const RichEditor = forwardRef<
         autocapitalize: "off",
         autocomplete: "off",
       },
-      // macOS Ctrl+A=行頭 / Ctrl+E=行末（Shiftで行選択）。
-      handleKeyDown: handleLineNavKeyDown,
+      // IME 変換を確定する Enter（WKWebView では isComposing=false で届く）は
+      // 段落分割させず飲み込む。続けて macOS の行頭/行末移動。
+      handleKeyDown: (view, event) => {
+        if (ime.isImeConfirmEnter(event)) return true;
+        return handleLineNavKeyDown(view, event);
+      },
+      // 変換の開始/終了を自前で追跡（確定Enter判定に使う）。
+      handleDOMEvents: {
+        compositionstart: () => {
+          ime.onCompositionStart();
+          return false;
+        },
+        compositionend: () => {
+          ime.onCompositionEnd();
+          return false;
+        },
+      },
       // トリプルクリック=その行を選択（段落全体ではなく視覚行）。
       handleTripleClick: handleTripleClickLine,
       handlePaste(_view, event) {

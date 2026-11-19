@@ -13,6 +13,7 @@ import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
 import type { Segment } from "@/lib/diff";
 import { SuggestionNode } from "./suggestionNode";
 import { handleLineNavKeyDown, handleTripleClickLine } from "./lineNav";
+import { createImeEnterGuard, type ImeEnterGuard } from "./imeEnter";
 import {
   countSuggestions,
   docFromText,
@@ -56,6 +57,11 @@ export const DraftEditor = forwardRef<
   onChangeRef.current = onChange;
   const onSelRef = useRef(onSelectionChange);
   onSelRef.current = onSelectionChange;
+  // IME-confirm Enter must only CONFIRM the 変換, never insert a line break
+  // (WKWebView fires compositionend before the confirming keydown — see imeEnter).
+  const imeRef = useRef<ImeEnterGuard | null>(null);
+  if (imeRef.current === null) imeRef.current = createImeEnterGuard();
+  const ime = imeRef.current;
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -86,8 +92,23 @@ export const DraftEditor = forwardRef<
         autocapitalize: "off",
         autocomplete: "off",
       },
-      // macOS Ctrl+A=行頭 / Ctrl+E=行末（Shiftで行選択）。
-      handleKeyDown: handleLineNavKeyDown,
+      // IME 変換を確定する Enter（WKWebView では isComposing=false で届く）は
+      // keymap の setHardBreak を走らせず飲み込む。続けて macOS の行頭/行末移動。
+      handleKeyDown: (view, event) => {
+        if (ime.isImeConfirmEnter(event)) return true;
+        return handleLineNavKeyDown(view, event);
+      },
+      // 変換の開始/終了を自前で追跡（確定Enter判定に使う）。
+      handleDOMEvents: {
+        compositionstart: () => {
+          ime.onCompositionStart();
+          return false;
+        },
+        compositionend: () => {
+          ime.onCompositionEnd();
+          return false;
+        },
+      },
       // トリプルクリック=その行を選択（単一段落なので既定は全文選択になる）。
       handleTripleClick: handleTripleClickLine,
       // The doc is a single paragraph, so default paste (which builds multiple
@@ -107,6 +128,10 @@ export const DraftEditor = forwardRef<
       },
     },
     onUpdate({ editor }) {
+      // IME 変換中は親の再描画を走らせない（WKWebView で変換中の再描画が重く、
+      // カーソル位置を乱すため。確定後の transaction で本文stateは同期される）。
+      // RichEditor と同方針。
+      if (editor.view.composing) return;
       const json = editor.getJSON();
       onChangeRef.current({ text: serializeDoc(json), pending: countSuggestions(json) });
     },
