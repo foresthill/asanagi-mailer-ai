@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Download, DownloadCloud, Loader2, Paperclip } from "lucide-react";
+import { Download, DownloadCloud, FileArchive, Loader2, Paperclip } from "lucide-react";
+import JSZip from "jszip";
 import type { Attachment } from "@/lib/types";
 import { getDownloadAsk, getDownloadDir } from "@/lib/download-prefs";
 
@@ -24,6 +25,19 @@ function fmtSize(bytes?: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** Make a filename unique within a set (for the zip): `name.ext` → `name (2).ext`. */
+function uniqueName(name: string, used: Map<string, number>): string {
+  const base = name || "attachment";
+  const n = used.get(base);
+  if (n === undefined) {
+    used.set(base, 1);
+    return base;
+  }
+  used.set(base, n + 1);
+  const dot = base.lastIndexOf(".");
+  return dot > 0 ? `${base.slice(0, dot)} (${n + 1})${base.slice(dot)}` : `${base} (${n + 1})`;
+}
+
 /**
  * Attachment chips for the reader. Bytes are fetched on demand (never cached
  * locally) and saved via fetch+Blob — the embedded-app-safe download pattern
@@ -41,17 +55,19 @@ export function AttachmentList({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
 
-  /** Save one attachment's bytes as a file. Bytes are fetched on demand (never
-   *  cached locally). Browser: fetch+Blob anchor (embedded-app safe). Desktop
-   *  (Tauri): the WebView ignores blob `<a download>`, so hand the bytes to the
-   *  native Save dialog instead. */
-  /** Returns true if the file was saved, false if the user cancelled. */
-  async function saveOne(att: Attachment): Promise<boolean> {
+  /** Fetch one attachment's bytes on demand (never cached locally). */
+  async function fetchBlob(att: Attachment): Promise<Blob> {
     const url = `/api/emails/${encodeURIComponent(emailId)}/attachment/${encodeURIComponent(att.id)}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(await res.text().catch(() => "ダウンロードに失敗しました"));
-    const blob = await res.blob();
+    return res.blob();
+  }
 
+  /** Save a blob as a file. Browser: fetch+Blob anchor (embedded-app safe).
+   *  Desktop (Tauri): the WebView ignores blob `<a download>`, so hand the bytes
+   *  to the native Save dialog / download folder instead.
+   *  Returns true if saved, false if the user cancelled. */
+  async function saveBlob(blob: Blob, filename: string): Promise<boolean> {
     if (isDesktopApp()) {
       const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
       const { invoke } = await import("@tauri-apps/api/core");
@@ -59,27 +75,29 @@ export function AttachmentList({
         // Direct-save to the default folder (no dialog). Returns the saved path.
         await invoke<string>("save_file_to_dir", {
           dir: getDownloadDir(),
-          filename: att.filename,
+          filename,
           bytes,
         });
         return true;
       }
       // Returns false if the user cancelled the Save dialog — not an error.
-      return await invoke<boolean>("save_file_dialog", {
-        filename: att.filename,
-        bytes,
-      });
+      return await invoke<boolean>("save_file_dialog", { filename, bytes });
     }
 
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = objectUrl;
-    a.download = att.filename;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(objectUrl);
     return true;
+  }
+
+  /** Save one attachment's bytes as a file. */
+  async function saveOne(att: Attachment): Promise<boolean> {
+    return saveBlob(await fetchBlob(att), att.filename);
   }
 
   async function download(att: Attachment) {
@@ -93,7 +111,7 @@ export function AttachmentList({
     }
   }
 
-  /** Download every attachment in one action (each saved to the download folder).
+  /** Download every attachment as separate files (each saved individually).
    *  Sequential with a short gap so the browser doesn't drop rapid-fire saves. */
   async function downloadAll() {
     setBusy("*");
@@ -112,27 +130,75 @@ export function AttachmentList({
     if (failed.length) alert(`一部の添付を取得できませんでした:\n${failed.join("\n")}`);
   }
 
+  /** Bundle every attachment into ONE .zip and save it (one file, one dialog).
+   *  Zipping happens in-app (JSZip) so bytes never leave the device beyond the
+   *  same-origin attachment fetch — keeps the local-first guarantee. */
+  async function downloadZip() {
+    setBusy("zip");
+    const failed: string[] = [];
+    try {
+      const zip = new JSZip();
+      const used = new Map<string, number>();
+      let added = 0;
+      for (const att of attachments) {
+        try {
+          const blob = await fetchBlob(att);
+          zip.file(uniqueName(att.filename, used), blob);
+          added++;
+        } catch {
+          failed.push(att.filename);
+        }
+      }
+      if (added === 0) {
+        alert("添付を取得できませんでした");
+        return;
+      }
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      if (await saveBlob(zipBlob, "添付ファイル.zip")) toast(`${added}件をzipにまとめました`);
+      if (failed.length) alert(`一部の添付を取得できませんでした:\n${failed.join("\n")}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "zipの作成に失敗しました");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className={bare ? "" : "mt-5 rounded-xl border border-border bg-surface px-3.5 py-2.5"}>
-      <div className="mb-1.5 flex items-center gap-2">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
         <p className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
           <Paperclip className="size-3.5" />
           添付ファイル {attachments.length}件
         </p>
         {attachments.length > 1 ? (
-          <button
-            onClick={downloadAll}
-            disabled={busy !== null}
-            title="すべての添付をダウンロード"
-            className="flex items-center gap-1 rounded-md border border-border bg-bg px-2 py-0.5 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
-          >
-            {busy === "*" ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <DownloadCloud className="size-3" />
-            )}
-            全てダウンロード
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={downloadAll}
+              disabled={busy !== null}
+              title="添付を1つずつ個別ファイルで保存"
+              className="flex items-center gap-1 rounded-md border border-border bg-bg px-2 py-0.5 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+            >
+              {busy === "*" ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <DownloadCloud className="size-3" />
+              )}
+              全てダウンロード
+            </button>
+            <button
+              onClick={downloadZip}
+              disabled={busy !== null}
+              title="添付を1つのzipにまとめて保存"
+              className="flex items-center gap-1 rounded-md border border-border bg-bg px-2 py-0.5 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+            >
+              {busy === "zip" ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <FileArchive className="size-3" />
+              )}
+              zipでまとめる
+            </button>
+          </div>
         ) : null}
       </div>
       <div className="flex flex-wrap gap-2">
