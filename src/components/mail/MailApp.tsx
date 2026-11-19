@@ -2071,6 +2071,17 @@ export function MailApp({
     searchResults !== null ? true : grouping,
   );
 
+  // 連動: 開いているメールの会話ID。一覧は「その会話の行」を点灯＆スクロール追従する
+  // （EmailList 側で row.email.threadId と突き合わせ）。開いた1通の id が一覧行の積載
+  // メンバーに無く（別フォルダのコピー等）ても会話単位で当てられるようにする。読み込んだ
+  // 会話(thread)の中の当該メール、無ければ現在の一覧から引く。
+  const selectedThreadId = useMemo(() => {
+    if (!selectedId) return null;
+    const inThread = thread?.find((m) => m.id === selectedId)?.threadId;
+    if (inThread) return inThread;
+    return emails.find((e) => e.id === selectedId)?.threadId ?? null;
+  }, [selectedId, thread, emails]);
+
   // 重要な人バッジ: 受信箱メールが読み込まれている時だけ正確に出せる（他フォルダ表示
   // 中は emails が別フォルダなので出さない）。未読のVIPメール数。
   const vipUnread = useMemo(() => {
@@ -2455,6 +2466,7 @@ export function MailApp({
       loading={loading && searchResults === null}
       refreshing={refreshing && searchResults === null}
       selectedId={selectedId}
+      selectedThreadId={selectedThreadId}
       searchQuery={searchQuery}
       searching={searchResults !== null}
       searchError={searchError}
