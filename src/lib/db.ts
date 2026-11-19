@@ -117,6 +117,27 @@ function getDb(): DatabaseSync {
   } catch {
     /* column already exists */
   }
+  // One-time repair: older rows stored the ENTIRE References chain as thread_id
+  // ("<root><parent>…" with only the outer <> stripped) because a packed-string
+  // References header wasn't split (fixed in imap.ts firstReference). That gave
+  // every reply a different threadId → one conversation shattered into many list
+  // rows. Normalize to the first id (the true conversation root = everything
+  // before the first '>', with any leading '<' trimmed). Idempotent: once
+  // repaired no thread_id contains '>', so later runs match 0 rows.
+  try {
+    const res = db
+      .prepare(
+        `UPDATE messages
+           SET thread_id = ltrim(substr(thread_id, 1, instr(thread_id, '>') - 1), '<')
+         WHERE instr(thread_id, '>') > 0`,
+      )
+      .run();
+    if (Number(res.changes) > 0) {
+      console.warn(`[db] repaired ${res.changes} concatenated thread_id row(s)`);
+    }
+  } catch (err) {
+    console.warn("[db] thread_id repair skipped:", err);
+  }
   dbGlobal.__asanagiDb = db;
   return db;
 }

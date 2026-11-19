@@ -116,6 +116,23 @@ function normId(s?: string | null): string | undefined {
   return t || undefined;
 }
 
+/**
+ * Conversation root = the FIRST Message-ID of the References chain (ancestors are
+ * listed oldest-first). mailparser usually returns `references` as an array, but
+ * some senders pack ids with no spaces (`<a><b><c>`, common with Outlook /
+ * groupware mailers) and it comes back as ONE string. Taking that whole string
+ * as the id gave every reply a different, ever-growing threadId and shattered the
+ * conversation into many list rows (the reader still bundled, because it walks
+ * References server-side — the list looked split while the thread view didn't).
+ * Always pull just the first id, array or string.
+ */
+export function firstReference(refs?: string[] | string | null): string | undefined {
+  if (!refs) return undefined;
+  if (Array.isArray(refs)) return normId(refs[0]);
+  const m = refs.match(/<[^<>]+>/); // first "<id>" token when packed w/o spaces
+  return normId(m ? m[0] : refs.split(/[\s>]+/)[0]);
+}
+
 export class ImapProvider implements EmailProvider {
   readonly name = "imap";
   /** Configured names — used as fallbacks; the server's reality wins. */
@@ -307,9 +324,9 @@ export class ImapProvider implements EmailProvider {
       const html = parsed.html
         ? embedInlineCids(parsed.html, parsed.attachments ?? [])
         : undefined;
-      // Conversation root: References lists ancestors oldest-first.
-      const refs = parsed.references;
-      const refRoot = normId(Array.isArray(refs) ? refs[0] : refs);
+      // Conversation root: References lists ancestors oldest-first. Take the
+      // FIRST id (handles the packed-string form "<a><b>" — see firstReference).
+      const refRoot = firstReference(parsed.references);
       // Meeting invite part (mailparser surfaces text/calendar as attachment).
       const icsPart = parsed.attachments?.find(
         (a) => a.contentType === "text/calendar" || a.filename?.toLowerCase().endsWith(".ics"),
@@ -448,7 +465,9 @@ export class ImapProvider implements EmailProvider {
    * route caches the result, so subsequent opens are also complete offline.
    */
   async thread(threadId: string): Promise<Email[]> {
-    const root = threadId.replace(/^<|>$/g, "").trim();
+    // Take the first id defensively — a legacy cached threadId may still be the
+    // packed-chain form "<root><parent>…" from before firstReference() landed.
+    const root = (firstReference(threadId) ?? threadId.replace(/^<|>$/g, "")).trim();
     // uid-fallback thread ids (no Message-ID) can't be matched server-side.
     if (!root.includes("@")) return [];
     const c = this.connection();
