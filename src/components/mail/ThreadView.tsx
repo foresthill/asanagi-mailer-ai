@@ -218,14 +218,19 @@ export function ThreadView({
   }, [selectedId]);
   useEffect(() => {
     if (view !== "cards" || !selectedId || userScrolled.current) return;
-    const t = setTimeout(() => {
-      // Re-anchor after each wave, unless the user has since scrolled. Instant
-      // jump ("ピッと") — smooth scrolling across a long thread feels slow.
+    // Re-anchor in several passes, not once. A long thread (e.g. 60通) can't
+    // mount+lay out its cards within a single 60ms tick, and lazy bodies/images
+    // keep shifting layout afterwards — a one-shot scroll lands early then drifts
+    // away, so the opened message is lost near the top. Each pass is an instant
+    // jump ("ピッと"), and every pass is skipped the moment the user actually
+    // scrolls (wheel/touch) — so digging up through history is never yanked back.
+    const anchor = () => {
       if (currentRef.current && !userScrolled.current) {
         currentRef.current.scrollIntoView({ block: "start", behavior: "auto" });
       }
-    }, 60); // brief tick so the just-rendered anchor is measurable
-    return () => clearTimeout(t);
+    };
+    const timers = [60, 200, 450, 900].map((d) => setTimeout(anchor, d));
+    return () => timers.forEach(clearTimeout);
   }, [selectedId, messages.length, view]);
 
   const changeView = (v: ViewMode) => {
