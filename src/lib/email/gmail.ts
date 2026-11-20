@@ -195,11 +195,15 @@ function stripHtml(html: string): string {
 function labelFor(state: MailboxState): { add: string[]; remove: string[] } {
   switch (state) {
     case "inbox":
-      return { add: ["INBOX"], remove: ["TRASH"] };
+      // Restoring to inbox also lifts SPAM (迷惑メールではない時の救済).
+      return { add: ["INBOX"], remove: ["TRASH", "SPAM"] };
     case "archived":
       return { add: [], remove: ["INBOX"] };
     case "trashed":
       return { add: ["TRASH"], remove: ["INBOX"] };
+    case "junk":
+      // 迷惑メール: Gmail の SPAM ラベルへ（受信箱からは外す）。
+      return { add: ["SPAM"], remove: ["INBOX"] };
     case "sent":
       // SENT is system-managed; never a target of a user move.
       return { add: [], remove: [] };
@@ -210,6 +214,7 @@ function labelFor(state: MailboxState): { add: string[]; remove: string[] } {
  *  as inbox; TRASH wins over everything. */
 function stateFromLabels(labels: string[]): MailboxState {
   if (labels.includes("TRASH")) return "trashed";
+  if (labels.includes("SPAM")) return "junk";
   if (labels.includes("INBOX")) return "inbox";
   if (labels.includes("SENT")) return "sent";
   return "archived";
@@ -285,9 +290,11 @@ export class GmailProvider implements EmailProvider {
         ? "in:inbox"
         : state === "trashed"
           ? "in:trash"
-          : state === "sent"
-            ? "in:sent"
-            : "-in:inbox -in:trash -in:sent"; // archived: exclude sent too
+          : state === "junk"
+            ? "in:spam"
+            : state === "sent"
+              ? "in:sent"
+              : "-in:inbox -in:trash -in:sent -in:spam"; // archived: exclude sent/spam too
     return base + horizon;
   }
 

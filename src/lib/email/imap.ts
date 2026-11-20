@@ -26,6 +26,7 @@ export interface ImapCreds {
   password: string;
   archiveFolder: string;
   trashFolder: string;
+  junkFolder: string;
   sentFolder: string;
   smtp: {
     host: string;
@@ -51,6 +52,7 @@ export function envImapCreds(): ImapCreds | null {
     password: IMAP_PASSWORD,
     archiveFolder: process.env.IMAP_ARCHIVE_FOLDER || "Archive",
     trashFolder: process.env.IMAP_TRASH_FOLDER || "Trash",
+    junkFolder: process.env.IMAP_JUNK_FOLDER || "Junk",
     sentFolder: process.env.IMAP_SENT_FOLDER || "Sent",
     smtp: {
       host: process.env.SMTP_HOST || IMAP_HOST,
@@ -155,6 +157,7 @@ export class ImapProvider implements EmailProvider {
       inbox: "INBOX",
       archived: creds.archiveFolder,
       trashed: creds.trashFolder,
+      junk: creds.junkFolder,
       sent: creds.sentFolder,
     };
     this.inboxCutoff = inboxCutoff;
@@ -223,6 +226,7 @@ export class ImapProvider implements EmailProvider {
       inbox: "INBOX",
       sent,
       trashed: pick(this.creds.trashFolder, "\\Trash"),
+      junk: pick(this.creds.junkFolder, "\\Junk"),
       archived,
     };
     return this.resolvedFolders;

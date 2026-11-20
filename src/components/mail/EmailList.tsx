@@ -624,7 +624,9 @@ export function EmailList({
         </button>
       </span>
       <span className="ml-auto flex items-center gap-1">
-        {(folder === "archived" || folder === "trashed") && (
+        {(folder === "archived" ||
+          folder === "trashed" ||
+          folder === "junk") && (
           <button
             onClick={onBulkRestore}
             title={t("reader.restore")}
@@ -644,7 +646,7 @@ export function EmailList({
             {t("action.archive")}
           </button>
         )}
-        {folder !== "sent" && (
+        {folder !== "sent" && folder !== "junk" && (
           <button
             onClick={onBulkReportSpam}
             title={t("bulk.reportSpam.title")}
@@ -1263,7 +1265,9 @@ function SubActionBar({
         </button>
       </span>
       <span className="ml-auto flex items-center gap-0.5">
-        {(folder === "archived" || folder === "trashed") && (
+        {(folder === "archived" ||
+          folder === "trashed" ||
+          folder === "junk") && (
           <button
             onClick={onRestore}
             title={t("reader.restore")}
@@ -1429,6 +1433,7 @@ function StateChip({ state }: { state: MailboxState }) {
     inbox: "bg-accent-soft text-accent",
     archived: "bg-surface-2 text-fg-muted",
     trashed: "bg-high-soft text-high",
+    junk: "bg-high-soft text-high",
     sent: "bg-surface-2 text-fg-muted",
   };
   return (

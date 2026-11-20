@@ -33,6 +33,7 @@ export function imapCredsFrom(i: ImapAccountSettings | undefined): ImapCreds | n
       password: i.password,
       archiveFolder: i.archiveFolder || "Archive",
       trashFolder: i.trashFolder || "Trash",
+      junkFolder: i.junkFolder || "Junk",
       sentFolder: i.sentFolder || "Sent",
       smtp: {
         // Blank SMTP host → derive from the IMAP host (imap.x → smtp.x), not

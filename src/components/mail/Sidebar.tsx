@@ -9,6 +9,7 @@ import {
   Send,
   Star,
   UserCheck,
+  ShieldAlert,
   Trash2,
   Sparkles,
   Clock,
@@ -45,6 +46,7 @@ const FOLDERS: { key: FolderView; icon: typeof Inbox }[] = [
   { key: "starred", icon: Star },
   { key: "sent", icon: Send },
   { key: "archived", icon: Archive },
+  { key: "junk", icon: ShieldAlert },
   { key: "trashed", icon: Trash2 },
 ];
 

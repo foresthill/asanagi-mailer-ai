@@ -2002,8 +2002,8 @@ export function MailApp({
     }
     await mutateState(
       [email.id],
-      "trashed",
-      "迷惑メールとして報告し、ゴミ箱へ移動しました",
+      "junk",
+      "迷惑メールとして報告し、迷惑メールフォルダへ移動しました",
     );
   };
 
@@ -2148,7 +2148,7 @@ export function MailApp({
     );
     await mutateState(
       ids,
-      "trashed",
+      "junk",
       `${targetRows.length}件を迷惑メールとして報告しました`,
     );
   };
