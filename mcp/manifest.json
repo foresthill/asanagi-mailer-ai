@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "asanagi",
   "display_name": "Asanagi メール MCP",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Asanagi のローカルメールキャッシュとプロジェクト・ハブを公開するMCPサーバ（読み取り中心＋下書き作成のみ・送信なし・端末内で完結）",
   "author": { "name": "foresthill" },
   "server": {
@@ -17,10 +17,10 @@
   "user_config": {
     "data_dir": {
       "type": "directory",
-      "title": "Asanagi のフォルダ",
-      "description": "ai-mailer のプロジェクトフォルダを選んでください（中の .data/asanagi.db を自動で探します）。.data を直接選んでもOK。",
-      "required": true,
-      "default": "${HOME}/Development/AI-Driven/ai-mailer"
+      "title": "Asanagi のデータフォルダ（通常は空のままでOK）",
+      "description": "通常は空のままで構いません。デスクトップ版 Asanagi のデータを自動検出します（mac: ~/Library/Application Support/com.foresthill.asanagi、Windows/Linux も各OSの標準領域）。別の場所のデータ（開発用の .data やプロジェクトフォルダ）を読みたい時だけ指定してください。",
+      "required": false,
+      "default": "${HOME}/Library/Application Support/com.foresthill.asanagi"
     }
   },
   "tools": [
