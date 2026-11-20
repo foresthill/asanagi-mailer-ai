@@ -11,6 +11,7 @@
  * behind explicit user action). Run: `npm run mcp`. Setup: see mcp/README.md.
  */
 import path from "node:path";
+import os from "node:os";
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -21,12 +22,36 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 const CONFIGURED = process.env.ASANAGI_DATA_DIR || path.join(import.meta.dirname, "..", ".data");
 
-/** Find the folder that actually holds asanagi.db. Accepts either the `.data`
- *  folder itself OR a parent (e.g. the project root) that contains `.data` —
- *  so users can pick the VISIBLE project folder in Claude Desktop's picker
- *  instead of the hidden `.data` folder. */
+/** OS-standard app-data location of the installed DESKTOP app (Tauri
+ *  app_data_dir for bundle id com.foresthill.asanagi). The desktop build writes
+ *  .data here (not the project folder), so the MCP finds the real mail even when
+ *  ASANAGI_DATA_DIR is unset/wrong. macOS path verified against a running build;
+ *  Windows/Linux follow Tauri's conventions (additive fallback — never override
+ *  an explicit, working ASANAGI_DATA_DIR). */
+function osAppDataDirs() {
+  const id = "com.foresthill.asanagi";
+  const home = os.homedir();
+  if (process.platform === "darwin")
+    return [path.join(home, "Library", "Application Support", id)];
+  if (process.platform === "win32")
+    return [
+      path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), id),
+    ];
+  return [path.join(process.env.XDG_DATA_HOME || path.join(home, ".local", "share"), id)];
+}
+
+/** Every folder we'll probe for asanagi.db, in priority order: the configured
+ *  dir, its `.data` child (so users can pick the VISIBLE project folder in
+ *  Claude Desktop's picker), then the installed desktop app's data dir. */
+const SEARCH_DIRS = [
+  CONFIGURED,
+  path.join(CONFIGURED, ".data"),
+  ...osAppDataDirs(),
+];
+
+/** Find the folder that actually holds asanagi.db (first match wins). */
 function dataDir() {
-  for (const d of [CONFIGURED, path.join(CONFIGURED, ".data")]) {
+  for (const d of SEARCH_DIRS) {
     if (existsSync(path.join(d, "asanagi.db"))) return d;
   }
   return CONFIGURED;
@@ -40,8 +65,8 @@ function db() {
     const p = dbPath();
     if (!existsSync(p)) {
       throw new Error(
-        `asanagi.db が見つかりません（探した場所: ${CONFIGURED} と ${path.join(CONFIGURED, ".data")}）。` +
-          `Asanagi のプロジェクトフォルダ（.data がある場所）を指定し、先にアプリを起動してメールを同期してください。`,
+        `asanagi.db が見つかりません（探した場所: ${SEARCH_DIRS.join(" / ")}）。` +
+          `デスクトップ版を一度起動してメールを同期するか、Asanagi のデータフォルダを指定してください。`,
       );
     }
     _db = new DatabaseSync(p, { readOnly: true });
@@ -107,7 +132,7 @@ function parseAddr(s) {
   return { email: String(s).trim() };
 }
 
-const server = new McpServer({ name: "asanagi", version: "0.1.3" });
+const server = new McpServer({ name: "asanagi", version: "0.1.4" });
 
 server.registerTool(
   "search_mail",
