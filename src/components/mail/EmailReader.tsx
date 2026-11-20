@@ -396,8 +396,9 @@ export function EmailReader({
             onClick={onArchive}
           />
         )}
-        {/* アーカイブ中は「受信箱に戻す」を出す（ゴミ箱側は下で復元ボタンを出す）。 */}
-        {folder === "archived" && (
+        {/* アーカイブ/迷惑メール中は「受信箱に戻す」を出す（誤検知の救済）。
+            ゴミ箱側は下の trash 分岐で復元ボタンを出す。 */}
+        {(folder === "archived" || folder === "junk") && (
           <IconBtn
             icon={RotateCcw}
             title={t("reader.restore")}
@@ -426,14 +427,17 @@ export function EmailReader({
             onClick={onRestore}
           />
         )}
-        {onReportSpam && folder !== "trashed" && folder !== "sent" && (
-          <IconBtn
-            icon={ShieldAlert}
-            title={t("reader.reportSpam")}
-            onClick={onReportSpam}
-            tone="danger"
-          />
-        )}
+        {onReportSpam &&
+          folder !== "trashed" &&
+          folder !== "junk" &&
+          folder !== "sent" && (
+            <IconBtn
+              icon={ShieldAlert}
+              title={t("reader.reportSpam")}
+              onClick={onReportSpam}
+              tone="danger"
+            />
+          )}
         {/* 重要度をこのツールバーからも設定（学習シグナル）。現在値を色で表示。 */}
         {folder !== "sent" && (
           <ImportanceMenu
@@ -547,7 +551,7 @@ export function EmailReader({
             </span>
             {email.threat === "phishing" && <> {t("threat.phishing.body")}</>}
           </p>
-          {/* 誤検知/確定の振り分け: 問題無し(安全学習) / スパムに分類(報告＋ゴミ箱)。 */}
+          {/* 誤検知/確定の振り分け: 問題無し(安全学習) / スパムに分類(報告＋迷惑メール)。 */}
           <span className="flex shrink-0 items-center gap-1.5">
             {onMarkSafe && (
               <button
@@ -557,14 +561,17 @@ export function EmailReader({
                 {t("threat.markSafe")}
               </button>
             )}
-            {onReportSpam && folder !== "trashed" && folder !== "sent" && (
-              <button
-                onClick={onReportSpam}
-                className="rounded-md border border-high/50 bg-surface px-2 py-1 font-medium text-high transition-colors hover:bg-high hover:text-white"
-              >
-                {t("threat.reportSpam")}
-              </button>
-            )}
+            {onReportSpam &&
+              folder !== "trashed" &&
+              folder !== "junk" &&
+              folder !== "sent" && (
+                <button
+                  onClick={onReportSpam}
+                  className="rounded-md border border-high/50 bg-surface px-2 py-1 font-medium text-high transition-colors hover:bg-high hover:text-white"
+                >
+                  {t("threat.reportSpam")}
+                </button>
+              )}
           </span>
         </div>
       )}

@@ -1,6 +1,13 @@
 // Core domain types shared across the app.
 
-export type MailboxState = "inbox" | "archived" | "trashed" | "sent";
+// "junk" = 迷惑メール: Gmail SPAM label / IMAP \Junk special-use folder. A real
+// server mailbox (not a view), so moving mail in/out hits the provider.
+export type MailboxState =
+  | "inbox"
+  | "archived"
+  | "trashed"
+  | "sent"
+  | "junk";
 
 /** What the folder pane can show: a real mailbox or the starred view
  *  (スター付き is a flag spanning folders, not a folder itself). */
@@ -328,6 +335,7 @@ export interface ImapAccountSettings {
   password?: string;
   archiveFolder?: string; // default "Archive"
   trashFolder?: string; // default "Trash"
+  junkFolder?: string; // default "Junk"（未設定でも \Junk 特殊用途を自動検出）
   sentFolder?: string; // default "Sent"
   // SMTP (send); blank fields fall back to the IMAP values.
   smtpHost?: string;
