@@ -895,6 +895,21 @@ export function EmailList({
         className="flex-1 overflow-y-auto px-2 pb-4"
         style={listZoom !== 1 ? { zoom: listZoom } : undefined}
       >
+        {/* 受信中バー（sticky）: stale-while-revalidate で既存の行を出したまま、
+            一覧の最上部に「新着を取りに行っている」ことを常時可視化する。右上の
+            小さなバッジや末尾フッタはスクロールで隠れて「止まった？」に見えるため、
+            スクロールしても残るこのバーを主たる進行表示にする。既存行はそのまま
+            開ける（非ブロック）。初回ロード（loading=キャッシュ無し）は下の全面
+            スピナーが出るのでここでは出さない。 */}
+        {refreshing && !loading && !searching && rows.length > 0 && (
+          <div
+            className="sticky top-0 z-20 -mx-2 mb-1 flex items-center justify-center gap-1.5 border-b border-border bg-surface/90 px-3 py-1.5 text-[11px] text-fg-subtle backdrop-blur"
+            aria-live="polite"
+          >
+            <Loader2 className="size-3.5 animate-spin" />
+            {t("list.syncing")}
+          </div>
+        )}
         {/* AI検索: ヒット群からまとめた「経緯」を一覧の上に。根拠メールは下にずらり。 */}
         {searching && searchMode === "ai" && (
           <SearchDigestPanel
@@ -984,19 +999,8 @@ export function EmailList({
             )}
           </div>
         )}
-        {/* 受信中フッタ: stale-while-revalidate で古い行が見えている間、一覧の
-            末尾でも「取りに行っている」ことを示す。右上の小さなバッジは
-            スクロールで隠れ、「回っているのに新しくならない＝止まった？」に
-            見えるため、行の下端に出して進行を可視化する（新着が来れば消える）。 */}
-        {refreshing && !searching && !loading && rows.length > 0 && (
-          <div
-            className="flex items-center justify-center gap-1.5 py-3 text-[11px] text-fg-subtle"
-            aria-live="polite"
-          >
-            <Loader2 className="size-3.5 animate-spin" />
-            {t("list.refreshing")}
-          </div>
-        )}
+        {/* 受信中の進行表示は一覧最上部の sticky バー（上記）に集約。末尾フッタは
+            長い一覧だと画面外で見えないため廃止した。 */}
       </div>
     </div>
   );
