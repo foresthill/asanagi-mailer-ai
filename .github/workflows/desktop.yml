@@ -147,3 +147,24 @@ jobs:
           # すると GitHub が別系列(mcp-v*)を Latest 扱いし、更新が見つからなくなるため
           # 正式リリースにする（最新の app-v* が Latest になり latest.json が解決する）。
           prerelease: false
+
+      # MCP 拡張(.mcpb)を同じ Release に同梱する。単独の mcp-v* リリースは
+      # app-v* の下に埋もれて見つかりづらかったため、最新のデスクトップ Release を
+      # 開けば必ず .mcpb も入っている状態にする（mcp-v* 個別タグは即時配布用に併存）。
+      # プラットフォーム非依存なので Linux ジョブで1回だけ pack＋添付する
+      # （macOS/Windows でも走らせると同一アセットを3重アップロードしてしまう）。
+      # ファイル名に manifest の版を入れ、アプリ本体(0.5.x)との版の取り違えを防ぐ。
+      - name: Pack MCP bundle (.mcpb)
+        if: matrix.platform == 'ubuntu-22.04' && github.ref_type == 'tag'
+        working-directory: mcp
+        run: |
+          npm install --no-audit --no-fund
+          VER=$(node -p "require('./manifest.json').version")
+          npx --yes @anthropic-ai/mcpb pack . "asanagi-mcp-${VER}.mcpb"
+
+      - name: Attach MCP bundle to desktop release
+        if: matrix.platform == 'ubuntu-22.04' && github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: mcp/asanagi-mcp-*.mcpb
