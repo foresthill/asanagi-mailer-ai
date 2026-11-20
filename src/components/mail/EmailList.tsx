@@ -5,6 +5,8 @@ import {
   AlarmClock,
   Archive,
   ArchiveRestore,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
   Check,
   ChevronDown,
   ChevronRight,
@@ -42,6 +44,10 @@ import { isEmailOnTodo } from "@/lib/todo-keys";
 import { avatarColor, initials, relativeTime } from "./helpers";
 import type { ThreadRow } from "./threadList";
 import type { SearchDigest } from "@/app/api/ai/search-digest/route";
+
+/** 一覧の並べ替え（Mac メール風・そのカラムでソート）。localStorage に保持。 */
+type SortKey = "date" | "from" | "subject" | "attachment";
+type SortDir = "asc" | "desc";
 
 export type SearchMode = "keyword" | "ai";
 
@@ -353,6 +359,68 @@ export function EmailList({
     } catch {
       /* per-viewer convenience only */
     }
+  };
+  // 並べ替え（そのカラムでソート）。既定は日時の新しい順＝従来の並び。
+  const [sortKey, setSortKeyState] = useState<SortKey>(() => {
+    try {
+      const v = localStorage.getItem("asanagi:list-sort-key");
+      return v === "from" || v === "subject" || v === "attachment" ? v : "date";
+    } catch {
+      return "date";
+    }
+  });
+  const [sortDir, setSortDirState] = useState<SortDir>(() => {
+    try {
+      return localStorage.getItem("asanagi:list-sort-dir") === "asc"
+        ? "asc"
+        : "desc";
+    } catch {
+      return "desc";
+    }
+  });
+  const setSortKey = (k: SortKey) => {
+    setSortKeyState(k);
+    try {
+      localStorage.setItem("asanagi:list-sort-key", k);
+    } catch {
+      /* per-viewer convenience only */
+    }
+  };
+  const setSortDir = (d: SortDir) => {
+    setSortDirState(d);
+    try {
+      localStorage.setItem("asanagi:list-sort-dir", d);
+    } catch {
+      /* per-viewer convenience only */
+    }
+  };
+  // Sort a copy (never mutate the incoming rows). The default (date desc) keeps
+  // the server/cache order as-is — no re-sort cost on the common path.
+  const sortRows = (list: ThreadRow[]): ThreadRow[] => {
+    if (sortKey === "date" && sortDir === "desc") return list;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const cmp = (a: ThreadRow, b: ThreadRow): number => {
+      const ea = a.email;
+      const eb = b.email;
+      switch (sortKey) {
+        case "from":
+          return (ea.from.name || ea.from.email || "").localeCompare(
+            eb.from.name || eb.from.email || "",
+            undefined,
+            { sensitivity: "base" },
+          );
+        case "subject":
+          return (ea.subject || "").localeCompare(eb.subject || "", undefined, {
+            sensitivity: "base",
+          });
+        case "attachment":
+          return (ea.hasAttachment ? 1 : 0) - (eb.hasAttachment ? 1 : 0);
+        case "date":
+        default:
+          return +new Date(ea.date) - +new Date(eb.date);
+      }
+    };
+    return [...list].sort((a, b) => dir * cmp(a, b));
   };
   // Aged-draft reminder: dismissible, and the dismissal only lasts the day so it
   // gently resurfaces each morning (local-first — the flag never leaves the device).
@@ -858,6 +926,33 @@ export function EmailList({
                 {t(`group.${a}`)}
               </button>
             ))}
+            {/* 並べ替え（そのカラムでソート・Mac メール風）。設定は端末ごとに保持。 */}
+            <span className="ml-1 flex items-center gap-1 border-l border-border pl-1.5">
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                title={t("list.sort.by")}
+                className="rounded-md border border-border bg-bg px-1 py-0.5 text-[11px] text-fg-muted outline-none focus:border-accent"
+              >
+                <option value="date">{t("list.sort.date")}</option>
+                <option value="from">{t("list.sort.from")}</option>
+                <option value="subject">{t("list.sort.subject")}</option>
+                <option value="attachment">{t("list.sort.attachment")}</option>
+              </select>
+              <button
+                onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
+                title={
+                  sortDir === "asc" ? t("list.sort.asc") : t("list.sort.desc")
+                }
+                className="grid size-5 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
+              >
+                {sortDir === "asc" ? (
+                  <ArrowUpNarrowWide className="size-3.5" />
+                ) : (
+                  <ArrowDownWideNarrow className="size-3.5" />
+                )}
+              </button>
+            </span>
           </div>
         ))}
 
@@ -965,7 +1060,7 @@ export function EmailList({
             </div>
           </div>
         ) : effectiveAxis === "none" ? (
-          rows.map(renderRow)
+          sortRows(rows).map(renderRow)
         ) : (
           sections.map((sec) => {
             const isCollapsed = collapsed.has(sec.key);
@@ -985,7 +1080,7 @@ export function EmailList({
                     {sec.rows.length}
                   </span>
                 </button>
-                {!isCollapsed && sec.rows.map(renderRow)}
+                {!isCollapsed && sortRows(sec.rows).map(renderRow)}
               </div>
             );
           })
