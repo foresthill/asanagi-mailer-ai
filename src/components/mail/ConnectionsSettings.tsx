@@ -183,6 +183,9 @@ export function ConnectionsSettings({
     msg: string;
   } | null>(null);
   const [fetchingModels, setFetchingModels] = useState(false);
+  // ローカル/オンプレは APIキー不要。トンネルをトークンで保護している場合のみ任意で
+  // 入力できるよう既定は隠し、折りたたみで出す（「不要なのに鍵欄がある」混乱を防ぐ）。
+  const [showOnpremKey, setShowOnpremKey] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -468,15 +471,62 @@ export function ConnectionsSettings({
                   );
                 })}
               </div>
-              {/* 優先関係を1行で明示: 本命＝選んだプロバイダ、予備＝オンプレ停止時のみ。 */}
+              {/* これは「選択中（未保存）」のプレビュー。保存済みの実効設定は下の
+                  「現在の有効設定」が正。役割を分けて「保存前に反映された?」の混乱を防ぐ。 */}
               <span className="text-[11px] text-fg-subtle">
-                {t("conn.active.label")}:{" "}
+                {t("conn.active.pending")}:{" "}
                 <span className="font-medium text-fg-muted">{activeSummary}</span>
               </span>
             </div>
 
-            {/* API key (per selected provider) */}
-            {keyProvider ? (
+            {/* API key — ローカル/オンプレは不要（既定で隠す）、クラウドはプロバイダ別。 */}
+            {provider === "onprem" ? (
+              <div className="flex flex-col gap-1.5">
+                <p className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-subtle">
+                  {t("conn.onprem.noKey")}
+                </p>
+                {showOnpremKey ? (
+                  <label className="flex flex-col gap-1.5">
+                    <span className="flex items-center gap-2 text-xs font-medium text-fg-muted">
+                      {t("conn.onprem.keyLabel")}
+                      {currentKeyStatus?.set && (
+                        <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-600">
+                          {t("conn.keySet").replace(
+                            "{last4}",
+                            currentKeyStatus.last4 ?? "",
+                          )}
+                        </span>
+                      )}
+                    </span>
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={keyInputs.openai ?? ""}
+                      onChange={(e) =>
+                        setKeyInputs((k) => ({ ...k, openai: e.target.value }))
+                      }
+                      placeholder={
+                        currentKeyStatus?.set
+                          ? t("conn.keyPlaceholder.change")
+                          : t("conn.onprem.keyPlaceholder")
+                      }
+                      className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+                    />
+                    <span className="text-[11px] text-fg-subtle">
+                      {t("conn.keyLocal")}
+                    </span>
+                  </label>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowOnpremKey(true)}
+                    className="self-start text-[11px] text-fg-subtle underline hover:text-high"
+                  >
+                    {t("conn.onprem.showKey")}
+                  </button>
+                )}
+              </div>
+            ) : keyProvider ? (
               <label className="flex flex-col gap-1.5">
                 <span className="flex items-center gap-2 text-xs font-medium text-fg-muted">
                   {t("conn.apiKey")}
@@ -766,52 +816,6 @@ export function ConnectionsSettings({
             {/* Jev プレイグラウンド（Claude と比較・sandbox） */}
             <JevPlayground />
 
-            {/* Active status */}
-            {view && (
-              <div className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-muted">
-                {t("conn.active.current")}
-                <span className="font-mono">
-                  {view.active.provider}:{view.active.model}
-                </span>{" "}
-                {view.active.configured ? (
-                  <span className="text-emerald-600">
-                    {t("conn.active.ok").replace(
-                      "{source}",
-                      view.active.source,
-                    )}
-                  </span>
-                ) : (
-                  <span className="text-high">{t("conn.active.noKey")}</span>
-                )}
-                {view.active.judgmentModel !== view.active.model && (
-                  <span className="mt-0.5 block">
-                    {t("conn.active.judge")}
-                    <span className="font-mono">
-                      {view.active.judgmentModel}
-                    </span>
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Test result */}
-            {test && (
-              <div
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-                  test.ok
-                    ? "bg-emerald-500/10 text-emerald-600"
-                    : "bg-high-soft text-high"
-                }`}
-              >
-                {test.ok ? (
-                  <Check className="size-4" />
-                ) : (
-                  <AlertCircle className="size-4" />
-                )}
-                <span className="break-all">{test.msg}</span>
-              </div>
-            )}
-
             <label className="flex items-start gap-2 rounded-xl border border-border bg-bg px-3 py-2.5">
               <input
                 type="checkbox"
@@ -868,6 +872,57 @@ export function ConnectionsSettings({
                 </span>
               </span>
             </label>
+
+            {/* 保存済みの実効設定（＝「現在の有効設定」）。上の「選択中」プレビューと
+                役割を分け、保存ボタンのすぐ上に置いて結果と操作を近接させる。 */}
+            {view && (
+              <div className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-muted">
+                {t("conn.active.current")}
+                <span className="font-mono">
+                  {view.active.provider === "openai" &&
+                  (view.baseUrl ?? "").trim()
+                    ? t("conn.provider.onprem.label")
+                    : view.active.provider}
+                  :{view.active.model}
+                </span>{" "}
+                {view.active.configured ? (
+                  <span className="text-emerald-600">
+                    {t("conn.active.ok").replace(
+                      "{source}",
+                      view.active.source,
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-high">{t("conn.active.noKey")}</span>
+                )}
+                {view.active.judgmentModel !== view.active.model && (
+                  <span className="mt-0.5 block">
+                    {t("conn.active.judge")}
+                    <span className="font-mono">
+                      {view.active.judgmentModel}
+                    </span>
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Test result — 操作（接続テスト）の真上に置き、結果が離れないように。 */}
+            {test && (
+              <div
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
+                  test.ok
+                    ? "bg-emerald-500/10 text-emerald-600"
+                    : "bg-high-soft text-high"
+                }`}
+              >
+                {test.ok ? (
+                  <Check className="size-4" />
+                ) : (
+                  <AlertCircle className="size-4" />
+                )}
+                <span className="break-all">{test.msg}</span>
+              </div>
+            )}
 
             {/* AI(BYOK) の操作: 接続テスト＋この AI 設定の保存（このブロック専用）。 */}
             <div className="flex items-center gap-2 pt-1">
