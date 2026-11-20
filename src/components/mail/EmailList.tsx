@@ -3,11 +3,13 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   AlarmClock,
+  AlignLeft,
   Archive,
   ArchiveRestore,
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
   Check,
+  Clock,
   ChevronDown,
   ChevronRight,
   Trash2,
@@ -48,6 +50,9 @@ import type { SearchDigest } from "@/app/api/ai/search-digest/route";
 /** 一覧の並べ替え（Mac メール風・そのカラムでソート）。localStorage に保持。 */
 type SortKey = "date" | "from" | "subject" | "attachment";
 type SortDir = "asc" | "desc";
+
+/** 一覧の表示要素ON/OFF（カラムの表示/非表示・Mac メール風）。localStorage に保持。 */
+type ListViewPrefs = { snippet: boolean; date: boolean; attachment: boolean };
 
 export type SearchMode = "keyword" | "ai";
 
@@ -422,6 +427,34 @@ export function EmailList({
     };
     return [...list].sort((a, b) => dir * cmp(a, b));
   };
+  // 表示要素のON/OFF（カラムの表示/非表示）。既定は全部表示。
+  const [listView, setListViewState] = useState<ListViewPrefs>(() => {
+    try {
+      const raw = localStorage.getItem("asanagi:list-view");
+      if (raw) {
+        const p = JSON.parse(raw) as Partial<ListViewPrefs>;
+        return {
+          snippet: p.snippet !== false,
+          date: p.date !== false,
+          attachment: p.attachment !== false,
+        };
+      }
+    } catch {
+      /* per-viewer convenience only */
+    }
+    return { snippet: true, date: true, attachment: true };
+  });
+  const toggleView = (k: keyof ListViewPrefs) => {
+    setListViewState((v) => {
+      const next = { ...v, [k]: !v[k] };
+      try {
+        localStorage.setItem("asanagi:list-view", JSON.stringify(next));
+      } catch {
+        /* per-viewer convenience only */
+      }
+      return next;
+    });
+  };
   // Aged-draft reminder: dismissible, and the dismissal only lasts the day so it
   // gently resurfaces each morning (local-first — the flag never leaves the device).
   const today = new Date().toISOString().slice(0, 10);
@@ -581,6 +614,7 @@ export function EmailList({
           }
           contactLabel={contactLabel}
           contactColor={contactColor}
+          listView={listView}
         />
         {isExpanded && (
           <div className="mb-1 ml-6 flex flex-col border-l border-border pl-1">
@@ -951,6 +985,46 @@ export function EmailList({
                 ) : (
                   <ArrowDownWideNarrow className="size-3.5" />
                 )}
+              </button>
+            </span>
+            {/* 表示要素のON/OFF（カラムの表示/非表示・Mac メール風）。端末ごとに保持。 */}
+            <span className="flex items-center gap-1 border-l border-border pl-1.5">
+              <button
+                onClick={() => toggleView("snippet")}
+                aria-pressed={listView.snippet}
+                title={t("list.view.preview")}
+                className={cn(
+                  "grid size-5 place-items-center rounded-md transition-colors hover:bg-surface-2",
+                  listView.snippet
+                    ? "text-accent"
+                    : "text-fg-subtle hover:text-fg",
+                )}
+              >
+                <AlignLeft className="size-3.5" />
+              </button>
+              <button
+                onClick={() => toggleView("date")}
+                aria-pressed={listView.date}
+                title={t("list.view.date")}
+                className={cn(
+                  "grid size-5 place-items-center rounded-md transition-colors hover:bg-surface-2",
+                  listView.date ? "text-accent" : "text-fg-subtle hover:text-fg",
+                )}
+              >
+                <Clock className="size-3.5" />
+              </button>
+              <button
+                onClick={() => toggleView("attachment")}
+                aria-pressed={listView.attachment}
+                title={t("list.view.attachment")}
+                className={cn(
+                  "grid size-5 place-items-center rounded-md transition-colors hover:bg-surface-2",
+                  listView.attachment
+                    ? "text-accent"
+                    : "text-fg-subtle hover:text-fg",
+                )}
+              >
+                <Paperclip className="size-3.5" />
               </button>
             </span>
           </div>
@@ -1572,6 +1646,7 @@ function EmailListItem({
   onToggleTodo,
   contactLabel,
   contactColor,
+  listView,
   showLocation,
 }: {
   row: ThreadRow;
@@ -1583,6 +1658,8 @@ function EmailListItem({
   /** Resolve the correspondent's label (重要取引先/迷惑) for the badge. */
   contactLabel?: (email?: string) => ContactLabel | undefined;
   contactColor?: (email?: string) => ContactColor | undefined;
+  /** 表示要素のON/OFF（本文プレビュー/日時/添付マーク）。 */
+  listView: ListViewPrefs;
   /** 1-line compact row (上下表示の上ペイン): sender · subject · time. */
   dense?: boolean;
   /** Active search text → show which field(s) each hit matched. Undefined when
@@ -1782,7 +1859,7 @@ function EmailListItem({
               aria-label={t("aria.replied")}
             />
           )}
-          {email.hasAttachment && (
+          {listView.attachment && email.hasAttachment && (
             <Paperclip
               className="size-3 text-fg-muted"
               aria-label={t("aria.attachment")}
@@ -1800,7 +1877,9 @@ function EmailListItem({
               aria-label={t("draft.badge")}
             />
           )}
-          <span className="tabular-nums">{relativeTime(email.date)}</span>
+          {listView.date && (
+            <span className="tabular-nums">{relativeTime(email.date)}</span>
+          )}
         </span>
         {/* Right-edge quick-actions (same set as the classic row). */}
         <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
@@ -2003,7 +2082,7 @@ function EmailListItem({
                   aria-label={t("aria.replied")}
                 />
               )}
-              {email.hasAttachment && (
+              {listView.attachment && email.hasAttachment && (
                 <Paperclip
                   className="size-3 text-fg-muted"
                   aria-label={t("aria.attachment")}
@@ -2021,7 +2100,7 @@ function EmailListItem({
                   aria-label={t("draft.badge")}
                 />
               )}
-              {relativeTime(email.date)}
+              {listView.date && relativeTime(email.date)}
             </span>
           </div>
           <div className="mt-0.5 flex items-center gap-1.5">
@@ -2076,9 +2155,11 @@ function EmailListItem({
                 ))}
               </span>
             )}
-            <p className="min-w-0 flex-1 truncate text-xs text-fg-subtle">
-              <Highlighted text={previewFor(email, terms)} terms={terms} />
-            </p>
+            {listView.snippet && (
+              <p className="min-w-0 flex-1 truncate text-xs text-fg-subtle">
+                <Highlighted text={previewFor(email, terms)} terms={terms} />
+              </p>
+            )}
           </div>
         </div>
       </div>
