@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, SquarePen, Sparkles, Check } from "lucide-react";
 import type {
+  ContactColor,
   ContactLabel,
   Email,
   EmailAddress,
   Importance,
   ResolvedContactMeta,
 } from "@/lib/types";
+import { CONTACT_COLORS } from "@/lib/contact-colors";
+import { cn } from "@/lib/utils";
 import { avatarColor } from "./helpers";
 import { useI18n } from "@/lib/i18n";
 import { ConversationBubbles } from "./ConversationBubbles";
@@ -222,6 +225,7 @@ function ContactMetaEditor({
   const [company, setCompany] = useState("");
   const [honorific, setHonorific] = useState("");
   const [tags, setTags] = useState("");
+  const [color, setColor] = useState<ContactColor | undefined>();
   const [inherited, setInherited] = useState<ResolvedContactMeta | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -274,6 +278,7 @@ function ContactMetaEditor({
             company?: string;
             honorific?: string;
             tags?: string[];
+            color?: ContactColor;
           }[];
         };
         if (!active) return;
@@ -289,6 +294,7 @@ function ContactMetaEditor({
         setCompany(person?.company ?? "");
         setHonorific(person?.honorific ?? "");
         setTags((person?.tags ?? []).join(", "));
+        setColor(person?.color ?? dom?.color);
         setInherited(
           dom
             ? {
@@ -296,6 +302,7 @@ function ContactMetaEditor({
                 company: dom.company,
                 honorific: dom.honorific,
                 tags: dom.tags ?? [],
+                color: dom.color,
               }
             : null,
         );
@@ -326,6 +333,7 @@ function ContactMetaEditor({
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean),
+          color: color ?? null,
         }),
       });
       setSaved(true);
@@ -401,6 +409,28 @@ function ContactMetaEditor({
         placeholder={t("contact.meta.tags")}
         className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1 outline-none focus:border-accent"
       />
+      {/* 差出人の色分け（最小 Rules）: 一覧行の左アクセント色。再クリックで解除。 */}
+      <span className="flex items-center gap-1" title={t("contact.meta.color")}>
+        {CONTACT_COLORS.map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => {
+              setColor((cur) => (cur === c.key ? undefined : c.key));
+              setSaved(false);
+            }}
+            title={c.labelJa}
+            aria-pressed={color === c.key}
+            className={cn(
+              "size-4 rounded-full transition-transform hover:scale-110",
+              color === c.key
+                ? "ring-2 ring-fg/60 ring-offset-1 ring-offset-surface-2"
+                : "",
+            )}
+            style={{ backgroundColor: c.hex }}
+          />
+        ))}
+      </span>
       <button
         onClick={save}
         disabled={saving}

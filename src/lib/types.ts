@@ -462,6 +462,18 @@ export interface ExcludedProject {
 /** 連絡先ラベル: 重要取引先 / 通常 / 迷惑（スパム）。 */
 export type ContactLabel = "vip" | "normal" | "spam";
 
+/** 差出人の色分け（最小 Rules）。一覧行の左アクセントに使う。undefined=色なし。
+ *  パレットの実体（表示名・hex）は src/lib/contact-colors.ts。 */
+export type ContactColor =
+  | "red"
+  | "orange"
+  | "amber"
+  | "green"
+  | "teal"
+  | "blue"
+  | "purple"
+  | "pink";
+
 /**
  * 連絡先メタデータ（手入力＋AI抽出）。会社(ドメイン)単位を既定に、個人(アドレス)
  * 単位で上書きする。`company` は署名どおり verbatim に持つ（"株式会社玉那覇" /
@@ -478,6 +490,8 @@ export interface ContactMeta {
   /** 敬称（既定は「様」。会社宛なら「御中」等）。 */
   honorific?: string;
   tags?: string[];
+  /** 一覧での色分け（差出人で色付け・最小 Rules）。undefined=色なし。 */
+  color?: ContactColor;
   /** AI抽出で入れた項目か（ユーザー確認前の目印）。手入力/確認後は false。 */
   aiSuggested?: boolean;
   updatedAt: string;
@@ -489,6 +503,7 @@ export interface ResolvedContactMeta {
   company?: string;
   honorific?: string;
   tags: string[];
+  color?: ContactColor;
 }
 
 /**

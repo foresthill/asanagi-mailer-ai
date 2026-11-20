@@ -10,6 +10,7 @@ import type {
   Importance,
   MailboxState,
   SavedDraft,
+  ContactColor,
   ContactLabel,
   ContactMeta,
   TodoItem,
@@ -435,6 +436,24 @@ export function MailApp({
         (m) => m.scope === "domain" && m.key.toLowerCase() === dom,
       );
       return domain?.label;
+    },
+    [contactMeta],
+  );
+  // 差出人の色分け（最小 Rules）。person 指定 > domain 既定、で解決。
+  const contactColor = useCallback(
+    (email?: string): ContactColor | undefined => {
+      if (!email) return undefined;
+      const e = email.toLowerCase();
+      const at = e.lastIndexOf("@");
+      const dom = at >= 0 ? e.slice(at + 1) : "";
+      const person = contactMeta.find(
+        (m) => m.scope === "person" && m.key.toLowerCase() === e,
+      );
+      if (person?.color) return person.color;
+      const domain = contactMeta.find(
+        (m) => m.scope === "domain" && m.key.toLowerCase() === dom,
+      );
+      return domain?.color;
     },
     [contactMeta],
   );
@@ -2479,6 +2498,7 @@ export function MailApp({
       groupAxis={groupAxis}
       noteIds={noteIds}
       contactLabel={contactLabel}
+      contactColor={contactColor}
       overdueTodoCount={overdueTodoCount}
       onOpenTodos={() => setView("todo")}
       draftThreadIds={draftThreadIds}

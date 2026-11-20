@@ -653,6 +653,7 @@ const ja: Dict = {
     "署名どおりに入力（例: 株式会社◯◯ / ◯◯株式会社）。前株/後株はこの表記のまま宛名に使います。",
   "contact.meta.honorific": "敬称",
   "contact.meta.tags": "タグ（カンマ区切り）",
+  "contact.meta.color": "一覧の色分け（差出人で色付け）",
   "contact.meta.save": "保存",
   "contact.meta.saved": "保存しました",
   "contact.meta.aiImport": "AIで会社名を取り込む",
@@ -1566,6 +1567,7 @@ const en: Dict = {
     "Type it exactly as in the signature. This exact spelling is used in the salutation.",
   "contact.meta.honorific": "Honorific",
   "contact.meta.tags": "Tags (comma-separated)",
+  "contact.meta.color": "List color (color-code by sender)",
   "contact.meta.save": "Save",
   "contact.meta.aiImport": "Fill company with AI",
   "contact.meta.aiImport.hint":
@@ -2500,6 +2502,7 @@ const fr: Dict = {
     "Saisissez-le exactement comme dans la signature. Cette orthographe est utilisée dans la formule d'appel.",
   "contact.meta.honorific": "Civilité",
   "contact.meta.tags": "Étiquettes (séparées par des virgules)",
+  "contact.meta.color": "Couleur de liste (par expéditeur)",
   "contact.meta.save": "Enregistrer",
   "contact.meta.aiImport": "Remplir la société avec l'IA",
   "contact.meta.aiImport.hint":
@@ -3377,6 +3380,7 @@ const zh: Dict = {
   "contact.meta.company.hint": "请按签名原样填写。此写法将原样用于称呼。",
   "contact.meta.honorific": "敬称",
   "contact.meta.tags": "标签（逗号分隔）",
+  "contact.meta.color": "列表颜色（按发件人着色）",
   "contact.meta.save": "保存",
   "contact.meta.saved": "已保存",
   "contact.meta.aiImport": "用AI填入公司名",
