@@ -118,6 +118,36 @@ fn free_port() -> u16 {
         .unwrap_or(3100)
 }
 
+/// Can we bind this exact port right now? (Immediately released — the Node
+/// server grabs it moments later. A single-user desktop app won't race itself.)
+fn port_is_free(p: u16) -> bool {
+    p != 0 && std::net::TcpListener::bind(("127.0.0.1", p)).is_ok()
+}
+
+/// A port that STAYS THE SAME across launches. The webview loads
+/// http://127.0.0.1:{port}, and browser storage (localStorage / IndexedDB) is
+/// keyed by origin — so a different port each launch means an empty store every
+/// time, i.e. "settings aren't retained". We persist the chosen port under the
+/// app-data dir and reuse it; only when none is saved, the saved value is
+/// invalid, or that port is currently taken do we pick (and save) a new free one.
+fn stable_port(data_dir: Option<&Path>) -> u16 {
+    let saved_path = data_dir.map(|d| d.join("server-port"));
+    if let Some(p) = saved_path.as_ref() {
+        if let Ok(s) = std::fs::read_to_string(p) {
+            if let Ok(saved) = s.trim().parse::<u16>() {
+                if port_is_free(saved) {
+                    return saved;
+                }
+            }
+        }
+    }
+    let port = free_port();
+    if let Some(p) = saved_path.as_ref() {
+        let _ = std::fs::write(p, port.to_string());
+    }
+    port
+}
+
 /// Bundled Node binary name (Windows needs the .exe extension to be executable).
 #[cfg(windows)]
 const NODE_BIN: &str = "node.exe";
@@ -253,7 +283,9 @@ fn start_server(handle: &tauri::AppHandle) {
         let _ = std::fs::create_dir_all(d);
     }
 
-    let port = free_port();
+    // 起動ごとにポートが変わると WebView のオリジンが変わり localStorage 等が
+    // 毎回まっさらになる（＝設定が保持されない）。保存済みポートを再利用して固定する。
+    let port = stable_port(data_dir.as_deref());
     log::info!("chosen server port = {port}");
     let node_bin = resolve_node(&resource_dir, data_dir.as_deref());
     let mut cmd = std::process::Command::new(&node_bin);
