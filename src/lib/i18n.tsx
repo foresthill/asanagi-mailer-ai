@@ -412,6 +412,12 @@ const ja: Dict = {
   "conn.keyPlaceholder.change": "変更する場合のみ入力",
   "conn.keyClear": "保存済みキーをクリア",
   "conn.keyLocal": "キーはこの端末のローカル（.data）にのみ保存されます。",
+  "conn.active.pending": "選択中（「AI設定を保存」で反映）",
+  "conn.onprem.noKey":
+    "ローカル/オンプレは APIキー不要です（エンドポイントに直接つなぎます）。",
+  "conn.onprem.showKey": "トンネルをトークンで保護している場合はキーを入力",
+  "conn.onprem.keyLabel": "APIキー（任意・Bearer トークン）",
+  "conn.onprem.keyPlaceholder": "Bearer トークン（任意）",
   "conn.gatewayNote":
     "Gateway のキーは環境変数（AI_GATEWAY_API_KEY / OIDC）で設定します。",
   "conn.autoNote": "設定済みのキーから自動でプロバイダを選びます。",
@@ -1321,6 +1327,12 @@ const en: Dict = {
   "conn.keyPlaceholder.change": "Enter only to change",
   "conn.keyClear": "Clear saved key",
   "conn.keyLocal": "The key is stored only locally on this device (.data).",
+  "conn.active.pending": "Selected (apply with “Save AI settings”)",
+  "conn.onprem.noKey":
+    "Local / on-prem needs no API key (it connects straight to the endpoint).",
+  "conn.onprem.showKey": "Enter a key if your tunnel is token-protected",
+  "conn.onprem.keyLabel": "API key (optional · Bearer token)",
+  "conn.onprem.keyPlaceholder": "Bearer token (optional)",
   "conn.gatewayNote":
     "Set the Gateway key via env vars (AI_GATEWAY_API_KEY / OIDC).",
   "conn.autoNote": "The provider is chosen automatically from your saved keys.",
@@ -2242,6 +2254,12 @@ const fr: Dict = {
   "conn.keyClear": "Effacer la clé enregistrée",
   "conn.keyLocal":
     "La clé est stockée uniquement en local sur cet appareil (.data).",
+  "conn.active.pending": "Sélection (appliquer via « Enregistrer les réglages IA »)",
+  "conn.onprem.noKey":
+    "Le local / sur site ne nécessite aucune clé API (connexion directe au point de terminaison).",
+  "conn.onprem.showKey": "Saisissez une clé si votre tunnel est protégé par jeton",
+  "conn.onprem.keyLabel": "Clé API (facultative · jeton Bearer)",
+  "conn.onprem.keyPlaceholder": "Jeton Bearer (facultatif)",
   "conn.gatewayNote":
     "Définissez la clé Gateway via les variables d'env (AI_GATEWAY_API_KEY / OIDC).",
   "conn.autoNote":
@@ -3145,6 +3163,11 @@ const zh: Dict = {
   "conn.keyPlaceholder.change": "仅在需要更改时输入",
   "conn.keyClear": "清除已保存的密钥",
   "conn.keyLocal": "密钥仅保存在本机（.data）。",
+  "conn.active.pending": "已选择（点击“保存AI设置”后生效）",
+  "conn.onprem.noKey": "本地/自建无需 API 密钥（直接连接端点）。",
+  "conn.onprem.showKey": "若隧道启用令牌保护，可在此填写密钥",
+  "conn.onprem.keyLabel": "API 密钥（可选 · Bearer 令牌）",
+  "conn.onprem.keyPlaceholder": "Bearer 令牌（可选）",
   "conn.gatewayNote":
     "Gateway 的密钥通过环境变量设置（AI_GATEWAY_API_KEY / OIDC）。",
   "conn.autoNote": "将从已保存的密钥自动选择服务商。",
