@@ -31,9 +31,11 @@ import type {
   Email,
   FolderView,
   Importance,
+  ContactColor,
   ContactLabel,
   MailboxState,
 } from "@/lib/types";
+import { contactColorHex } from "@/lib/contact-colors";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { isEmailOnTodo } from "@/lib/todo-keys";
@@ -194,6 +196,7 @@ export function EmailList({
   groupAxis,
   noteIds,
   contactLabel,
+  contactColor,
   overdueTodoCount,
   onOpenTodos,
   draftThreadIds,
@@ -266,6 +269,7 @@ export function EmailList({
   noteIds: Set<string>;
   /** 差出人/宛先の連絡先ラベル（重要取引先/迷惑）を解決する（バッジ表示用）。 */
   contactLabel?: (email?: string) => ContactLabel | undefined;
+  contactColor?: (email?: string) => ContactColor | undefined;
   /** 期限切れの TODO 件数（受信箱のリマインドバナー用）。 */
   overdueTodoCount?: number;
   /** TODO ビューを開く（バナーから）。 */
@@ -508,6 +512,7 @@ export function EmailList({
             onToggleTodo ? () => onToggleTodo(row.email) : undefined
           }
           contactLabel={contactLabel}
+          contactColor={contactColor}
         />
         {isExpanded && (
           <div className="mb-1 ml-6 flex flex-col border-l border-border pl-1">
@@ -1471,6 +1476,7 @@ function EmailListItem({
   isTodo,
   onToggleTodo,
   contactLabel,
+  contactColor,
   showLocation,
 }: {
   row: ThreadRow;
@@ -1481,6 +1487,7 @@ function EmailListItem({
   showLocation?: boolean;
   /** Resolve the correspondent's label (重要取引先/迷惑) for the badge. */
   contactLabel?: (email?: string) => ContactLabel | undefined;
+  contactColor?: (email?: string) => ContactColor | undefined;
   /** 1-line compact row (上下表示の上ペイン): sender · subject · time. */
   dense?: boolean;
   /** Active search text → show which field(s) each hit matched. Undefined when
@@ -1528,6 +1535,8 @@ function EmailListItem({
   // Sent mail: the avatar represents the recipient (the row shows "To: …").
   const face = email.state === "sent" && email.to[0] ? email.to[0] : email.from;
   const label = contactLabel?.(face.email);
+  // 差出人の色分け（最小 Rules）: 行の左に細いアクセントバーを出す。
+  const accentHex = contactColorHex(contactColor?.(face.email));
   const showCheckbox = checked || selectionActive;
   // Bring the selected row into view when it becomes active off-screen (e.g.
   // opening a thread message that lives in this folder / after a folder switch).
@@ -1568,6 +1577,13 @@ function EmailListItem({
               : "hover:bg-surface-2",
         )}
       >
+        {accentHex && (
+          <span
+            aria-hidden
+            className="absolute inset-y-0 left-0 w-[3px] rounded-r"
+            style={{ backgroundColor: accentHex }}
+          />
+        )}
         {/* Unread dot ⇄ checkbox: hover or an active selection reveals the box
             so 上下表示でもチェックして一括アーカイブ/削除できる。 */}
         <button
@@ -1781,6 +1797,13 @@ function EmailListItem({
             : "hover:bg-surface-2",
       )}
     >
+      {accentHex && (
+        <span
+          aria-hidden
+          className="absolute inset-y-1 left-0 w-[3px] rounded-r"
+          style={{ backgroundColor: accentHex }}
+        />
+      )}
       <div className="flex items-start gap-3">
         {/* Avatar ⇄ checkbox (Gmail-style): hover or active selection swaps. */}
         <button

@@ -4,7 +4,7 @@ import {
   saveContactMeta,
   resolveContactMeta,
 } from "@/lib/store";
-import type { ContactLabel } from "@/lib/types";
+import type { ContactColor, ContactLabel } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     company?: string;
     honorific?: string;
     tags?: string[];
+    color?: ContactColor | null;
   } | null;
   if (!body?.key || (body.scope !== "domain" && body.scope !== "person")) {
     return NextResponse.json(
@@ -44,6 +45,7 @@ export async function POST(req: Request) {
     company: body.company,
     honorific: body.honorific,
     tags: body.tags,
+    color: body.color ?? undefined,
     // Saved via the UI = user-confirmed (not an unverified AI suggestion).
     aiSuggested: false,
   });

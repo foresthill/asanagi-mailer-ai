@@ -949,6 +949,7 @@ export async function saveContactMeta(
     !entry.label &&
     !entry.company?.trim() &&
     !entry.honorific?.trim() &&
+    !entry.color &&
     tags.length === 0;
   const idx = rows.findIndex((r) => r.scope === entry.scope && r.key === key);
   if (empty) {
@@ -961,6 +962,7 @@ export async function saveContactMeta(
       company: entry.company?.trim() || undefined,
       honorific: entry.honorific?.trim() || undefined,
       tags: tags.length ? tags : undefined,
+      color: entry.color,
       aiSuggested: entry.aiSuggested,
       updatedAt: now.toISOString(),
     };
@@ -986,6 +988,7 @@ export async function resolveContactMeta(
     company: person?.company ?? domain?.company,
     honorific: person?.honorific ?? domain?.honorific,
     tags: [...(domain?.tags ?? []), ...(person?.tags ?? [])],
+    color: person?.color ?? domain?.color,
   };
 }
 
