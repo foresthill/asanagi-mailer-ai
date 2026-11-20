@@ -211,6 +211,8 @@ export function MailApp({
     setGroupAxis(loadGroupAxis());
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
+  // geek レイアウトの上下分割コンテナ（高さ上限を実寸から算出するため）。
+  const geekSplitRef = useRef<HTMLDivElement>(null);
   const resizeList = useCallback((deltaX: number) => {
     setListWidth((w) => {
       const next = Math.min(680, Math.max(300, w + deltaX));
@@ -224,7 +226,14 @@ export function MailApp({
   }, []);
   const resizeListHeight = useCallback((deltaY: number) => {
     setListHeight((h) => {
-      const next = Math.min(700, Math.max(140, h + deltaY));
+      // 上限は固定 px ではなく分割コンテナの実高さから算出し、下ペイン(本文)を
+      // 細く残すだけ＝ほぼ畳める所まで一覧を広げられるようにする（Mac メール風）。
+      // コンテナ未測定時のフォールバックは画面高から概算。
+      const container =
+        geekSplitRef.current?.clientHeight ??
+        (typeof window !== "undefined" ? window.innerHeight - 160 : 900);
+      const maxH = Math.max(200, container - 64); // 本文を ~64px 残す（ハンドルは掴める）
+      const next = Math.min(maxH, Math.max(140, h + deltaY));
       try {
         localStorage.setItem(LIST_HEIGHT_KEY, String(next));
       } catch {
@@ -2686,7 +2695,7 @@ export function MailApp({
       )}
       {/* geek: 一覧(上・件名がずらり)｜本文(下)・高さドラッグ可変。 */}
       {view === "mail" && !composerActive && layout === "geek" && (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div ref={geekSplitRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
           {emailListEl}
           <ResizeHandle orientation="horizontal" onResize={resizeListHeight} />
           {readerEl}
