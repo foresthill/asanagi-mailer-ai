@@ -101,7 +101,7 @@ export function ThreadView({
   /** Search query to highlight in plain-text card bodies (search mode only). */
   highlight?: string;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const lastId = messages[messages.length - 1]?.id;
   const [view, setView] = useState<ViewMode>(loadViewPref);
   const [open, setOpen] = useState<Set<string>>(
@@ -187,12 +187,19 @@ export function ThreadView({
   // changes, and stop as soon as the user scrolls, so digging up through the
   // history isn't yanked back (ばーっと過去を遡れる).
   const userScrolled = useRef(false);
+  // 開いたメッセージへの「位置合わせ」が済むまで true→false。長いスレッドは
+  // アンカー確定まで数秒かかり、その間は最古メッセージが先頭に見えて紛らわしい
+  // ので、確定するまで小さな「移動中…」インジケータを出す（下の cards 描画）。
+  const [settled, setSettled] = useState(true);
   useEffect(() => {
     userScrolled.current = false; // a new mail = a fresh auto-anchor
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: a newly opened mail must show the 移動中 indicator until re-anchored
+    setSettled(false);
   }, [selectedId]);
   useEffect(() => {
     const mark = () => {
       userScrolled.current = true;
+      setSettled(true); // ユーザー操作で位置合わせ完了扱い（遡りを邪魔しない）
     };
     // Genuine gestures only — programmatic scrollIntoView fires none of these,
     // so the auto-anchor never cancels itself.
@@ -217,20 +224,42 @@ export function ThreadView({
     });
   }, [selectedId]);
   useEffect(() => {
-    if (view !== "cards" || !selectedId || userScrolled.current) return;
+    if (view !== "cards" || !selectedId) return;
+    if (userScrolled.current) {
+      setSettled(true);
+      return;
+    }
     // Re-anchor in several passes, not once. A long thread (e.g. 60通) can't
     // mount+lay out its cards within a single 60ms tick, and lazy bodies/images
     // keep shifting layout afterwards — a one-shot scroll lands early then drifts
     // away, so the opened message is lost near the top. Each pass is an instant
     // jump ("ピッと"), and every pass is skipped the moment the user actually
     // scrolls (wheel/touch) — so digging up through history is never yanked back.
+    // We mark "settled" once the anchor's position stops moving between passes
+    // (layout stable) — so the 移動中 indicator clears as soon as it's really
+    // anchored, instantly on short threads and after the drift stops on long ones.
+    let lastTop = NaN;
     const anchor = () => {
-      if (currentRef.current && !userScrolled.current) {
-        currentRef.current.scrollIntoView({ block: "start", behavior: "auto" });
+      if (userScrolled.current) {
+        setSettled(true);
+        return;
       }
+      const el = currentRef.current;
+      if (!el) return;
+      el.scrollIntoView({ block: "start", behavior: "auto" });
+      const top = Math.round(el.getBoundingClientRect().top);
+      if (Math.abs(top - lastTop) <= 2) setSettled(true);
+      lastTop = top;
     };
-    const timers = [60, 200, 450, 900].map((d) => setTimeout(anchor, d));
-    return () => timers.forEach(clearTimeout);
+    const timers = [60, 200, 450, 900, 1500, 2400].map((d) =>
+      setTimeout(anchor, d),
+    );
+    // Safety: never leave the indicator up forever, even if measurement is odd.
+    const done = setTimeout(() => setSettled(true), 2500);
+    return () => {
+      timers.forEach(clearTimeout);
+      clearTimeout(done);
+    };
   }, [selectedId, messages.length, view]);
 
   const changeView = (v: ViewMode) => {
@@ -390,6 +419,20 @@ export function ThreadView({
   return (
     <div className="mt-6 flex flex-col gap-3">
       {switcherBar}
+      {/* 開いたメッセージへ位置合わせ中の表示（長いスレッドのみ・500ms遅延で
+          フェードイン＝短いスレッドでは一瞬で確定するので出ない）。最古が先頭に
+          見えて「？」となるのを防ぐ。ユーザーが自分でスクロールした時点で消える。 */}
+      {!settled && (
+        <div
+          className="pointer-events-none sticky top-12 z-10 flex animate-in justify-center fade-in"
+          style={{ animationDelay: "500ms", animationFillMode: "both" }}
+        >
+          <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface/95 px-3 py-1 text-[11px] text-fg-muted shadow-sm backdrop-blur">
+            <Loader2 className="size-3 animate-spin" />
+            {t("thread.anchoring")}
+          </span>
+        </div>
+      )}
       {digestSection}
       <div className="flex flex-col gap-3">
         {messages.map((m) => {
