@@ -1802,9 +1802,33 @@ export function MailApp({
       // このあと走り、より新しい状態・HTML で置き換える。
       const inThread = threadRef.current?.find((m) => m.id === id);
       if (inThread) setSelected(inThread);
+      // 開いた＝その会話を読んだ。一覧行の太字は「会話にどれか未読があれば太字」
+      // (threadList の unread=members.some(!read)) で決まるため、開いた1通だけでなく
+      // 一覧にある同じ会話(threadId)のメッセージをまとめて既読にする。でないと
+      // 複数通スレッドは残りの未読で太字が消えない。
+      const cur = emailsRef.current ?? [];
+      const tid = cur.find((e) => e.id === id)?.threadId;
+      const alsoRead = cur
+        .filter(
+          (e) => !e.read && e.id !== id && !!tid && e.threadId === tid,
+        )
+        .map((e) => e.id);
       setEmails((list) =>
-        list.map((e) => (e.id === id ? { ...e, read: true } : e)),
+        list.map((e) =>
+          e.id === id || (!!tid && e.threadId === tid)
+            ? { ...e, read: true }
+            : e,
+        ),
       );
+      // サーバにも反映（開いた1通は下の GET が既読化するので、同スレッドの残りだけ
+      // PATCH。best-effort＝失敗しても一覧の楽観更新は維持）。
+      for (const rid of alsoRead) {
+        fetch(`/api/emails/${encodeURIComponent(rid)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ read: true }),
+        }).catch(() => {});
+      }
 
       const token = ++selectToken.current;
       const enc = encodeURIComponent(id);
