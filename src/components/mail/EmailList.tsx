@@ -1154,6 +1154,49 @@ export function EmailList({
             }
           />
         )}
+        {/* 上下表示（密行）の列見出し。Mac メール風に、表示中の列だけラベルを出す。
+            グループ表示時はセクション見出しが最上部に sticky するため出さない
+            （二重 sticky の重なりを避ける）。 */}
+        {horizontal &&
+          effectiveAxis === "none" &&
+          !loading &&
+          !searching &&
+          rows.length > 0 && (
+            <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-surface/95 px-2.5 py-1.5 text-[11px] font-medium text-fg-subtle backdrop-blur">
+              <span aria-hidden className="size-4 shrink-0" />
+              {columns.from && (
+                <span className="w-40 shrink-0 truncate">
+                  {t("list.columns.from")}
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate">
+                {t("list.columns.subject")}
+              </span>
+              {columns.preview && (
+                <span className="hidden min-w-0 flex-1 truncate lg:block">
+                  {t("list.columns.preview")}
+                </span>
+              )}
+              <span className="flex shrink-0 items-center gap-1">
+                {columns.attachment && (
+                  <span
+                    className="grid w-4 shrink-0 place-items-center"
+                    title={t("list.columns.attachment")}
+                  >
+                    <Paperclip
+                      className="size-3"
+                      aria-label={t("list.columns.attachment")}
+                    />
+                  </span>
+                )}
+                {columns.date && (
+                  <span className="w-14 shrink-0 text-right">
+                    {t("list.columns.date")}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
         {loading ? (
           <div className="grid h-40 place-items-center text-fg-subtle">
             <Loader2 className="size-5 animate-spin" />
