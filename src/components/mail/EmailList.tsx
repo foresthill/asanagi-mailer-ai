@@ -3,13 +3,12 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   AlarmClock,
-  AlignLeft,
   Archive,
   ArchiveRestore,
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
   Check,
-  Clock,
+  Columns3,
   ChevronDown,
   ChevronRight,
   Trash2,
@@ -51,8 +50,18 @@ import type { SearchDigest } from "@/app/api/ai/search-digest/route";
 type SortKey = "date" | "from" | "subject" | "attachment";
 type SortDir = "asc" | "desc";
 
-/** 一覧の表示要素ON/OFF（カラムの表示/非表示・Mac メール風）。localStorage に保持。 */
-type ListViewPrefs = { snippet: boolean; date: boolean; attachment: boolean };
+/** 一覧の表示列（Mac メール風の列レイアウト）。どの列を出すかを localStorage に保持。
+ *  件名は主役カラムなので常時表示。添付は独立した整列カラム（📎 が縦に揃う）。
+ *  フラグ列は会社レビューで「TODO で代用」と決めたため持たない。 */
+type ColumnKey = "from" | "preview" | "date" | "attachment";
+type ColumnPrefs = Record<ColumnKey, boolean>;
+const COLUMN_ORDER: ColumnKey[] = ["from", "preview", "date", "attachment"];
+const DEFAULT_COLUMNS: ColumnPrefs = {
+  from: true,
+  preview: true,
+  date: true,
+  attachment: true,
+};
 
 export type SearchMode = "keyword" | "ai";
 
@@ -427,14 +436,25 @@ export function EmailList({
     };
     return [...list].sort((a, b) => dir * cmp(a, b));
   };
-  // 表示要素のON/OFF（カラムの表示/非表示）。既定は全部表示。
-  const [listView, setListViewState] = useState<ListViewPrefs>(() => {
+  // 表示する列（Mac メール風の列レイアウト）。既定は全部表示。端末ごとに保持。
+  // 旧 "asanagi:list-view"（snippet/date/attachment）からも引き継ぐ。
+  const [columns, setColumnsState] = useState<ColumnPrefs>(() => {
     try {
-      const raw = localStorage.getItem("asanagi:list-view");
+      const raw = localStorage.getItem("asanagi:list-columns");
       if (raw) {
-        const p = JSON.parse(raw) as Partial<ListViewPrefs>;
+        const p = JSON.parse(raw) as Partial<ColumnPrefs>;
+        return { ...DEFAULT_COLUMNS, ...p };
+      }
+      const legacy = localStorage.getItem("asanagi:list-view");
+      if (legacy) {
+        const p = JSON.parse(legacy) as {
+          snippet?: boolean;
+          date?: boolean;
+          attachment?: boolean;
+        };
         return {
-          snippet: p.snippet !== false,
+          from: true,
+          preview: p.snippet !== false,
           date: p.date !== false,
           attachment: p.attachment !== false,
         };
@@ -442,19 +462,32 @@ export function EmailList({
     } catch {
       /* per-viewer convenience only */
     }
-    return { snippet: true, date: true, attachment: true };
+    return DEFAULT_COLUMNS;
   });
-  const toggleView = (k: keyof ListViewPrefs) => {
-    setListViewState((v) => {
+  const toggleColumn = (k: ColumnKey) => {
+    setColumnsState((v) => {
       const next = { ...v, [k]: !v[k] };
       try {
-        localStorage.setItem("asanagi:list-view", JSON.stringify(next));
+        localStorage.setItem("asanagi:list-columns", JSON.stringify(next));
       } catch {
         /* per-viewer convenience only */
       }
       return next;
     });
   };
+  // 列メニュー（Mac メールの右クリック列メニュー相当）。外側クリックで閉じる。
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+  const colMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!colMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
+        setColMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [colMenuOpen]);
   // Aged-draft reminder: dismissible, and the dismissal only lasts the day so it
   // gently resurfaces each morning (local-first — the flag never leaves the device).
   const today = new Date().toISOString().slice(0, 10);
@@ -614,7 +647,7 @@ export function EmailList({
           }
           contactLabel={contactLabel}
           contactColor={contactColor}
-          listView={listView}
+          columns={columns}
         />
         {isExpanded && (
           <div className="mb-1 ml-6 flex flex-col border-l border-border pl-1">
@@ -931,7 +964,7 @@ export function EmailList({
             {bulkControls}
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 px-4 pb-2 text-[11px] text-fg-subtle">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 px-4 pb-2 text-[11px] text-fg-subtle">
             {/* 上下(geek): 「選択」開始ボタンを一覧の直上・左端に。グループは右へ。 */}
             {horizontal && rows.length > 0 && (
               <button
@@ -943,7 +976,7 @@ export function EmailList({
                 {t("list.select")}
               </button>
             )}
-            <span className={cn(horizontal && "ml-auto")}>
+            <span className={cn("whitespace-nowrap", horizontal && "ml-auto")}>
               {t("group.label")}
             </span>
             {(["none", "account", "sender"] as GroupAxis[]).map((a) => (
@@ -951,7 +984,7 @@ export function EmailList({
                 key={a}
                 onClick={() => onChangeGroupAxis(a)}
                 className={cn(
-                  "rounded-md border px-2 py-0.5 transition-colors",
+                  "inline-flex h-6 items-center whitespace-nowrap rounded-md border px-2 transition-colors",
                   groupAxis === a
                     ? "border-accent bg-accent-soft text-accent"
                     : "border-border hover:border-accent hover:text-accent",
@@ -966,7 +999,7 @@ export function EmailList({
                 value={sortKey}
                 onChange={(e) => setSortKey(e.target.value as SortKey)}
                 title={t("list.sort.by")}
-                className="rounded-md border border-border bg-bg px-1 py-0.5 text-[11px] text-fg-muted outline-none focus:border-accent"
+                className="h-6 rounded-md border border-border bg-bg px-1.5 text-[11px] text-fg-muted outline-none focus:border-accent"
               >
                 <option value="date">{t("list.sort.date")}</option>
                 <option value="from">{t("list.sort.from")}</option>
@@ -978,7 +1011,7 @@ export function EmailList({
                 title={
                   sortDir === "asc" ? t("list.sort.asc") : t("list.sort.desc")
                 }
-                className="grid size-5 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
+                className="grid size-6 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg"
               >
                 {sortDir === "asc" ? (
                   <ArrowUpNarrowWide className="size-3.5" />
@@ -987,45 +1020,62 @@ export function EmailList({
                 )}
               </button>
             </span>
-            {/* 表示要素のON/OFF（カラムの表示/非表示・Mac メール風）。端末ごとに保持。 */}
-            <span className="flex items-center gap-1 border-l border-border pl-1.5">
+            {/* 列メニュー（Mac メールの右クリック列メニュー相当）。どの列を出すかを
+                チェックで選ぶ。件名は主役カラムなので常時表示。端末ごとに保持。 */}
+            <span
+              ref={colMenuRef}
+              className="relative flex items-center border-l border-border pl-1.5"
+            >
               <button
-                onClick={() => toggleView("snippet")}
-                aria-pressed={listView.snippet}
-                title={t("list.view.preview")}
+                onClick={() => setColMenuOpen((v) => !v)}
+                aria-expanded={colMenuOpen}
+                aria-haspopup="menu"
+                title={t("list.columns.title")}
                 className={cn(
-                  "grid size-5 place-items-center rounded-md transition-colors hover:bg-surface-2",
-                  listView.snippet
-                    ? "text-accent"
-                    : "text-fg-subtle hover:text-fg",
+                  "inline-flex h-6 items-center gap-1 rounded-md border px-2 transition-colors",
+                  colMenuOpen
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border text-fg-muted hover:border-accent hover:text-accent",
                 )}
               >
-                <AlignLeft className="size-3.5" />
+                <Columns3 className="size-3.5" />
+                <span className="hidden sm:inline">{t("list.columns.label")}</span>
+                <ChevronDown className="size-3" />
               </button>
-              <button
-                onClick={() => toggleView("date")}
-                aria-pressed={listView.date}
-                title={t("list.view.date")}
-                className={cn(
-                  "grid size-5 place-items-center rounded-md transition-colors hover:bg-surface-2",
-                  listView.date ? "text-accent" : "text-fg-subtle hover:text-fg",
-                )}
-              >
-                <Clock className="size-3.5" />
-              </button>
-              <button
-                onClick={() => toggleView("attachment")}
-                aria-pressed={listView.attachment}
-                title={t("list.view.attachment")}
-                className={cn(
-                  "grid size-5 place-items-center rounded-md transition-colors hover:bg-surface-2",
-                  listView.attachment
-                    ? "text-accent"
-                    : "text-fg-subtle hover:text-fg",
-                )}
-              >
-                <Paperclip className="size-3.5" />
-              </button>
+              {colMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute left-0 top-7 z-30 w-44 rounded-lg border border-border bg-surface p-1 text-xs shadow-lg"
+                >
+                  <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                    {t("list.columns.heading")}
+                  </p>
+                  {COLUMN_ORDER.map((k) => (
+                    <button
+                      key={k}
+                      role="menuitemcheckbox"
+                      aria-checked={columns[k]}
+                      onClick={() => toggleColumn(k)}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                    >
+                      <span
+                        className={cn(
+                          "grid size-3.5 shrink-0 place-items-center rounded border",
+                          columns[k]
+                            ? "border-accent bg-accent text-accent-fg"
+                            : "border-border",
+                        )}
+                      >
+                        {columns[k] && <Check className="size-2.5" />}
+                      </span>
+                      {t(`list.columns.${k}`)}
+                    </button>
+                  ))}
+                  <p className="border-t border-border px-2 pb-0.5 pt-1 text-[10px] text-fg-subtle">
+                    {t("list.columns.subjectNote")}
+                  </p>
+                </div>
+              )}
             </span>
           </div>
         ))}
@@ -1646,7 +1696,7 @@ function EmailListItem({
   onToggleTodo,
   contactLabel,
   contactColor,
-  listView,
+  columns,
   showLocation,
 }: {
   row: ThreadRow;
@@ -1658,8 +1708,8 @@ function EmailListItem({
   /** Resolve the correspondent's label (重要取引先/迷惑) for the badge. */
   contactLabel?: (email?: string) => ContactLabel | undefined;
   contactColor?: (email?: string) => ContactColor | undefined;
-  /** 表示要素のON/OFF（本文プレビュー/日時/添付マーク）。 */
-  listView: ListViewPrefs;
+  /** 表示する列（送信者/プレビュー/日時/添付）。件名は常時表示。 */
+  columns: ColumnPrefs;
   /** 1-line compact row (上下表示の上ペイン): sender · subject · time. */
   dense?: boolean;
   /** Active search text → show which field(s) each hit matched. Undefined when
@@ -1787,14 +1837,16 @@ function EmailListItem({
             {checked && <Check className="size-2.5" />}
           </span>
         </button>
-        <span
-          className={cn(
-            "w-40 shrink-0 truncate text-xs",
-            unread ? "font-semibold text-fg" : "text-fg-muted",
-          )}
-        >
-          <Highlighted text={participants} terms={terms} />
-        </span>
+        {columns.from && (
+          <span
+            className={cn(
+              "w-40 shrink-0 truncate text-xs",
+              unread ? "font-semibold text-fg" : "text-fg-muted",
+            )}
+          >
+            <Highlighted text={participants} terms={terms} />
+          </span>
+        )}
         <LabelBadge label={label} />
         {accountLabel && (
           <AccountChip account={email.account ?? ""} label={accountLabel} />
@@ -1845,7 +1897,14 @@ function EmailListItem({
         >
           <Highlighted text={email.subject} terms={terms} />
         </span>
-        {/* Meta (time + status icons) — hidden on hover to reveal quick-actions. */}
+        {/* Preview column (wide pane only — dense is compact by nature). */}
+        {columns.preview && (
+          <span className="hidden min-w-0 flex-1 truncate text-xs text-fg-subtle lg:block">
+            <Highlighted text={previewFor(email, terms)} terms={terms} />
+          </span>
+        )}
+        {/* Meta — status glyphs, then the aligned 添付/日時 columns (fixed width
+            so 📎 and the date line up across rows). Hidden on hover for actions. */}
         <span className="flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle group-hover:hidden">
           {starred && (
             <Star
@@ -1857,12 +1916,6 @@ function EmailListItem({
             <Reply
               className="size-3 text-accent"
               aria-label={t("aria.replied")}
-            />
-          )}
-          {listView.attachment && email.hasAttachment && (
-            <Paperclip
-              className="size-3 text-fg-muted"
-              aria-label={t("aria.attachment")}
             />
           )}
           {hasNote && (
@@ -1877,8 +1930,20 @@ function EmailListItem({
               aria-label={t("draft.badge")}
             />
           )}
-          {listView.date && (
-            <span className="tabular-nums">{relativeTime(email.date)}</span>
+          {columns.attachment && (
+            <span className="grid w-4 shrink-0 place-items-center">
+              {email.hasAttachment && (
+                <Paperclip
+                  className="size-3 text-fg-muted"
+                  aria-label={t("aria.attachment")}
+                />
+              )}
+            </span>
+          )}
+          {columns.date && (
+            <span className="w-14 shrink-0 text-right tabular-nums">
+              {relativeTime(email.date)}
+            </span>
           )}
         </span>
         {/* Right-edge quick-actions (same set as the classic row). */}
@@ -2023,14 +2088,18 @@ function EmailListItem({
             {unread && (
               <span className="size-2 shrink-0 rounded-full bg-accent" />
             )}
-            <span
-              className={cn(
-                "truncate text-sm",
-                unread ? "font-semibold text-fg" : "font-normal text-fg-muted",
-              )}
-            >
-              <Highlighted text={participants} terms={terms} />
-            </span>
+            {columns.from && (
+              <span
+                className={cn(
+                  "truncate text-sm",
+                  unread
+                    ? "font-semibold text-fg"
+                    : "font-normal text-fg-muted",
+                )}
+              >
+                <Highlighted text={participants} terms={terms} />
+              </span>
+            )}
             <LabelBadge label={label} />
             {showBadge &&
               (expandable ? (
@@ -2069,6 +2138,8 @@ function EmailListItem({
             {accountLabel && (
               <AccountChip account={email.account ?? ""} label={accountLabel} />
             )}
+            {/* 右端メタ: 状態グリフ → 整列した「添付」「日時」列（固定幅で 📎 と
+                日時が行をまたいで縦に揃う）。 */}
             <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle">
               {starred && (
                 <Star
@@ -2080,12 +2151,6 @@ function EmailListItem({
                 <Reply
                   className="size-3 text-accent"
                   aria-label={t("aria.replied")}
-                />
-              )}
-              {listView.attachment && email.hasAttachment && (
-                <Paperclip
-                  className="size-3 text-fg-muted"
-                  aria-label={t("aria.attachment")}
                 />
               )}
               {hasNote && (
@@ -2100,7 +2165,21 @@ function EmailListItem({
                   aria-label={t("draft.badge")}
                 />
               )}
-              {listView.date && relativeTime(email.date)}
+              {columns.attachment && (
+                <span className="grid w-4 shrink-0 place-items-center">
+                  {email.hasAttachment && (
+                    <Paperclip
+                      className="size-3 text-fg-muted"
+                      aria-label={t("aria.attachment")}
+                    />
+                  )}
+                </span>
+              )}
+              {columns.date && (
+                <span className="w-14 shrink-0 text-right tabular-nums">
+                  {relativeTime(email.date)}
+                </span>
+              )}
             </span>
           </div>
           <div className="mt-0.5 flex items-center gap-1.5">
@@ -2155,7 +2234,7 @@ function EmailListItem({
                 ))}
               </span>
             )}
-            {listView.snippet && (
+            {columns.preview && (
               <p className="min-w-0 flex-1 truncate text-xs text-fg-subtle">
                 <Highlighted text={previewFor(email, terms)} terms={terms} />
               </p>
