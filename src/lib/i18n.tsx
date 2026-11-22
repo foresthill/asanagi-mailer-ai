@@ -3838,8 +3838,13 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     if (!("__TAURI_INTERNALS__" in window)) return;
     void import("@tauri-apps/api/core")
       .then(({ invoke }) => invoke("rebuild_menu", { lang: locale }))
-      .catch(() => {
-        // メニュー再構築に失敗しても UI は動く（ログは Rust 側）
+      .catch((e) => {
+        // The menu is non-critical — the UI keeps working if this fails. But a
+        // permission-authority denial (command missing from the remote-origin
+        // allowlist) rejects BEFORE the Rust body runs, so nothing is logged on
+        // the Rust side either. Surface it here so that failure mode is not
+        // silent (this was the cause of the "menu language won't switch" bug).
+        console.warn("rebuild_menu invoke failed:", e);
       });
   }, [locale]);
 
