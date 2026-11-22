@@ -731,6 +731,9 @@ fn build_menu<R: tauri::Runtime, M: tauri::Manager<R>>(
 fn rebuild_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
     let menu = build_menu(&app, &lang).map_err(|e| e.to_string())?;
     app.set_menu(menu).map_err(|e| e.to_string())?;
+    // リモートオリジンからの invoke 許可漏れ等で「無反応」になった時に切り分け
+    // できるよう、適用言語をログに残す（頻度は低い＝言語切替と起動時のみ）。
+    log::info!("native menu rebuilt in lang = {lang}");
     Ok(())
 }
 
