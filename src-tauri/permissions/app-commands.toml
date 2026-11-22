@@ -10,10 +10,11 @@
 # capabilities/remote.json. Docs: https://v2.tauri.app/security/permissions/
 [[permission]]
 identifier = "allow-app-commands"
-description = "朝凪本体画面(リモートオリジン配信)から、アプリ独自コマンド（添付の保存ダイアログ・保存・保存先選択・外部リンクをOSブラウザで開く）の invoke を許可する。"
+description = "朝凪本体画面(リモートオリジン配信)から、アプリ独自コマンド（添付の保存ダイアログ・保存・保存先選択・外部リンクをOSブラウザで開く・ネイティブメニューをアプリ言語で再構築）の invoke を許可する。"
 commands.allow = [
     "save_file_dialog",
     "save_file_to_dir",
     "pick_folder",
     "open_external",
+    "rebuild_menu",
 ]
