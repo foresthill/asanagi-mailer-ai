@@ -580,76 +580,176 @@ fn confirm_and_install(
         });
 }
 
+/// Localized labels for the parts of the native menu we author ourselves. The
+/// predefined roles (Copy/Paste/Undo/…) stay `None` so macOS localizes them by
+/// system language; only our own submenu titles and custom items are translated
+/// here, so the menu follows the in-app language (see `rebuild_menu`).
+struct MenuStrings {
+    file: &'static str,
+    close_window: &'static str,
+    edit: &'static str,
+    view: &'static str,
+    window: &'static str,
+    help: &'static str,
+    open_log_dir: &'static str,
+    open_app_log: &'static str,
+    open_server_log: &'static str,
+    check_update: &'static str,
+    quit: &'static str,
+}
+
+fn menu_strings(lang: &str) -> MenuStrings {
+    match lang {
+        "en" => MenuStrings {
+            file: "File",
+            close_window: "Close Window",
+            edit: "Edit",
+            view: "View",
+            window: "Window",
+            help: "Help",
+            open_log_dir: "Open Log Folder",
+            open_app_log: "Show App Log (asanagi.log)",
+            open_server_log: "Show Server Log (server.log)",
+            check_update: "Check for Updates…",
+            quit: "Quit Asanagi",
+        },
+        "fr" => MenuStrings {
+            file: "Fichier",
+            close_window: "Fermer la fenêtre",
+            edit: "Édition",
+            view: "Présentation",
+            window: "Fenêtre",
+            help: "Aide",
+            open_log_dir: "Ouvrir le dossier des journaux",
+            open_app_log: "Afficher le journal de l’app (asanagi.log)",
+            open_server_log: "Afficher le journal du serveur (server.log)",
+            check_update: "Rechercher les mises à jour…",
+            quit: "Quitter Asanagi",
+        },
+        "zh" => MenuStrings {
+            file: "文件",
+            close_window: "关闭窗口",
+            edit: "编辑",
+            view: "显示",
+            window: "窗口",
+            help: "帮助",
+            open_log_dir: "打开日志文件夹",
+            open_app_log: "查看应用日志 (asanagi.log)",
+            open_server_log: "查看服务器日志 (server.log)",
+            check_update: "检查更新…",
+            quit: "退出 Asanagi",
+        },
+        // 既定（ja）。未知の lang もここに落とす。
+        _ => MenuStrings {
+            file: "ファイル",
+            close_window: "ウィンドウを閉じる",
+            edit: "編集",
+            view: "表示",
+            window: "ウィンドウ",
+            help: "ヘルプ",
+            open_log_dir: "ログフォルダを開く",
+            open_app_log: "アプリログを表示 (asanagi.log)",
+            open_server_log: "サーバログを表示 (server.log)",
+            check_update: "アップデートを確認…",
+            quit: "終了する",
+        },
+    }
+}
+
+/// Build the native menu with labels for `lang`. Generic over App/AppHandle so
+/// both `install_menu` (startup) and `rebuild_menu` (command) share it. Menu
+/// item ids are identical across languages, so the `on_menu_event` handler
+/// registered once at startup keeps working after a rebuild.
+fn build_menu<R: tauri::Runtime, M: tauri::Manager<R>>(
+    m: &M,
+    lang: &str,
+) -> tauri::Result<tauri::menu::Menu<R>> {
+    let s = menu_strings(lang);
+    let open_dir = MenuItemBuilder::with_id("open_log_dir", s.open_log_dir).build(m)?;
+    let open_app_log = MenuItemBuilder::with_id("open_app_log", s.open_app_log).build(m)?;
+    let open_server_log =
+        MenuItemBuilder::with_id("open_server_log", s.open_server_log).build(m)?;
+    let check_update = MenuItemBuilder::with_id("check_update", s.check_update).build(m)?;
+
+    // アプリメニュー（macOS は先頭サブメニュー＝アプリ名のメニュー）。
+    // 「アップデートを確認…」は macOS 慣習に合わせ About の近く（アプリメニュー）に置く。
+    let app_menu = SubmenuBuilder::new(m, &m.package_info().name)
+        .items(&[
+            &PredefinedMenuItem::about(m, None, None)?,
+            &PredefinedMenuItem::separator(m)?,
+            &check_update,
+            &PredefinedMenuItem::separator(m)?,
+            &PredefinedMenuItem::services(m, None)?,
+            &PredefinedMenuItem::separator(m)?,
+            &PredefinedMenuItem::hide(m, None)?,
+            &PredefinedMenuItem::hide_others(m, None)?,
+            &PredefinedMenuItem::show_all(m, None)?,
+            &PredefinedMenuItem::separator(m)?,
+            &PredefinedMenuItem::quit(m, Some(s.quit))?,
+        ])
+        .build()?;
+    // ファイル（ウィンドウを閉じる。終了はアプリメニューの慣習に合わせ移動）。
+    let file = SubmenuBuilder::new(m, s.file)
+        .items(&[&PredefinedMenuItem::close_window(m, Some(s.close_window))?])
+        .build()?;
+    // 編集: これが無いと macOS の WebView で ⌘C/⌘V/⌘X/⌘A が効かない（ペースト
+    // できない不具合の原因）。Predefined ロールで OS 標準の挙動になる。
+    let edit = SubmenuBuilder::new(m, s.edit)
+        .items(&[
+            &PredefinedMenuItem::undo(m, None)?,
+            &PredefinedMenuItem::redo(m, None)?,
+            &PredefinedMenuItem::separator(m)?,
+            &PredefinedMenuItem::cut(m, None)?,
+            &PredefinedMenuItem::copy(m, None)?,
+            &PredefinedMenuItem::paste(m, None)?,
+            &PredefinedMenuItem::select_all(m, None)?,
+        ])
+        .build()?;
+    // 表示
+    let view = SubmenuBuilder::new(m, s.view)
+        .items(&[&PredefinedMenuItem::fullscreen(m, None)?])
+        .build()?;
+    // ウィンドウ
+    let window = SubmenuBuilder::new(m, s.window)
+        .items(&[
+            &PredefinedMenuItem::minimize(m, None)?,
+            &PredefinedMenuItem::maximize(m, None)?,
+        ])
+        .build()?;
+    let help = SubmenuBuilder::new(m, s.help)
+        .items(&[&open_dir, &open_app_log, &open_server_log])
+        .build()?;
+    MenuBuilder::new(m)
+        .items(&[&app_menu, &file, &edit, &view, &window, &help])
+        .build()
+}
+
+/// Rebuild the native menu in `lang` (ja|en|fr|zh). Called by the web UI on
+/// startup and whenever the user switches the in-app language, so the macOS menu
+/// bar follows the app language rather than only the system language.
+#[tauri::command]
+fn rebuild_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
+    let menu = build_menu(&app, &lang).map_err(|e| e.to_string())?;
+    app.set_menu(menu).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Native Help menu → open the log folder / individual log files with the OS
 /// default app, plus manual update-check and quit. Native so it works even when
-/// the web UI failed to load (update-check feedback needs the UI, though).
+/// the web UI failed to load (update-check feedback needs the UI, though). Built
+/// in ja by default; the web UI calls `rebuild_menu` with the real locale on
+/// load.
 fn install_menu(app: &tauri::App) {
-    let build = || -> tauri::Result<()> {
-        let open_dir = MenuItemBuilder::with_id("open_log_dir", "ログフォルダを開く").build(app)?;
-        let open_app_log =
-            MenuItemBuilder::with_id("open_app_log", "アプリログを表示 (asanagi.log)").build(app)?;
-        let open_server_log =
-            MenuItemBuilder::with_id("open_server_log", "サーバログを表示 (server.log)").build(app)?;
-        let check_update =
-            MenuItemBuilder::with_id("check_update", "アップデートを確認…").build(app)?;
-
-        // アプリメニュー（macOS は先頭サブメニュー＝アプリ名のメニュー）。
-        // 「アップデートを確認…」は macOS 慣習に合わせ About の近く（アプリメニュー）に置く。
-        let app_menu = SubmenuBuilder::new(app, &app.package_info().name)
-            .items(&[
-                &PredefinedMenuItem::about(app, None, None)?,
-                &PredefinedMenuItem::separator(app)?,
-                &check_update,
-                &PredefinedMenuItem::separator(app)?,
-                &PredefinedMenuItem::services(app, None)?,
-                &PredefinedMenuItem::separator(app)?,
-                &PredefinedMenuItem::hide(app, None)?,
-                &PredefinedMenuItem::hide_others(app, None)?,
-                &PredefinedMenuItem::show_all(app, None)?,
-                &PredefinedMenuItem::separator(app)?,
-                &PredefinedMenuItem::quit(app, Some("終了する"))?,
-            ])
-            .build()?;
-        // ファイル（ウィンドウを閉じる。終了はアプリメニューの慣習に合わせ移動）。
-        let file = SubmenuBuilder::new(app, "ファイル")
-            .items(&[&PredefinedMenuItem::close_window(app, Some("ウィンドウを閉じる"))?])
-            .build()?;
-        // 編集: これが無いと macOS の WebView で ⌘C/⌘V/⌘X/⌘A が効かない（ペースト
-        // できない不具合の原因）。Predefined ロールで OS 標準の挙動になる。
-        let edit = SubmenuBuilder::new(app, "編集")
-            .items(&[
-                &PredefinedMenuItem::undo(app, None)?,
-                &PredefinedMenuItem::redo(app, None)?,
-                &PredefinedMenuItem::separator(app)?,
-                &PredefinedMenuItem::cut(app, None)?,
-                &PredefinedMenuItem::copy(app, None)?,
-                &PredefinedMenuItem::paste(app, None)?,
-                &PredefinedMenuItem::select_all(app, None)?,
-            ])
-            .build()?;
-        // 表示
-        let view = SubmenuBuilder::new(app, "表示")
-            .items(&[&PredefinedMenuItem::fullscreen(app, None)?])
-            .build()?;
-        // ウィンドウ
-        let window = SubmenuBuilder::new(app, "ウィンドウ")
-            .items(&[
-                &PredefinedMenuItem::minimize(app, None)?,
-                &PredefinedMenuItem::maximize(app, None)?,
-            ])
-            .build()?;
-        let help = SubmenuBuilder::new(app, "ヘルプ")
-            .items(&[&open_dir, &open_app_log, &open_server_log])
-            .build()?;
-        let menu = MenuBuilder::new(app)
-            .items(&[&app_menu, &file, &edit, &view, &window, &help])
-            .build()?;
-        app.set_menu(menu)?;
-        Ok(())
-    };
-    if let Err(e) = build() {
-        log::error!("install_menu failed: {e}");
-        return;
+    match build_menu(app, "ja") {
+        Ok(menu) => {
+            if let Err(e) = app.set_menu(menu) {
+                log::error!("install_menu set_menu failed: {e}");
+            }
+        }
+        Err(e) => {
+            log::error!("install_menu build failed: {e}");
+            return;
+        }
     }
     app.on_menu_event(move |app, event| {
         let log_dir = app.path().app_log_dir().ok();
@@ -852,7 +952,8 @@ pub fn run() {
             save_file_dialog,
             save_file_to_dir,
             pick_folder,
-            open_external
+            open_external,
+            rebuild_menu
         ])
         .manage(MailtoQueue::default())
         .setup(|app| {

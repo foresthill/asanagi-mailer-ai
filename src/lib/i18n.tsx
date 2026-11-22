@@ -583,6 +583,7 @@ const ja: Dict = {
   "list.columns.preview": "本文プレビュー",
   "list.columns.date": "日時",
   "list.columns.attachment": "添付",
+  "list.columns.subject": "件名",
   "list.columns.subjectNote": "件名は常に表示します",
   "list.draftReminder": "📝 数日前の未送信の下書きが {n} 件あります",
   "list.draftReminder.open": "下書き一覧を開く",
@@ -1517,6 +1518,7 @@ const en: Dict = {
   "list.columns.preview": "Preview",
   "list.columns.date": "Date",
   "list.columns.attachment": "Attachment",
+  "list.columns.subject": "Subject",
   "list.columns.subjectNote": "Subject is always shown",
   "list.draftReminder": "📝 {n} unsent drafts have been sitting for days",
   "list.draftReminder.open": "Open drafts",
@@ -2470,6 +2472,7 @@ const fr: Dict = {
   "list.columns.preview": "Aperçu",
   "list.columns.date": "Date",
   "list.columns.attachment": "Pièce jointe",
+  "list.columns.subject": "Objet",
   "list.columns.subjectNote": "L'objet est toujours affiché",
   "list.draftReminder":
     "📝 {n} brouillons non envoyés attendent depuis des jours",
@@ -3382,6 +3385,7 @@ const zh: Dict = {
   "list.columns.preview": "预览",
   "list.columns.date": "日期",
   "list.columns.attachment": "附件",
+  "list.columns.subject": "主题",
   "list.columns.subjectNote": "主题始终显示",
   "list.select": "选择",
   "list.selectAll.title": "全选——取消勾选要保留的，其余归档／移入垃圾箱",
@@ -3823,6 +3827,21 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       // noop
     }
   };
+
+  // Desktop (Tauri) only: keep the native macOS menu bar in the app's language.
+  // The web layer owns the language (localStorage), so Rust can't know it at
+  // startup — we push it here on mount and on every change. No-op in the browser
+  // dev server. A brief default-language flash at launch is expected (the menu
+  // builds in ja before this fires).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke("rebuild_menu", { lang: locale }))
+      .catch(() => {
+        // メニュー再構築に失敗しても UI は動く（ログは Rust 側）
+      });
+  }, [locale]);
 
   return (
     <LocaleCtx.Provider
