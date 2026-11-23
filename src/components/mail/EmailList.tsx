@@ -217,6 +217,7 @@ export function EmailList({
   noteIds,
   contactLabel,
   contactColor,
+  ruleColor,
   overdueTodoCount,
   onOpenTodos,
   draftThreadIds,
@@ -290,6 +291,9 @@ export function EmailList({
   /** 差出人/宛先の連絡先ラベル（重要取引先/迷惑）を解決する（バッジ表示用）。 */
   contactLabel?: (email?: string) => ContactLabel | undefined;
   contactColor?: (email?: string) => ContactColor | undefined;
+  /** 仕分けルールで解決した行の色（件名/宛先/添付も見る）。マッチ無しは
+   *  undefined → 行は contactColor（差出人色）へフォールバックする。 */
+  ruleColor?: (e: Email) => ContactColor | undefined;
   /** 期限切れの TODO 件数（受信箱のリマインドバナー用）。 */
   overdueTodoCount?: number;
   /** TODO ビューを開く（バナーから）。 */
@@ -647,6 +651,7 @@ export function EmailList({
           }
           contactLabel={contactLabel}
           contactColor={contactColor}
+          ruleColor={ruleColor}
           columns={columns}
         />
         {isExpanded && (
@@ -1739,6 +1744,7 @@ function EmailListItem({
   onToggleTodo,
   contactLabel,
   contactColor,
+  ruleColor,
   columns,
   showLocation,
 }: {
@@ -1751,6 +1757,7 @@ function EmailListItem({
   /** Resolve the correspondent's label (重要取引先/迷惑) for the badge. */
   contactLabel?: (email?: string) => ContactLabel | undefined;
   contactColor?: (email?: string) => ContactColor | undefined;
+  ruleColor?: (e: Email) => ContactColor | undefined;
   /** 表示する列（送信者/プレビュー/日時/添付）。件名は常時表示。 */
   columns: ColumnPrefs;
   /** 1-line compact row (上下表示の上ペイン): sender · subject · time. */
@@ -1800,8 +1807,11 @@ function EmailListItem({
   // Sent mail: the avatar represents the recipient (the row shows "To: …").
   const face = email.state === "sent" && email.to[0] ? email.to[0] : email.from;
   const label = contactLabel?.(face.email);
-  // 差出人の色分け（最小 Rules）: 行の左に細いアクセントバーを出す。
-  const accentHex = contactColorHex(contactColor?.(face.email));
+  // 行の左の細いアクセントバー。仕分けルール（件名/宛先/添付も見る・上から先勝ち）
+  // を優先し、当たらなければ差出人の連絡先色（最小 Rules）へフォールバック。
+  const accentHex = contactColorHex(
+    ruleColor?.(email) ?? contactColor?.(face.email),
+  );
   const showCheckbox = checked || selectionActive;
   // Bring the selected row into view when it becomes active off-screen (e.g.
   // opening a thread message that lives in this folder / after a folder switch).

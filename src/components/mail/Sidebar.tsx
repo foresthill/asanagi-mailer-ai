@@ -21,6 +21,7 @@ import {
   SquarePen,
   Users,
   ListChecks,
+  ListFilter,
   ListTodo,
   FileText,
   ScrollText,
@@ -98,6 +99,7 @@ export function Sidebar({
     | "projects"
     | "todo"
     | "integrations"
+    | "rules"
     | "logs";
   onSelect: (f: FolderView) => void;
   onSelectView: (
@@ -109,6 +111,7 @@ export function Sidebar({
       | "projects"
       | "todo"
       | "integrations"
+      | "rules"
       | "logs",
   ) => void;
   /** Pick an account AND folder together (folders nested per account). */
@@ -303,6 +306,21 @@ export function Sidebar({
             className={cn("size-4", view === "contacts" && "text-accent")}
           />
           <span className="flex-1 text-left">{t("nav.contacts")}</span>
+        </button>
+        <button
+          onClick={() => onSelectView("rules")}
+          title={t("nav.rules.title")}
+          className={cn(
+            "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+            view === "rules"
+              ? "bg-accent-soft font-medium text-fg"
+              : "text-fg-muted hover:bg-surface hover:text-fg",
+          )}
+        >
+          <ListFilter
+            className={cn("size-4", view === "rules" && "text-accent")}
+          />
+          <span className="flex-1 text-left">{t("nav.rules")}</span>
         </button>
         <button
           onClick={() => onSelectView("projects")}

@@ -13,6 +13,7 @@ import type {
   ContactColor,
   ContactLabel,
   ContactMeta,
+  MailRule,
   TodoItem,
   OpWorkPackage,
   OpProjectProgress,
@@ -31,6 +32,8 @@ import { IntegrationsView } from "./IntegrationsView";
 import { ScheduledPanel } from "./ScheduledPanel";
 import { DraftsPanel } from "./DraftsPanel";
 import { ContactsView } from "./ContactsView";
+import { RulesView, type RuleDraft } from "./RulesView";
+import { resolveRuleColor } from "@/lib/rules";
 import { TriageView } from "./TriageView";
 import { LogView } from "./LogView";
 import { AiLogView } from "./AiLogView";
@@ -146,8 +149,11 @@ export function MailApp({
     | "projects"
     | "todo"
     | "integrations"
+    | "rules"
     | "logs"
   >("mail");
+  // 「このメールからルールを作成」でエディタを初期値付きで開くための下書き。
+  const [ruleDraft, setRuleDraft] = useState<RuleDraft | null>(null);
   // "all" = unified inbox across accounts; otherwise a single account key.
   const [account, setAccount] = useState("all");
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
@@ -349,6 +355,7 @@ export function MailApp({
   const [noteIds, setNoteIds] = useState<Set<string>>(new Set());
   // Contact labels (重要取引先/迷惑) — resolved from the contacts store for badges.
   const [contactMeta, setContactMeta] = useState<ContactMeta[]>([]);
+  const [rules, setRules] = useState<MailRule[]>([]);
   // TODO（「あとで」）— メールをタスク化。ローカル保存、期限＋アプリ内リマインド。
   const [todos, setTodos] = useState<TodoItem[]>([]);
   // OpenProject 連携が設定済みか（送信ボタンの表示切替）。
@@ -448,6 +455,17 @@ export function MailApp({
     },
     [contactMeta],
   );
+  // メール仕分けルール（Mac メール風 Rules）。保存すると全メールへライブ反映。
+  const loadRules = useCallback(async () => {
+    try {
+      const res = await fetch("/api/rules");
+      const data = await res.json();
+      setRules((data.rules ?? []) as MailRule[]);
+    } catch {
+      /* rules are non-critical — fall back to contact colors */
+    }
+  }, []);
+
   // 差出人の色分け（最小 Rules）。person 指定 > domain 既定、で解決。
   const contactColor = useCallback(
     (email?: string): ContactColor | undefined => {
@@ -466,6 +484,22 @@ export function MailApp({
     },
     [contactMeta],
   );
+  // ルール評価による行の色（件名/宛先/添付も見る）。上から先勝ち。マッチ無しは
+  // undefined を返し、呼び出し側（EmailList）が差出人の連絡先色へフォールバック。
+  const ruleColor = useCallback(
+    (e: Email): ContactColor | undefined => resolveRuleColor(e, rules),
+    [rules],
+  );
+  // 開いているメールの差出人ドメインを初期条件にしてルール作成画面へ。件名を名前に。
+  const createRuleFromEmail = useCallback((e: Email) => {
+    const at = e.from.email.lastIndexOf("@");
+    const domain = at >= 0 ? e.from.email.slice(at + 1) : e.from.email;
+    setRuleDraft({
+      name: e.from.name || domain,
+      conditions: [{ field: "from", op: "domainIs", value: domain }],
+    });
+    setView("rules");
+  }, []);
 
   // ── TODO（「あとで」）───────────────────────────────────────────────
   const loadTodos = useCallback(async () => {
@@ -1327,12 +1361,14 @@ export function MailApp({
   }, [loadNoteIds, selectedId]);
 
   useEffect(() => {
-    // Load contact labels on mount and whenever we return to the mail view (so
-    // labels edited in Contacts show up on the list). eslint-disable justified:
-    // this only kicks off an async fetch that sets state in its callback.
+    // Load contact labels + rules on mount and whenever we return to the mail
+    // view (so labels/rules edited elsewhere show up on the list). eslint-disable
+    // justified: these only kick off async fetches that set state in a callback.
+    if (view !== "mail") return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch
-    if (view === "mail") loadContactMeta();
-  }, [loadContactMeta, view]);
+    loadContactMeta();
+    loadRules();
+  }, [loadContactMeta, loadRules, view]);
 
   useEffect(() => {
     // TODO は常に読み込む（サイドバー件数・受信箱の期限切れバナー用）。ビュー切替の
@@ -2532,6 +2568,7 @@ export function MailApp({
       noteIds={noteIds}
       contactLabel={contactLabel}
       contactColor={contactColor}
+      ruleColor={ruleColor}
       overdueTodoCount={overdueTodoCount}
       onOpenTodos={() => setView("todo")}
       draftThreadIds={draftThreadIds}
@@ -2601,6 +2638,7 @@ export function MailApp({
       onImportanceFeedback={onImportanceFeedback}
       onReportSpam={() => selected && reportSpam(selected)}
       onMarkSafe={() => selected && markSafe(selected)}
+      onCreateRule={() => selected && createRuleFromEmail(selected)}
       isTodo={isSelectedTodo}
       onToggleTodo={() => selected && toggleTodo(selected)}
       // 「この1通だけ」: スレッドがある時だけ意味を持つ副選択肢。
@@ -2696,6 +2734,12 @@ export function MailApp({
               account: account !== "all" ? account : undefined,
             })
           }
+        />
+      )}
+      {view === "rules" && (
+        <RulesView
+          initialDraft={ruleDraft}
+          onDraftConsumed={() => setRuleDraft(null)}
         />
       )}
       {view === "triage" && <TriageView />}
