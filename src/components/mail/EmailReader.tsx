@@ -7,6 +7,7 @@ import {
   BookText,
   Trash2,
   Mail,
+  ListFilter,
   RotateCcw,
   Loader2,
   Star,
@@ -72,6 +73,7 @@ export function EmailReader({
   onReplyMessage,
   onToggleStar,
   onMarkUnread,
+  onCreateRule,
   senderLabel,
   onImportanceFeedback,
   onReportSpam,
@@ -107,6 +109,8 @@ export function EmailReader({
   onToggleStar: () => void;
   /** Mark this (already-read) mail back to unread. */
   onMarkUnread?: () => void;
+  /** 「このメールからルールを作成」— 差出人ドメインを初期条件にルール画面を開く。 */
+  onCreateRule?: () => void;
   /** Correspondent's label (重要取引先/迷惑) for the header badge. */
   senderLabel?: ContactLabel;
   onImportanceFeedback: (importance: Importance) => void;
@@ -411,6 +415,14 @@ export function EmailReader({
             icon={Mail}
             title={t("reader.markUnread")}
             onClick={onMarkUnread}
+          />
+        )}
+        {/* このメールからルールを作成（差出人ドメインを初期条件に）。 */}
+        {onCreateRule && email && (
+          <IconBtn
+            icon={ListFilter}
+            title={t("reader.createRule")}
+            onClick={onCreateRule}
           />
         )}
         {folder !== "trashed" ? (

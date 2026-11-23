@@ -507,6 +507,43 @@ export interface ResolvedContactMeta {
 }
 
 /**
+ * メール仕分けルール（Mac メール風 Rules）。条件に合うメールへアクションを適用する。
+ * v1 のアクションは「色を付ける」のみ（一覧行の左アクセント）。色はローカルの表示
+ * 属性でサーバを一切変更しないため、保存した瞬間に新着・既存すべてへライブ反映する
+ * （一覧描画時に評価）。local-first: .data(rules.json) にのみ保存する。 */
+export type RuleField = "from" | "subject" | "recipient" | "hasAttachment";
+/** from のみ domainIs / equals を持つ。subject / recipient は contains 固定。 */
+export type RuleOp = "contains" | "domainIs" | "equals";
+
+export interface RuleCondition {
+  field: RuleField;
+  /** from/subject/recipient 用。hasAttachment では未使用。 */
+  op?: RuleOp;
+  /** from/subject/recipient の照合値。hasAttachment では "yes"(あり)/"no"(なし)。 */
+  value?: string;
+}
+
+export interface RuleAction {
+  type: "color";
+  color: ContactColor;
+}
+
+export interface MailRule {
+  id: string;
+  /** ユーザーが付ける名前（例「請求メール」）。 */
+  name: string;
+  enabled: boolean;
+  /** all=すべての条件(AND) / any=いずれかの条件(OR)。 */
+  match: "all" | "any";
+  conditions: RuleCondition[];
+  /** v1 は color のみ。 */
+  actions: RuleAction[];
+  /** 評価順＝優先度。小さいほど上位（先に評価・先勝ち）。 */
+  order: number;
+  updatedAt: string;
+}
+
+/**
  * TODO（「あとで」）— メールを後で対応するタスクとして印を付ける。スター（お気に入り＝
  * フラグ）とは別軸で、任意の期限＋アプリ内リマインドを持つ。local-first: .data にのみ
  * 保存し、一覧レンダリングのため件名・差出人・日時のスナップショットを保持する

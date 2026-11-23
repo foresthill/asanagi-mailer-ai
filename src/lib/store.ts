@@ -18,6 +18,9 @@ import type {
   SavedDraft,
   ContactMeta,
   ResolvedContactMeta,
+  MailRule,
+  RuleCondition,
+  RuleAction,
   TodoItem,
   WritingSample,
   AiCacheEntry,
@@ -990,6 +993,73 @@ export async function resolveContactMeta(
     tags: [...(domain?.tags ?? []), ...(person?.tags ?? [])],
     color: person?.color ?? domain?.color,
   };
+}
+
+// ── メール仕分けルール（Mac メール風 Rules）──────────────────────────
+// 条件に合うメールへアクション（v1 は色付け）を適用する。local-first: .data のみ。
+const RULES = "mail-rules.json";
+
+/** 全ルールを優先度順（order 昇順＝上が先）で返す。 */
+export async function listRules(): Promise<MailRule[]> {
+  const rows = await readJson<MailRule[]>(RULES, []);
+  return rows.slice().sort((a, b) => a.order - b.order);
+}
+
+/**
+ * ルールを 1 件 upsert（id で突合）。id 無し＝新規作成（末尾の order を採番）。
+ * 条件が空のルールは保存しない（＝全メールに当たってしまうのを防ぐ）。
+ */
+export async function saveRule(
+  input: {
+    id?: string;
+    name: string;
+    enabled?: boolean;
+    match: "all" | "any";
+    conditions: RuleCondition[];
+    actions: RuleAction[];
+  },
+  now = new Date(),
+): Promise<MailRule[]> {
+  const rows = await readJson<MailRule[]>(RULES, []);
+  const idx = input.id ? rows.findIndex((r) => r.id === input.id) : -1;
+  const order =
+    idx >= 0
+      ? rows[idx].order
+      : rows.reduce((m, r) => Math.max(m, r.order), -1) + 1;
+  const next: MailRule = {
+    id: input.id && idx >= 0 ? input.id : crypto.randomUUID(),
+    name: input.name.trim() || "ルール",
+    enabled: input.enabled ?? true,
+    match: input.match,
+    conditions: input.conditions,
+    actions: input.actions,
+    order,
+    updatedAt: now.toISOString(),
+  };
+  if (idx >= 0) rows[idx] = next;
+  else rows.push(next);
+  await writeJson(RULES, rows);
+  return listRules();
+}
+
+/** ルールを 1 件削除。 */
+export async function deleteRule(id: string): Promise<MailRule[]> {
+  const rows = await readJson<MailRule[]>(RULES, []);
+  const next = rows.filter((r) => r.id !== id);
+  await writeJson(RULES, next);
+  return listRules();
+}
+
+/** 並べ替え＝優先度変更。渡された id 順に order を振り直す（未知 id は無視）。 */
+export async function reorderRules(ids: string[]): Promise<MailRule[]> {
+  const rows = await readJson<MailRule[]>(RULES, []);
+  const rank = new Map(ids.map((id, i) => [id, i]));
+  for (const r of rows) {
+    const i = rank.get(r.id);
+    if (i !== undefined) r.order = i;
+  }
+  await writeJson(RULES, rows);
+  return listRules();
 }
 
 // ── TODO（「あとで」）───────────────────────────────────────────────
