@@ -11,6 +11,7 @@ import {
   Columns3,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Trash2,
   Loader2,
   Inbox,
@@ -51,16 +52,23 @@ type SortKey = "date" | "from" | "subject" | "attachment";
 type SortDir = "asc" | "desc";
 
 /** 一覧の表示列（Mac メール風の列レイアウト）。どの列を出すかを localStorage に保持。
- *  件名は主役カラムなので常時表示。添付は独立した整列カラム（📎 が縦に揃う）。
- *  フラグ列は会社レビューで「TODO で代用」と決めたため持たない。 */
-type ColumnKey = "from" | "preview" | "date" | "attachment";
+ *  件名は主役カラムなので常時表示。from/preview は位置が構造で決まる表示トグル。
+ *  flag/attachment/date は右端の「指標の固定列」で、各行で必ず同じ横位置に出る
+ *  （目線を1列下に走らせて拾える＝#2 スキャン性）。並び順はユーザーが変えられる。 */
+type ColumnKey = "from" | "preview" | "flag" | "attachment" | "date";
 type ColumnPrefs = Record<ColumnKey, boolean>;
-const COLUMN_ORDER: ColumnKey[] = ["from", "preview", "date", "attachment"];
+/** 表示/非表示のみの列（位置は構造で固定: from=件名の左, preview=件名の右・可変幅）。 */
+const TOGGLE_COLUMNS: ("from" | "preview")[] = ["from", "preview"];
+/** 右端の指標列（固定幅・順序可変）。縦に揃うので一目で拾える。 */
+type MetaColumnKey = "flag" | "attachment" | "date";
+const META_COLUMNS: MetaColumnKey[] = ["flag", "attachment", "date"];
+const DEFAULT_META_ORDER: MetaColumnKey[] = ["flag", "attachment", "date"];
 const DEFAULT_COLUMNS: ColumnPrefs = {
   from: true,
   preview: true,
-  date: true,
+  flag: true,
   attachment: true,
+  date: true,
 };
 
 export type SearchMode = "keyword" | "ai";
@@ -459,6 +467,7 @@ export function EmailList({
         return {
           from: true,
           preview: p.snippet !== false,
+          flag: true,
           date: p.date !== false,
           attachment: p.attachment !== false,
         };
@@ -473,6 +482,41 @@ export function EmailList({
       const next = { ...v, [k]: !v[k] };
       try {
         localStorage.setItem("asanagi:list-columns", JSON.stringify(next));
+      } catch {
+        /* per-viewer convenience only */
+      }
+      return next;
+    });
+  };
+  // 右端「指標の固定列」(flag/attachment/date) の並び順。端末ごとに保持。
+  // 不正値や欠けたキーは既定順で補正する（前方互換）。
+  const [metaOrder, setMetaOrderState] = useState<MetaColumnKey[]>(() => {
+    try {
+      const raw = localStorage.getItem("asanagi:list-column-order");
+      if (raw) {
+        const arr = JSON.parse(raw) as unknown;
+        if (Array.isArray(arr)) {
+          const valid = arr.filter((k): k is MetaColumnKey =>
+            (META_COLUMNS as string[]).includes(k as string),
+          );
+          const missing = META_COLUMNS.filter((k) => !valid.includes(k));
+          if (valid.length) return [...valid, ...missing];
+        }
+      }
+    } catch {
+      /* per-viewer convenience only */
+    }
+    return DEFAULT_META_ORDER;
+  });
+  const moveMetaColumn = (k: MetaColumnKey, dir: -1 | 1) => {
+    setMetaOrderState((order) => {
+      const i = order.indexOf(k);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= order.length) return order;
+      const next = [...order];
+      [next[i], next[j]] = [next[j], next[i]];
+      try {
+        localStorage.setItem("asanagi:list-column-order", JSON.stringify(next));
       } catch {
         /* per-viewer convenience only */
       }
@@ -653,6 +697,7 @@ export function EmailList({
           contactColor={contactColor}
           ruleColor={ruleColor}
           columns={columns}
+          metaOrder={metaOrder}
         />
         {isExpanded && (
           <div className="mb-1 ml-6 flex flex-col border-l border-border pl-1">
@@ -1050,12 +1095,13 @@ export function EmailList({
               {colMenuOpen && (
                 <div
                   role="menu"
-                  className="absolute left-0 top-7 z-30 w-44 rounded-lg border border-border bg-surface p-1 text-xs shadow-lg"
+                  className="absolute right-0 top-7 z-30 w-56 rounded-lg border border-border bg-surface p-1 text-xs shadow-lg"
                 >
+                  {/* 表示/非表示（位置は構造で固定）: 送信者・本文プレビュー。 */}
                   <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
                     {t("list.columns.heading")}
                   </p>
-                  {COLUMN_ORDER.map((k) => (
+                  {TOGGLE_COLUMNS.map((k) => (
                     <button
                       key={k}
                       role="menuitemcheckbox"
@@ -1076,8 +1122,58 @@ export function EmailList({
                       {t(`list.columns.${k}`)}
                     </button>
                   ))}
-                  <p className="border-t border-border px-2 pb-0.5 pt-1 text-[10px] text-fg-subtle">
+                  {/* 指標の固定列（フラグ/添付/日時）: 表示切替＋並び順（上下）。
+                      各行で同じ横位置に並ぶので一目で拾える（上下表示に反映）。 */}
+                  <p className="mt-1 border-t border-border px-2 pb-0.5 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                    {t("list.columns.order")}
+                  </p>
+                  {metaOrder.map((k, i) => (
+                    <div
+                      key={k}
+                      className="flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-surface-2"
+                    >
+                      <button
+                        role="menuitemcheckbox"
+                        aria-checked={columns[k]}
+                        onClick={() => toggleColumn(k)}
+                        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-fg-muted transition-colors hover:text-fg"
+                      >
+                        <span
+                          className={cn(
+                            "grid size-3.5 shrink-0 place-items-center rounded border",
+                            columns[k]
+                              ? "border-accent bg-accent text-accent-fg"
+                              : "border-border",
+                          )}
+                        >
+                          {columns[k] && <Check className="size-2.5" />}
+                        </span>
+                        <span className="truncate">
+                          {t(`list.columns.${k}`)}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => moveMetaColumn(k, -1)}
+                        disabled={i === 0}
+                        title={t("list.columns.moveUp")}
+                        className="grid size-5 shrink-0 place-items-center rounded text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-30"
+                      >
+                        <ChevronUp className="size-3.5" />
+                      </button>
+                      <button
+                        onClick={() => moveMetaColumn(k, 1)}
+                        disabled={i === metaOrder.length - 1}
+                        title={t("list.columns.moveDown")}
+                        className="grid size-5 shrink-0 place-items-center rounded text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-30"
+                      >
+                        <ChevronDown className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <p className="mt-1 border-t border-border px-2 pb-0.5 pt-1 text-[10px] leading-relaxed text-fg-subtle">
                     {t("list.columns.subjectNote")}
+                    {" ・ "}
+                    {t("list.columns.orderNote")}
                   </p>
                 </div>
               )}
@@ -1183,21 +1279,34 @@ export function EmailList({
                 </span>
               )}
               <span className="flex shrink-0 items-center gap-1">
-                {columns.attachment && (
-                  <span
-                    className="grid w-4 shrink-0 place-items-center"
-                    title={t("list.columns.attachment")}
-                  >
-                    <Paperclip
-                      className="size-3"
-                      aria-label={t("list.columns.attachment")}
-                    />
-                  </span>
-                )}
-                {columns.date && (
-                  <span className="w-14 shrink-0 text-right">
-                    {t("list.columns.date")}
-                  </span>
+                {metaOrder.map((k) =>
+                  !columns[k] ? null : k === "flag" ? (
+                    <span
+                      key={k}
+                      className="grid w-5 shrink-0 place-items-center"
+                      title={t("list.columns.flag")}
+                    >
+                      <Star
+                        className="size-3"
+                        aria-label={t("list.columns.flag")}
+                      />
+                    </span>
+                  ) : k === "attachment" ? (
+                    <span
+                      key={k}
+                      className="grid w-4 shrink-0 place-items-center"
+                      title={t("list.columns.attachment")}
+                    >
+                      <Paperclip
+                        className="size-3"
+                        aria-label={t("list.columns.attachment")}
+                      />
+                    </span>
+                  ) : (
+                    <span key={k} className="w-14 shrink-0 text-right">
+                      {t("list.columns.date")}
+                    </span>
+                  ),
                 )}
               </span>
             </div>
@@ -1746,6 +1855,7 @@ function EmailListItem({
   contactColor,
   ruleColor,
   columns,
+  metaOrder,
   showLocation,
 }: {
   row: ThreadRow;
@@ -1758,8 +1868,10 @@ function EmailListItem({
   contactLabel?: (email?: string) => ContactLabel | undefined;
   contactColor?: (email?: string) => ContactColor | undefined;
   ruleColor?: (e: Email) => ContactColor | undefined;
-  /** 表示する列（送信者/プレビュー/日時/添付）。件名は常時表示。 */
+  /** 表示する列（送信者/プレビュー/フラグ/添付/日時）。件名は常時表示。 */
   columns: ColumnPrefs;
+  /** 右端「指標の固定列」(flag/attachment/date) の並び順。上下表示で使用。 */
+  metaOrder: MetaColumnKey[];
   /** 1-line compact row (上下表示の上ペイン): sender · subject · time. */
   dense?: boolean;
   /** Active search text → show which field(s) each hit matched. Undefined when
@@ -1956,15 +2068,11 @@ function EmailListItem({
             <Highlighted text={previewFor(email, terms)} terms={terms} />
           </span>
         )}
-        {/* Meta — status glyphs, then the aligned 添付/日時 columns (fixed width
-            so 📎 and the date line up across rows). Hidden on hover for actions. */}
+        {/* Meta — variable glyphs (返信済/メモ/下書き), then the fixed indicator
+            columns (フラグ/添付/日時) in the user's chosen order. Each fixed column
+            reserves its width so ★ · 📎 · 日時 line up down the list even when a row
+            has none of them (#2 scannability). Hidden on hover to reveal actions. */}
         <span className="flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle group-hover:hidden">
-          {starred && (
-            <Star
-              className="size-3 fill-amber-400 text-amber-400"
-              aria-label={t("aria.starred")}
-            />
-          )}
           {email.replied && (
             <Reply
               className="size-3 text-accent"
@@ -1983,20 +2091,30 @@ function EmailListItem({
               aria-label={t("draft.badge")}
             />
           )}
-          {columns.attachment && (
-            <span className="grid w-4 shrink-0 place-items-center">
-              {email.hasAttachment && (
-                <Paperclip
-                  className="size-3 text-fg-muted"
-                  aria-label={t("aria.attachment")}
-                />
-              )}
-            </span>
-          )}
-          {columns.date && (
-            <span className="w-14 shrink-0 text-right tabular-nums">
-              {relativeTime(email.date)}
-            </span>
+          {metaOrder.map((k) =>
+            !columns[k] ? null : k === "flag" ? (
+              <span key={k} className="grid w-5 shrink-0 place-items-center">
+                {starred && (
+                  <Star
+                    className="size-3 fill-amber-400 text-amber-400"
+                    aria-label={t("aria.starred")}
+                  />
+                )}
+              </span>
+            ) : k === "attachment" ? (
+              <span key={k} className="grid w-4 shrink-0 place-items-center">
+                {email.hasAttachment && (
+                  <Paperclip
+                    className="size-3 text-fg-muted"
+                    aria-label={t("aria.attachment")}
+                  />
+                )}
+              </span>
+            ) : (
+              <span key={k} className="w-14 shrink-0 text-right tabular-nums">
+                {relativeTime(email.date)}
+              </span>
+            ),
           )}
         </span>
         {/* Right-edge quick-actions (same set as the classic row). */}
