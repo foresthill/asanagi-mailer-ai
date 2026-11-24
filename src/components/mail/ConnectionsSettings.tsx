@@ -264,6 +264,9 @@ export function ConnectionsSettings({
       setBaseUrl("http://localhost:11434/v1");
     }
     setTest(null);
+    // 取得済みモデル一覧は切替先のものではないので捨てる（別社のIDが残る混乱を防ぐ）。
+    setEndpointModels(null);
+    setEndpointStatus(null);
   };
   // onprem は openai のキー枠を使う（ローカルは任意）。auto/gateway はキー無し。
   const keyProvider: AIProvider | null =
@@ -353,16 +356,32 @@ export function ConnectionsSettings({
     }
   }
 
-  async function fetchEndpointModels() {
+  // モデル一覧の取得＝接続確認。オンプレは baseUrl、クラウド各社は選択中プロバイダ
+  // の公式 /models を叩く。キー欄が空ならサーバが保存済み（マスク）キーで補う。
+  // local-first: 送信先は選んだプロバイダ自身のAPIだけ（通常のAI呼び出しと同じ）。
+  async function fetchModels() {
     setFetchingModels(true);
     setEndpointStatus(null);
+    const rp = realProvider(provider);
+    const useBaseUrl = provider === "onprem" || provider === "openai";
+    // onprem は openai のキー枠を使う。typed = 今セッションで入力した鍵（無ければ
+    // サーバが保存済みキーにフォールバック）。
+    const typedKey =
+      provider === "onprem"
+        ? keyInputs.openai
+        : rp !== "auto"
+          ? keyInputs[rp]
+          : undefined;
+    const failMsg = useBaseUrl ? t("conn.endpoint.fail") : t("conn.models.fail");
     try {
       const res = await fetch("/api/settings/ai/models", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        // keyInputs.openai is undefined unless typed this session → the server
-        // falls back to the stored (masked) key, or none for a bare Ollama.
-        body: JSON.stringify({ baseUrl, apiKey: keyInputs.openai }),
+        body: JSON.stringify({
+          provider: rp === "auto" ? undefined : rp,
+          baseUrl: useBaseUrl ? baseUrl : "",
+          apiKey: typedKey,
+        }),
       });
       const data = (await res.json()) as {
         ok: boolean;
@@ -379,19 +398,23 @@ export function ConnectionsSettings({
               ? t("conn.endpoint.ok").replace("{n}", String(models.length))
               : t("conn.endpoint.empty"),
         });
-        // Suggest the first model only when the field is empty — never silently
-        // override a model id the user typed on purpose.
-        if (models.length > 0 && !model.trim()) setModel(models[0]);
+        // Suggest the first model only for on-prem, and only when the field is
+        // empty — there the list is small and there's no sensible cloud default
+        // to fall back to. For cloud providers the catalogue is huge and its
+        // first entry is arbitrary, so leave the field empty (→ provider default)
+        // and let the user pick from the list. Never override a typed id.
+        if (provider === "onprem" && models.length > 0 && !model.trim())
+          setModel(models[0]);
       } else {
         setEndpointModels(null);
         setEndpointStatus({
           ok: false,
-          msg: `${t("conn.endpoint.fail")}${data.error ? `（${data.error}）` : ""}`,
+          msg: `${failMsg}${data.error ? `（${data.error}）` : ""}`,
         });
       }
     } catch {
       setEndpointModels(null);
-      setEndpointStatus({ ok: false, msg: t("conn.endpoint.fail") });
+      setEndpointStatus({ ok: false, msg: failMsg });
     } finally {
       setFetchingModels(false);
     }
@@ -404,6 +427,66 @@ export function ConnectionsSettings({
     view && rpForModels !== "auto" ? view.defaultModels[rpForModels] : "";
   const cheapModel =
     view && rpForModels !== "auto" ? view.cheapModels[rpForModels] : "";
+
+  // モデル取得ボタンの活性条件。onprem は baseUrl、anthropic/openai はキー必須、
+  // openrouter/gateway はキー任意（公開カタログ / OIDC）。auto は対象外。
+  const hasKeyFor = (p: AIProvider): boolean =>
+    Boolean(keyInputs[p]?.trim()) || Boolean(view?.keys[p]?.set);
+  const canFetchModels =
+    provider === "onprem"
+      ? baseUrl.trim().length > 0
+      : rpForModels === "auto"
+        ? false
+        : provider === "openai"
+          ? baseUrl.trim().length > 0 || hasKeyFor("openai")
+          : rpForModels === "anthropic"
+            ? hasKeyFor("anthropic")
+            : true; // openrouter / gateway
+
+  // 「モデルを取得（＝接続確認）」ボタン＋結果＋ピッカー。全プロバイダ共通で、
+  // クラウドはモデル欄の直下、オンプレはエンドポイント欄の下に差し込む。手入力の
+  // input は正のまま（ピッカーは setModel するだけ）＝一覧に無いIDも打てる。
+  const modelFetchControls =
+    rpForModels === "auto" ? null : (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={fetchingModels || !canFetchModels}
+            onClick={fetchModels}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
+          >
+            {fetchingModels && <Loader2 className="size-3.5 animate-spin" />}
+            {fetchingModels
+              ? t("conn.endpoint.fetching")
+              : t("conn.endpoint.fetch")}
+          </button>
+          {endpointStatus && (
+            <span
+              className={`text-[11px] ${endpointStatus.ok ? "text-emerald-600" : "text-rose-600"}`}
+              aria-live="polite"
+            >
+              {endpointStatus.ok ? "✅ " : "⚠️ "}
+              {endpointStatus.msg}
+            </span>
+          )}
+        </div>
+        {endpointModels && endpointModels.length > 0 && (
+          <select
+            value={endpointModels.includes(model) ? model : ""}
+            onChange={(e) => e.target.value && setModel(e.target.value)}
+            className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+          >
+            <option value="">{t("conn.endpoint.pick")}</option>
+            {endpointModels.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    );
 
   // ウィンドウ（アプリ窓の中身）いっぱいに被せる全画面表示。OSのディスプレイ
   // 全画面ではない。中央モーダルだと max-w-lg で狭かったため、メール画面を
@@ -600,6 +683,10 @@ export function ConnectionsSettings({
               </span>
             </label>
 
+            {/* クラウド各社はモデル欄の直下に「取得→一覧から選択」を出す（オンプレは
+                下のエンドポイント欄の中に出すので重複させない）。 */}
+            {provider !== "onprem" && provider !== "openai" && modelFetchControls}
+
             {/* Custom endpoint (OpenAI-compatible) — e.g. on-prem Ollama /v1.
                 Shown for the dedicated "onprem" choice (primary) and cloud
                 "openai" (power users who proxy it). */}
@@ -619,45 +706,8 @@ export function ConnectionsSettings({
                   placeholder={t("conn.endpoint.placeholder")}
                   className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
                 />
-                {/* モデル取得＝接続確認（①②）。落ちてると「未接続」で分かる。 */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={!baseUrl.trim() || fetchingModels}
-                    onClick={fetchEndpointModels}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-accent disabled:opacity-50"
-                  >
-                    {fetchingModels && (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    )}
-                    {fetchingModels
-                      ? t("conn.endpoint.fetching")
-                      : t("conn.endpoint.fetch")}
-                  </button>
-                  {endpointStatus && (
-                    <span
-                      className={`text-[11px] ${endpointStatus.ok ? "text-emerald-600" : "text-rose-600"}`}
-                      aria-live="polite"
-                    >
-                      {endpointStatus.ok ? "✅ " : "⚠️ "}
-                      {endpointStatus.msg}
-                    </span>
-                  )}
-                </div>
-                {endpointModels && endpointModels.length > 0 && (
-                  <select
-                    value={endpointModels.includes(model) ? model : ""}
-                    onChange={(e) => e.target.value && setModel(e.target.value)}
-                    className="rounded-lg border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-accent"
-                  >
-                    <option value="">{t("conn.endpoint.pick")}</option>
-                    {endpointModels.map((id) => (
-                      <option key={id} value={id}>
-                        {id}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                {/* モデル取得＝接続確認。落ちてると「未接続」で分かる。 */}
+                {modelFetchControls}
                 <span className="text-[11px] text-fg-subtle">
                   {t("conn.endpoint.note")}
                 </span>
@@ -685,6 +735,38 @@ export function ConnectionsSettings({
                     {t("conn.fallback.note")}
                   </span>
                 </div>
+              </div>
+            )}
+
+            {/* 接続テスト — モデル設定の直下に（以前は一番下で直感的でなかった）。
+                結果もすぐ隣に出す。handleTest は内部で現フォームを保存してから試す。 */}
+            {provider !== "auto" && (
+              <div className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
+                <button
+                  type="button"
+                  onClick={handleTest}
+                  disabled={loading || saving || testing}
+                  className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2 disabled:opacity-50"
+                >
+                  {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                  {t("conn.test.btn")}
+                </button>
+                {test && (
+                  <div
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
+                      test.ok
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : "bg-high-soft text-high"
+                    }`}
+                  >
+                    {test.ok ? (
+                      <Check className="size-4" />
+                    ) : (
+                      <AlertCircle className="size-4" />
+                    )}
+                    <span className="break-all">{test.msg}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -906,34 +988,8 @@ export function ConnectionsSettings({
               </div>
             )}
 
-            {/* Test result — 操作（接続テスト）の真上に置き、結果が離れないように。 */}
-            {test && (
-              <div
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-                  test.ok
-                    ? "bg-emerald-500/10 text-emerald-600"
-                    : "bg-high-soft text-high"
-                }`}
-              >
-                {test.ok ? (
-                  <Check className="size-4" />
-                ) : (
-                  <AlertCircle className="size-4" />
-                )}
-                <span className="break-all">{test.msg}</span>
-              </div>
-            )}
-
-            {/* AI(BYOK) の操作: 接続テスト＋この AI 設定の保存（このブロック専用）。 */}
+            {/* この AI 設定の保存（接続テストはモデル設定の直下へ移動済み）。 */}
             <div className="flex items-center gap-2 pt-1">
-              <button
-                onClick={handleTest}
-                disabled={loading || saving || testing}
-                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2 disabled:opacity-50"
-              >
-                {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                {t("conn.test.btn")}
-              </button>
               <button
                 onClick={handleSave}
                 disabled={loading || saving || testing}
