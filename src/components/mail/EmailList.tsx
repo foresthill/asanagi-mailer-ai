@@ -2073,37 +2073,59 @@ function EmailListItem({
             columns (フラグ/添付/日時) in the user's chosen order. Each fixed column
             reserves its width so ★ · 📎 · 日時 line up down the list even when a row
             has none of them (#2 scannability). Hidden on hover to reveal actions. */}
-        <span className="flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle group-hover:hidden">
-          {email.replied && (
-            <Reply
-              className="size-3 text-accent"
-              aria-label={t("aria.replied")}
-            />
-          )}
-          {hasNote && (
-            <NotebookPen
-              className="size-3 text-amber-500"
-              aria-label={t("aria.note")}
-            />
-          )}
-          {hasDraft && (
-            <PenLine
-              className="size-3 text-amber-600"
-              aria-label={t("draft.badge")}
-            />
-          )}
+        <span className="flex shrink-0 items-center gap-1 text-[11px] text-fg-subtle">
+          {/* 変動グリフ（返信済/メモ/下書き）は hover でアクションに場所を譲る。 */}
+          <span className="flex items-center gap-1 group-hover:hidden">
+            {email.replied && (
+              <Reply
+                className="size-3 text-accent"
+                aria-label={t("aria.replied")}
+              />
+            )}
+            {hasNote && (
+              <NotebookPen
+                className="size-3 text-amber-500"
+                aria-label={t("aria.note")}
+              />
+            )}
+            {hasDraft && (
+              <PenLine
+                className="size-3 text-amber-600"
+                aria-label={t("draft.badge")}
+              />
+            )}
+          </span>
           {metaOrder.map((k) =>
             !columns[k] ? null : k === "flag" ? (
-              <span key={k} className="grid w-5 shrink-0 place-items-center">
-                {starred && (
-                  <Star
-                    className="size-3 fill-amber-400 text-amber-400"
-                    aria-label={t("aria.starred")}
-                  />
-                )}
-              </span>
+              // ★フラグ列はクリックでその場スター切替。常時表示（hover でも隠さない）
+              // ＝カーソルを乗せても消えず押せる。未スターは hover で薄く出して誘導。
+              <button
+                key={k}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleStar();
+                }}
+                title={email.starred ? t("row.star.off") : t("row.star.on")}
+                className="grid w-5 shrink-0 place-items-center rounded text-fg-subtle hover:text-amber-500"
+              >
+                <Star
+                  className={cn(
+                    "size-3",
+                    starred
+                      ? "fill-amber-400 text-amber-400"
+                      : "opacity-0 group-hover:opacity-50",
+                  )}
+                  aria-label={
+                    email.starred ? t("row.star.off") : t("row.star.on")
+                  }
+                />
+              </button>
             ) : k === "attachment" ? (
-              <span key={k} className="grid w-4 shrink-0 place-items-center">
+              <span
+                key={k}
+                className="grid w-4 shrink-0 place-items-center group-hover:hidden"
+              >
                 {email.hasAttachment && (
                   <Paperclip
                     className="size-3 text-fg-muted"
@@ -2112,29 +2134,35 @@ function EmailListItem({
                 )}
               </span>
             ) : (
-              <span key={k} className="w-14 shrink-0 text-right tabular-nums">
+              <span
+                key={k}
+                className="w-14 shrink-0 text-right tabular-nums group-hover:hidden"
+              >
                 {relativeTime(email.date)}
               </span>
             ),
           )}
         </span>
-        {/* Right-edge quick-actions (same set as the classic row). */}
+        {/* Right-edge quick-actions. スター切替は★フラグ列に移したので、ここでは
+            フラグ列を非表示にしている場合のフォールバックとしてのみ★を出す。 */}
         <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleStar();
-            }}
-            title={email.starred ? t("row.star.off") : t("row.star.on")}
-            className="grid size-6 place-items-center rounded-md text-fg-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
-          >
-            <Star
-              className={cn(
-                "size-3.5",
-                email.starred && "fill-amber-400 text-amber-400",
-              )}
-            />
-          </button>
+          {!columns.flag && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleStar();
+              }}
+              title={email.starred ? t("row.star.off") : t("row.star.on")}
+              className="grid size-6 place-items-center rounded-md text-fg-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-400/10"
+            >
+              <Star
+                className={cn(
+                  "size-3.5",
+                  email.starred && "fill-amber-400 text-amber-400",
+                )}
+              />
+            </button>
+          )}
           {onToggleTodo && (
             <button
               onClick={(e) => {
