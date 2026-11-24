@@ -1550,7 +1550,7 @@ function SearchDigestPanel({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-medium text-fg">
-                      {e?.subject || "(メール)"}
+                      {e?.subject || t("drafts.noSubject")}
                     </span>
                     <span className="block truncate text-[11px] text-fg-subtle">
                       {s.reason}
@@ -1571,11 +1571,12 @@ function SearchDigestPanel({
  * ラベルは @ の前だけに短縮（morioka / g1989n）。色はアカウント色で識別。
  */
 function AccountChip({ account, label }: { account: string; label: string }) {
+  const { t } = useI18n();
   const short = label.split("@")[0] || label;
   return (
     <span
       className="flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-medium text-fg-muted"
-      title={`アカウント: ${label}`}
+      title={t("sweep.account").replace("{label}", label)}
     >
       <span
         className="size-1.5 rounded-full"

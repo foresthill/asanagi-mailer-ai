@@ -2021,6 +2021,64 @@ const en: Dict = {
   "wsamp.cancel": "Cancel",
   "wsamp.added": "✓ Rule added",
   "wsamp.failed": "Couldn't add",
+  // Projects: waiting / people map / board / stalled (ProjectsView)
+  "projects.waiting.them": "Waiting on them · {n}d",
+  "projects.waiting.me": "Your move · reply needed",
+  "projects.graph.show": "People map",
+  "projects.graph.hide": "Hide people map",
+  "projects.graph.title": "People map (contacts visible across these emails)",
+  "projects.status.done": "Done",
+  "projects.view.list": "List view",
+  "projects.view.board": "Board view",
+  "projects.board.empty": "No projects in this status.",
+  "projects.stalled.label": "Highlight stalled",
+  "projects.stalled.unit": "d+",
+  "projects.stalled.hint":
+    "Projects waiting on them for at least this many days are highlighted (display only — detection is unchanged).",
+  // Obsidian integration
+  "ob.title": "Obsidian integration",
+  "ob.intro":
+    "Save the open email to your Obsidian vault as a Markdown note (no plugin, stays on your device).",
+  "ob.connected": "Connected",
+  "ob.vaultPath": "Vault path",
+  "ob.vaultPath.note":
+    "Absolute path to your Obsidian vault folder (e.g. /Users/you/Documents/MyVault). Stored only on this device.",
+  "ob.folder": "Destination folder (inside the vault)",
+  "ob.folder.note": "If left blank, notes are saved to the “Asanagi” folder.",
+  "ob.notFound": "That folder was not found. Please check the path.",
+  "ob.save": "Save",
+  "ob.saved": "Saved.",
+  "ob.disconnect": "Disconnect",
+  "ob.disconnected": "Disconnected.",
+  "obsidian.save": "Save to Obsidian",
+  "obsidian.saving": "Saving to Obsidian…",
+  "obsidian.saved": "Saved to Obsidian.",
+  "obsidian.fail": "Couldn't save to Obsidian.",
+  "integrations.desc.note": "Save emails to your vault as Markdown notes",
+  // Shared team rules (collective reply-style rules)
+  "tr.title": "Shared team rules",
+  "tr.intro":
+    "Share only the abstract style-rule lines for replies with your team. Asanagi reads a shared file (team-rules.json in a sync folder) and, when drafting replies, combines them as “personal rules > team rules”. Email bodies, raw diffs and PII are never shared.",
+  "tr.connected": "Connected",
+  "tr.filePath": "Shared file path (team-rules.json)",
+  "tr.filePath.note":
+    "Absolute path to team-rules.json placed in a sync folder such as Nextcloud or iCloud. The path is stored only on this device. If the file doesn't exist yet, “Propose to team” will create it.",
+  "tr.current": "Rules currently shared ({n} · applied as defaults when drafting replies)",
+  "tr.empty": "No shared rules yet.",
+  "tr.noFileYet":
+    "The shared file hasn't been created yet (“Propose to team” will create it).",
+  "tr.propose": "Propose to team (opt-in)",
+  "tr.propose.placeholder": "e.g. Lead with the conclusion / Avoid over-formal honorifics",
+  "tr.propose.note":
+    "One generalizable style rule only. Don't include proper nouns (names, companies, project names, amounts, etc.) or message text. Review it before proposing.",
+  "tr.propose.btn": "Propose this line to the team",
+  "tr.proposed": "Proposed to the team (appended to the shared file).",
+  "tr.save": "Save",
+  "tr.saved": "Saved.",
+  "tr.disconnect": "Disconnect",
+  "tr.disconnected": "Disconnected.",
+  "tr.fail": "Something went wrong.",
+  "integrations.desc.teamRules": "Share abstract reply-style rules with your team",
 };
 
 // fr / zh: キー予約。未訳は en へフォールバック（順次追加）。
@@ -3009,6 +3067,79 @@ const fr: Dict = {
   "wsamp.cancel": "Annuler",
   "wsamp.added": "✓ Règle ajoutée",
   "wsamp.failed": "Échec de l'ajout",
+  // Projects: waiting / people map / board / stalled (ProjectsView)
+  "projects.waiting.them": "En attente d'eux · {n} j",
+  "projects.waiting.me": "À vous de jouer · réponse requise",
+  "projects.graph.show": "Carte des intervenants",
+  "projects.graph.hide": "Masquer la carte",
+  "projects.graph.title": "Carte des intervenants (contacts visibles dans ces e-mails)",
+  "projects.status.done": "Terminé",
+  "projects.view.list": "Vue liste",
+  "projects.view.board": "Vue tableau",
+  "projects.board.empty": "Aucun dossier dans ce statut.",
+  "projects.stalled.label": "Surligner les dossiers bloqués",
+  "projects.stalled.unit": "j+",
+  "projects.stalled.hint":
+    "Les dossiers en attente d'eux depuis au moins ce nombre de jours sont surlignés (affichage seulement — la détection ne change pas).",
+  // Obsidian integration
+  "ob.title": "Intégration Obsidian",
+  "ob.intro":
+    "Enregistre l'e-mail ouvert dans votre coffre Obsidian sous forme de note Markdown (sans plugin, reste sur votre appareil).",
+  "ob.connected": "Connecté",
+  "ob.vaultPath": "Chemin du coffre",
+  "ob.vaultPath.note":
+    "Chemin absolu du dossier de votre coffre Obsidian (ex. /Users/you/Documents/MyVault). Enregistré uniquement sur cet appareil.",
+  "ob.folder": "Dossier de destination (dans le coffre)",
+  "ob.folder.note": "Si vide, les notes sont enregistrées dans le dossier « Asanagi ».",
+  "ob.notFound": "Dossier introuvable. Veuillez vérifier le chemin.",
+  "ob.save": "Enregistrer",
+  "ob.saved": "Enregistré.",
+  "ob.disconnect": "Déconnecter",
+  "ob.disconnected": "Déconnecté.",
+  "obsidian.save": "Enregistrer dans Obsidian",
+  "obsidian.saving": "Enregistrement dans Obsidian…",
+  "obsidian.saved": "Enregistré dans Obsidian.",
+  "obsidian.fail": "Échec de l'enregistrement dans Obsidian.",
+  "integrations.desc.note": "Enregistrer les e-mails dans votre coffre en notes Markdown",
+  // Shared team rules (collective reply-style rules)
+  "tr.title": "Règles d'équipe partagées",
+  "tr.intro":
+    "Partagez uniquement les lignes de règles de style abstraites pour les réponses avec votre équipe. Asanagi lit un fichier partagé (team-rules.json dans un dossier synchronisé) et, lors de la rédaction des réponses, les combine selon « règles personnelles > règles d'équipe ». Le corps des e-mails, les diffs bruts et les données personnelles ne sont jamais partagés.",
+  "tr.connected": "Connecté",
+  "tr.filePath": "Chemin du fichier partagé (team-rules.json)",
+  "tr.filePath.note":
+    "Chemin absolu de team-rules.json placé dans un dossier synchronisé comme Nextcloud ou iCloud. Le chemin est enregistré uniquement sur cet appareil. Si le fichier n'existe pas encore, « Proposer à l'équipe » le créera.",
+  "tr.current": "Règles actuellement partagées ({n} · appliquées par défaut lors de la rédaction)",
+  "tr.empty": "Aucune règle partagée pour l'instant.",
+  "tr.noFileYet":
+    "Le fichier partagé n'a pas encore été créé (« Proposer à l'équipe » le créera).",
+  "tr.propose": "Proposer à l'équipe (opt-in)",
+  "tr.propose.placeholder": "ex. Commencer par la conclusion / Éviter les formules trop polies",
+  "tr.propose.note":
+    "Une seule règle de style généralisable. N'incluez pas de noms propres (personnes, entreprises, dossiers, montants, etc.) ni de texte de message. Vérifiez avant de proposer.",
+  "tr.propose.btn": "Proposer cette ligne à l'équipe",
+  "tr.proposed": "Proposé à l'équipe (ajouté au fichier partagé).",
+  "tr.save": "Enregistrer",
+  "tr.saved": "Enregistré.",
+  "tr.disconnect": "Déconnecter",
+  "tr.disconnected": "Déconnecté.",
+  "tr.fail": "Une erreur est survenue.",
+  "integrations.desc.teamRules": "Partager les règles de style de réponse avec votre équipe",
+  // Connection settings (previously en-only)
+  "settings.emailNotSet": "Paramètres de connexion (e-mail non défini)",
+  "gmail.intro":
+    "C'est la méthode avancée où vous créez votre propre client OAuth dans Google Cloud. Si c'est trop compliqué, utilisez « Connexion e-mail (adresse + mot de passe) » ci-dessus pour connecter Gmail avec un mot de passe d'application. L'ID/secret ici ne sont pas requis pour utiliser la messagerie.",
+  "gmail.oauthAdvanced": "Avancé : se connecter avec un ID/secret de client OAuth (rarement nécessaire)",
+  "imap.intro":
+    "Saisissez simplement votre adresse e-mail et votre mot de passe. Pour Gmail et d'autres, les paramètres du serveur sont remplis automatiquement. La messagerie d'entreprise peut être configurée manuellement sous « Paramètres avancés ».",
+  "imap.gmail.detected":
+    "Gmail détecté : paramètres du serveur remplis automatiquement. Utilisez un « mot de passe d'application » Gmail (votre mot de passe de connexion habituel ne fonctionnera pas).",
+  "imap.gmail.appPwLink": "Comment créer un mot de passe d'application",
+  "imap.title.gmail": "Connexion Gmail / Google Workspace",
+  "imap.gmail.workspace":
+    "Gmail / Google Workspace : serveurs réglés sur Gmail. Utilisez un « mot de passe d'application » Google (votre mot de passe habituel / la validation en 2 étapes ne se connectera pas).",
+  "imap.gmail.slotTaken":
+    "Une autre boîte ({host}) est déjà connectée. Une seule est prise en charge pour l'instant — utilisez « Effacer » ci-dessus pour la déconnecter avant d'utiliser Gmail (le multicompte arrive).",
 };
 
 const zh: Dict = {
@@ -3919,6 +4050,79 @@ const zh: Dict = {
   "wsamp.cancel": "取消",
   "wsamp.added": "✓ 已添加规则",
   "wsamp.failed": "添加失败",
+  // Projects: waiting / people map / board / stalled (ProjectsView)
+  "projects.waiting.them": "等待对方 · {n}天",
+  "projects.waiting.me": "轮到你了 · 需回复",
+  "projects.graph.show": "关系人地图",
+  "projects.graph.hide": "隐藏关系人地图",
+  "projects.graph.title": "关系人地图（这组邮件中可见的联系人）",
+  "projects.status.done": "已完成",
+  "projects.view.list": "列表视图",
+  "projects.view.board": "看板视图",
+  "projects.board.empty": "此状态下没有项目。",
+  "projects.stalled.label": "突出停滞项目",
+  "projects.stalled.unit": "天+",
+  "projects.stalled.hint":
+    "等待对方达到此天数及以上的项目会被突出显示（仅显示设置，不改变判定）。",
+  // Obsidian integration
+  "ob.title": "Obsidian 集成",
+  "ob.intro":
+    "将打开的邮件以 Markdown 笔记保存到你的 Obsidian 库（无需插件，全部在本地完成）。",
+  "ob.connected": "已连接",
+  "ob.vaultPath": "库路径",
+  "ob.vaultPath.note":
+    "Obsidian 库文件夹的绝对路径（例如 /Users/you/Documents/MyVault）。仅保存在本机。",
+  "ob.folder": "保存文件夹（库内）",
+  "ob.folder.note": "留空时保存到「Asanagi」文件夹。",
+  "ob.notFound": "找不到指定的文件夹，请检查路径。",
+  "ob.save": "保存",
+  "ob.saved": "已保存。",
+  "ob.disconnect": "断开连接",
+  "ob.disconnected": "已断开连接。",
+  "obsidian.save": "保存到 Obsidian",
+  "obsidian.saving": "正在保存到 Obsidian…",
+  "obsidian.saved": "已保存到 Obsidian。",
+  "obsidian.fail": "保存到 Obsidian 失败。",
+  "integrations.desc.note": "将邮件以 Markdown 笔记保存到库",
+  // Shared team rules (collective reply-style rules)
+  "tr.title": "团队共享规则",
+  "tr.intro":
+    "仅与团队共享回复文体的「抽象规则行」。Asanagi 读取共享文件（同步文件夹中的 team-rules.json），在生成回复时按「个人规则＞团队规则」合成。邮件正文、原始差异和个人信息不会被共享。",
+  "tr.connected": "已连接",
+  "tr.filePath": "共享文件路径（team-rules.json）",
+  "tr.filePath.note":
+    "放在 Nextcloud、iCloud 等同步文件夹中的 team-rules.json 的绝对路径。路径仅保存在本机。即使文件不存在，使用「向团队提议」也会创建它。",
+  "tr.current": "当前共享的规则（{n} 条 · 生成回复时作为默认应用）",
+  "tr.empty": "暂无共享规则。",
+  "tr.noFileYet":
+    "共享文件尚未创建（「向团队提议」会创建它）。",
+  "tr.propose": "向团队提议（opt-in）",
+  "tr.propose.placeholder": "例如：先写结论 / 避免过度敬语",
+  "tr.propose.note":
+    "只写一行可通用的文体规则。请勿包含专有名词（人名、公司名、项目名、金额等）或正文内容。确认后再提议。",
+  "tr.propose.btn": "将此行提议给团队",
+  "tr.proposed": "已向团队提议（已追加到共享文件）。",
+  "tr.save": "保存",
+  "tr.saved": "已保存。",
+  "tr.disconnect": "断开共享",
+  "tr.disconnected": "已断开共享。",
+  "tr.fail": "操作失败。",
+  "integrations.desc.teamRules": "与团队共享回复文体的抽象规则",
+  // Connection settings (previously en-only)
+  "settings.emailNotSet": "连接设置（邮箱未设置）",
+  "gmail.intro":
+    "这是高级方式，你需要在 Google Cloud 中创建自己的 OAuth 客户端。如果太复杂，请使用上方的「邮箱连接（地址 + 密码）」用应用专用密码连接 Gmail。此处的 ID/密钥并非使用邮件所必需。",
+  "gmail.oauthAdvanced": "高级：使用 OAuth 客户端 ID/密钥连接（很少需要）",
+  "imap.intro":
+    "只需输入你的邮箱地址和密码。Gmail 等的服务器设置会自动填写。企业邮箱可在「高级设置」中手动配置。",
+  "imap.gmail.detected":
+    "检测到 Gmail：服务器设置已自动填写。密码请使用 Gmail「应用专用密码」（普通登录密码无法使用）。",
+  "imap.gmail.appPwLink": "如何创建应用专用密码",
+  "imap.title.gmail": "Gmail / Google Workspace 连接",
+  "imap.gmail.workspace":
+    "Gmail / Google Workspace：服务器已设为 Gmail。请使用 Google「应用专用密码」（普通登录密码 / 两步验证无法连接）。",
+  "imap.gmail.slotTaken":
+    "已连接另一个邮箱（{host}）。目前仅支持一个——使用上方的「清除」断开它后再使用 Gmail（多账户即将推出）。",
 };
 
 const DICTS: Record<Locale, Dict> = { ja, en, fr, zh };
