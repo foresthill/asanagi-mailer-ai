@@ -74,3 +74,34 @@ export function resolveRuleColor(
   }
   return undefined;
 }
+
+/** 行動を伴うアクション（色以外）。 */
+export type ApplyActionType = "star" | "todo" | "archive" | "junk";
+/** 受信時に自動適用してよい非破壊アクション。 */
+export const AUTO_ACTIONS: readonly ApplyActionType[] = ["star", "todo"];
+
+/**
+ * あるメールに対して発火する「色以外」のアクション種別の集合（全マッチルールの和）。
+ * 一通が複数ルールに当たれば star と todo の両方が立つ、のように合成する。
+ * archive と junk は移動先が競合するため、呼び出し側で片方だけ適用する（junk 優先）。
+ */
+export function resolveRuleActions(
+  e: Email,
+  rules: MailRule[],
+): Set<ApplyActionType> {
+  const out = new Set<ApplyActionType>();
+  for (const r of rules) {
+    if (!ruleMatches(e, r)) continue;
+    for (const a of r.actions) {
+      if (
+        a.type === "star" ||
+        a.type === "todo" ||
+        a.type === "archive" ||
+        a.type === "junk"
+      ) {
+        out.add(a.type);
+      }
+    }
+  }
+  return out;
+}

@@ -523,9 +523,20 @@ export interface RuleCondition {
   value?: string;
 }
 
+/**
+ * ルールのアクション種別。
+ * - color: 一覧の行に色付け（描画時のみ・サーバ不変＝従来どおり）
+ * - star : スター（Gmail STARRED / IMAP \Flagged）を付ける（非破壊）
+ * - todo : TODO（あとで）に積む（端末内のみ・非破壊）
+ * - archive / junk: アーカイブ / 迷惑メールへ移動（サーバのメールを動かす＝破壊的寄り）
+ * star/todo は受信時に自動適用、archive/junk は「今すぐ適用」ボタンでのみ実行する。
+ */
+export type RuleActionType = "color" | "star" | "todo" | "archive" | "junk";
+
 export interface RuleAction {
-  type: "color";
-  color: ContactColor;
+  type: RuleActionType;
+  /** color のときのみ使用。 */
+  color?: ContactColor;
 }
 
 export interface MailRule {

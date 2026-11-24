@@ -14,7 +14,11 @@ import {
   listSignals,
   listThreatSenders,
   listSafeSenders,
+  listRules,
+  getRulesAutoMark,
+  setRulesAutoMark,
 } from "@/lib/store";
+import { applyRuleActionsForAccount } from "@/lib/rules-apply";
 import { annotateImportance } from "@/lib/importance";
 import { detectThreat } from "@/lib/threat";
 import type { Email, FolderView, MailboxState } from "@/lib/types";
@@ -151,11 +155,22 @@ export async function GET(req: Request) {
     }
 
     const stale: string[] = [];
+    // 受信時の自動ルール適用用に、今回の同期で初めてキャッシュに現れた受信メール
+    // （＝新着）をアカウント別に拾っておく。upsert 前に existingIds で判定する。
+    const freshInbox: { account: string; emails: Email[] }[] = [];
     const lists = await Promise.all(
       targets.map(async (a) => {
         try {
           const provider = await getProviderFor(a.key);
           const live = await provider.list(mbox);
+          if (mbox === "inbox") {
+            const have = existingIds(
+              a.key,
+              live.map((e) => e.id),
+            );
+            const fresh = live.filter((e) => !have.has(e.id));
+            if (fresh.length) freshInbox.push({ account: a.key, emails: fresh });
+          }
           upsertEmails(a.key, live); // write-through (raw provider ids)
           // Sent: drop optimistic `pending:` copies now that the real server
           // copy (same message_id) is in — avoids showing the sent mail twice.
@@ -219,6 +234,54 @@ export async function GET(req: Request) {
           } catch {
             /* backfill is best-effort */
           }
+        }
+
+        // 受信時の自動ルール適用（非破壊＝star / todo のみ。移動系は「今すぐ適用」）。
+        // アカウント別の基準点（最後に処理した受信日時）より後に届いた新着だけに
+        // 適用し、初回同期やキャッシュ再構築で受信箱全体へ一括適用する事故を防ぐ。
+        try {
+          const rules = (await listRules()).filter((r) => r.enabled);
+          const hasAuto = rules.some((r) =>
+            r.actions.some((act) => act.type === "star" || act.type === "todo"),
+          );
+          const marks = await getRulesAutoMark();
+          const freshFor = (account: string) =>
+            freshInbox.find((f) => f.account === account)?.emails ?? [];
+          for (const a of targets) {
+            const account = a.key;
+            const fresh = freshFor(account);
+            const markMs = marks[account] ? +new Date(marks[account]) : null;
+            // 基準点が未設定（初回）＝基準点だけ立てて、既存／今回分には一切適用しない。
+            // 以後、この時刻より後に届いた新着だけが自動適用の対象になる。
+            if (markMs === null) {
+              const base = fresh.reduce(
+                (m, e) => Math.max(m, +new Date(e.date)),
+                Date.now(),
+              );
+              await setRulesAutoMark(account, new Date(base).toISOString());
+              continue;
+            }
+            // 基準点より後の新着だけ適用（star / todo のみ）。
+            if (hasAuto) {
+              const toApply = fresh.filter((e) => +new Date(e.date) > markMs);
+              if (toApply.length) {
+                await applyRuleActionsForAccount(account, toApply, rules, {
+                  moves: false,
+                });
+              }
+            }
+            // 基準点を新着の最新へ前進（ルール有無に関わらず。後からルールを足しても
+            // 過去分へ遡らないため）。
+            const newest = fresh.reduce(
+              (m, e) => Math.max(m, +new Date(e.date)),
+              0,
+            );
+            if (newest > markMs) {
+              await setRulesAutoMark(account, new Date(newest).toISOString());
+            }
+          }
+        } catch {
+          /* auto-apply is best-effort — never fail the list over it */
         }
       });
     }

@@ -57,14 +57,24 @@ function parseConditions(raw: unknown): RuleCondition[] {
 function parseActions(raw: unknown): RuleAction[] {
   if (!Array.isArray(raw)) return [];
   const out: RuleAction[] = [];
+  // archive と junk は移動先が競合するので最後の指定だけを採用（相互排他）。
+  let move: RuleAction | null = null;
   for (const r of raw) {
     if (!r || typeof r !== "object") continue;
     const a = r as Record<string, unknown>;
-    if (a.type === "color" && COLORS.includes(a.color as ContactColor)) {
+    const type = a.type;
+    if (type === "color" && COLORS.includes(a.color as ContactColor)) {
       out.push({ type: "color", color: a.color as ContactColor });
+    } else if (type === "star" || type === "todo") {
+      out.push({ type });
+    } else if (type === "archive" || type === "junk") {
+      move = { type };
     }
   }
-  return out;
+  if (move) out.push(move);
+  // 種別で重複排除（color は先勝ち・star/todo/移動は各1つ）。
+  const seen = new Set<string>();
+  return out.filter((a) => (seen.has(a.type) ? false : (seen.add(a.type), true)));
 }
 
 export async function GET() {
@@ -89,7 +99,7 @@ export async function POST(req: Request) {
   }
   if (actions.length === 0) {
     return NextResponse.json(
-      { error: "アクション（色）を指定してください" },
+      { error: "アクションを1つ以上指定してください（色／スター／TODO／移動）" },
       { status: 400 },
     );
   }
