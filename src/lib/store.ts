@@ -1062,6 +1062,24 @@ export async function reorderRules(ids: string[]): Promise<MailRule[]> {
   return listRules();
 }
 
+// ルール自動適用の基準点（アカウント別・最後に処理した受信メールの日時 ISO）。
+// 受信時の star/todo 自動適用を「この時刻より後に届いたメール」だけに限定し、
+// 初回同期やキャッシュ再構築で受信箱全体に一括適用してしまう事故を防ぐ。
+const RULES_AUTO = "mail-rules-auto.json";
+
+export async function getRulesAutoMark(): Promise<Record<string, string>> {
+  return readJson<Record<string, string>>(RULES_AUTO, {});
+}
+
+export async function setRulesAutoMark(
+  account: string,
+  iso: string,
+): Promise<void> {
+  const marks = await readJson<Record<string, string>>(RULES_AUTO, {});
+  marks[account] = iso;
+  await writeJson(RULES_AUTO, marks);
+}
+
 // ── TODO（「あとで」）───────────────────────────────────────────────
 // メールを後で対応するタスクとして保持。local-first: .data のみ。
 const TODOS = "todos.json";
