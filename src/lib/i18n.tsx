@@ -465,6 +465,7 @@ const ja: Dict = {
   "conn.endpoint.fetching": "確認中…",
   "conn.endpoint.ok": "接続OK（{n}件）。下の一覧から選べます。",
   "conn.endpoint.fail": "未接続。SSHトンネル等の接続を確認してください。",
+  "conn.models.fail": "モデル取得に失敗しました。APIキーをご確認ください。",
   "conn.endpoint.empty":
     "接続OK。ただしモデル未取得です（サーバ側で ollama pull してください）。",
   "conn.endpoint.pick": "一覧から選択",
@@ -1435,6 +1436,7 @@ const en: Dict = {
   "conn.endpoint.fetching": "Checking…",
   "conn.endpoint.ok": "Connected ({n}). Pick one from the list below.",
   "conn.endpoint.fail": "Not connected. Check the SSH tunnel / endpoint.",
+  "conn.models.fail": "Failed to fetch models. Check your API key.",
   "conn.endpoint.empty":
     "Connected, but no models yet (run `ollama pull` on the server).",
   "conn.endpoint.pick": "Pick from list",
@@ -2478,6 +2480,7 @@ const fr: Dict = {
   "conn.endpoint.fetching": "Vérification…",
   "conn.endpoint.ok": "Connecté ({n}). Choisissez dans la liste ci-dessous.",
   "conn.endpoint.fail": "Non connecté. Vérifiez le tunnel SSH / le point de terminaison.",
+  "conn.models.fail": "Échec de la récupération des modèles. Vérifiez votre clé API.",
   "conn.endpoint.empty":
     "Connecté, mais aucun modèle (lancez « ollama pull » sur le serveur).",
   "conn.endpoint.pick": "Choisir dans la liste",
@@ -3510,6 +3513,7 @@ const zh: Dict = {
   "conn.endpoint.fetching": "检查中…",
   "conn.endpoint.ok": "已连接（{n} 个）。可从下方列表选择。",
   "conn.endpoint.fail": "未连接。请检查 SSH 隧道／端点。",
+  "conn.models.fail": "获取模型失败。请检查 API 密钥。",
   "conn.endpoint.empty": "已连接，但尚无模型（请在服务器执行 ollama pull）。",
   "conn.endpoint.pick": "从列表选择",
   "conn.fallback.label": "② 本地停止时的备用（云端）",
