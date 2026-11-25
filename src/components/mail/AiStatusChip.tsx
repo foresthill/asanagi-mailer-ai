@@ -90,10 +90,15 @@ export function AiStatusChip({
   // Dot colour + what's actually serving + short status word from the snapshot.
   let dot = "bg-fg-subtle";
   let label = t("aistatus.checking");
+  // On-prem は実装上 provider="openai"（OpenAI互換API）で保存されるため、生の
+  // "openai:model" を出すと「ローカル・オンプレ(Ollama)」を選んでいるのに openai:
+  // と見えて紛らわしい。kind を見て表示名だけ「ローカル」に差し替える（挙動は不変）。
+  const provLabel = (st: AiStatus) =>
+    st.kind === "onprem" ? t("aistatus.local") : st.provider;
   // What is answering right now: normally the primary, but the cloud fallback
   // when the tunnel is down and fallback is serving (so the user sees bodies are
   // going to the cloud).
-  let serving = s ? `${s.provider}:${s.model}` : "AI";
+  let serving = s ? `${provLabel(s)}:${s.model}` : "AI";
   let endpoint = s?.endpoint ?? "";
   if (s) {
     if (s.fallbackActive && s.serving) {

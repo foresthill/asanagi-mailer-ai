@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   Archive,
+  ChevronDown,
   ChevronRight,
   Inbox,
   Sunrise,
@@ -152,6 +153,27 @@ export function Sidebar({
 
   // 送信/予約に失敗して相手に届いていないメールの合計。0 のときは何も出さない。
   const unsentTotal = failedDraftsCount + failedScheduledCount;
+
+  // フッタの「表示設定」(レイアウト/タブ/テーマ/色/言語) の折りたたみ。頻繁に触らない
+  // ので収納できるように。端末ごとのUI都合なので localStorage に保持（既定=開）。
+  const DISPLAY_OPEN_KEY = "asanagi:sidebar-display-open";
+  const [displayOpen, setDisplayOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(DISPLAY_OPEN_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const toggleDisplay = () =>
+    setDisplayOpen((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(DISPLAY_OPEN_KEY, next ? "1" : "0");
+      } catch {
+        /* private mode / blocked storage: keep in-memory only */
+      }
+      return next;
+    });
 
   return (
     <aside className="flex w-56 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border bg-surface-2 px-3 py-4">
@@ -505,6 +527,21 @@ export function Sidebar({
             </span>
             <Settings className="size-3.5" />
           </button>
+          {/* 「表示設定」= レイアウト/タブ/テーマ/色/言語 の折りたたみ見出し。収納できる。 */}
+          <button
+            onClick={toggleDisplay}
+            aria-expanded={displayOpen}
+            className="mt-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] text-fg-subtle transition-colors hover:bg-surface hover:text-fg"
+          >
+            {displayOpen ? (
+              <ChevronDown className="size-3" />
+            ) : (
+              <ChevronRight className="size-3" />
+            )}
+            <span className="flex-1 text-left">{t("settings.display.section")}</span>
+          </button>
+          {displayOpen && (
+          <div>
           {/* 表示切替: 左右(一覧|本文) / 上下(件名を上・本文を下) のセグメント。 */}
           <div className="mt-1 flex items-center gap-1.5 px-0.5 pt-1">
             <span className="shrink-0 text-[10px] text-fg-subtle">
@@ -581,6 +618,8 @@ export function Sidebar({
           <ColorPreset />
           {/* 言語切替: 社内展開向け（日/英/仏/中）。 */}
           <LanguageSwitcher />
+          </div>
+          )}
         </div>
       </div>
     </aside>
