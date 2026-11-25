@@ -597,6 +597,7 @@ const ja: Dict = {
   "conn.usage.foot.b":
     "から計算した目安です。正確な請求はプロバイダのダッシュボードで確認してください。",
   "view.label": "表示",
+  "settings.display.section": "表示設定",
   "view.classic": "左右",
   "view.classic.title": "左右表示: 一覧(左)｜本文(右)",
   "view.geek": "上下",
@@ -1590,6 +1591,7 @@ const en: Dict = {
   "conn.usage.foot.link": "OpenRouter's list prices",
   "conn.usage.foot.b": ". Check your provider's dashboard for the exact bill.",
   "view.label": "View",
+  "settings.display.section": "Display",
   "view.classic": "Split",
   "view.classic.title": "Split view: list (left) | message (right)",
   "view.geek": "Stacked",
@@ -2662,6 +2664,7 @@ const fr: Dict = {
   "conn.usage.foot.b":
     ". Consultez le tableau de bord de votre fournisseur pour la facture exacte.",
   "view.label": "Affichage",
+  "settings.display.section": "Affichage",
   "view.classic": "Colonnes",
   "view.classic.title":
     "Affichage côte à côte : liste (gauche) | message (droite)",
@@ -3705,6 +3708,7 @@ const zh: Dict = {
   "conn.usage.foot.link": "OpenRouter 公布单价",
   "conn.usage.foot.b": " 计算的估算值。准确账单请在服务商的仪表盘确认。",
   "view.label": "视图",
+  "settings.display.section": "显示设置",
   "view.classic": "分栏",
   "view.classic.title": "分栏视图：列表（左）｜正文（右）",
   "view.geek": "堆叠",
