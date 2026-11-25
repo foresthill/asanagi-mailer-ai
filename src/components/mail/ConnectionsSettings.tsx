@@ -520,7 +520,37 @@ export function ConnectionsSettings({
             <div className="flex items-center gap-2 border-t border-border pt-4">
               <Sparkles className="size-4 text-accent" />
               <h3 className="text-xs font-semibold">{t("conn.byok")}</h3>
+              {/* 接続テストはセクション見出しの横（最上部）に。以前はモデル設定の
+                  直下／さらに前は最下部で「どこにあるか分かりづらい」指摘が続いた。 */}
+              {provider !== "auto" && (
+                <button
+                  type="button"
+                  onClick={handleTest}
+                  disabled={loading || saving || testing}
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-fg-muted hover:bg-surface-2 disabled:opacity-50"
+                >
+                  {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                  {t("conn.test.btn")}
+                </button>
+              )}
             </div>
+            {/* テスト結果は見出し直下に出す（ボタンのすぐ近くで視線移動が少ない）。 */}
+            {provider !== "auto" && test && (
+              <div
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
+                  test.ok
+                    ? "bg-emerald-500/10 text-emerald-600"
+                    : "bg-high-soft text-high"
+                }`}
+              >
+                {test.ok ? (
+                  <Check className="size-4" />
+                ) : (
+                  <AlertCircle className="size-4" />
+                )}
+                <span className="break-all">{test.msg}</span>
+              </div>
+            )}
             {/* Provider */}
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-fg-muted">
@@ -735,38 +765,6 @@ export function ConnectionsSettings({
                     {t("conn.fallback.note")}
                   </span>
                 </div>
-              </div>
-            )}
-
-            {/* 接続テスト — モデル設定の直下に（以前は一番下で直感的でなかった）。
-                結果もすぐ隣に出す。handleTest は内部で現フォームを保存してから試す。 */}
-            {provider !== "auto" && (
-              <div className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
-                <button
-                  type="button"
-                  onClick={handleTest}
-                  disabled={loading || saving || testing}
-                  className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-2 disabled:opacity-50"
-                >
-                  {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                  {t("conn.test.btn")}
-                </button>
-                {test && (
-                  <div
-                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-                      test.ok
-                        ? "bg-emerald-500/10 text-emerald-600"
-                        : "bg-high-soft text-high"
-                    }`}
-                  >
-                    {test.ok ? (
-                      <Check className="size-4" />
-                    ) : (
-                      <AlertCircle className="size-4" />
-                    )}
-                    <span className="break-all">{test.msg}</span>
-                  </div>
-                )}
               </div>
             )}
 
@@ -988,7 +986,7 @@ export function ConnectionsSettings({
               </div>
             )}
 
-            {/* この AI 設定の保存（接続テストはモデル設定の直下へ移動済み）。 */}
+            {/* この AI 設定の保存（接続テストは AI(BYOK) 見出しの横へ移動済み）。 */}
             <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={handleSave}
