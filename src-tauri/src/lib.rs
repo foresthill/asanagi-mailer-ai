@@ -580,10 +580,13 @@ fn confirm_and_install(
         });
 }
 
-/// Localized labels for the parts of the native menu we author ourselves. The
-/// predefined roles (Copy/Paste/Undo/…) stay `None` so macOS localizes them by
-/// system language; only our own submenu titles and custom items are translated
-/// here, so the menu follows the in-app language (see `rebuild_menu`).
+/// Localized labels for the native menu. Predefined roles (About/Services/
+/// Copy/Paste/…) were previously left `None`, on the assumption macOS would
+/// localize them by system language — but our bundle ships no `.lproj`, so AppKit
+/// fell back to the development region (English) and the menu showed English
+/// roles next to our Japanese custom items. We now give every item an explicit
+/// label so the whole menu follows the in-app language (see `rebuild_menu`). The
+/// role (behavior) is preserved regardless of the label we pass.
 struct MenuStrings {
     file: &'static str,
     close_window: &'static str,
@@ -596,6 +599,23 @@ struct MenuStrings {
     open_server_log: &'static str,
     check_update: &'static str,
     quit: &'static str,
+    // Predefined roles — labels only; macOS keeps each item's built-in behavior.
+    about: &'static str,
+    services: &'static str,
+    hide: &'static str,
+    hide_others: &'static str,
+    show_all: &'static str,
+    undo: &'static str,
+    redo: &'static str,
+    cut: &'static str,
+    copy: &'static str,
+    paste: &'static str,
+    select_all: &'static str,
+    // Passing a static label drops the macOS auto Enter/Exit toggle, but keeping
+    // it `None` would leave this one item in English amid the localized menu.
+    fullscreen: &'static str,
+    minimize: &'static str,
+    zoom: &'static str,
 }
 
 fn menu_strings(lang: &str) -> MenuStrings {
@@ -612,6 +632,20 @@ fn menu_strings(lang: &str) -> MenuStrings {
             open_server_log: "Show Server Log (server.log)",
             check_update: "Check for Updates…",
             quit: "Quit Asanagi",
+            about: "About Asanagi",
+            services: "Services",
+            hide: "Hide Asanagi",
+            hide_others: "Hide Others",
+            show_all: "Show All",
+            undo: "Undo",
+            redo: "Redo",
+            cut: "Cut",
+            copy: "Copy",
+            paste: "Paste",
+            select_all: "Select All",
+            fullscreen: "Enter Full Screen",
+            minimize: "Minimize",
+            zoom: "Zoom",
         },
         "fr" => MenuStrings {
             file: "Fichier",
@@ -625,6 +659,20 @@ fn menu_strings(lang: &str) -> MenuStrings {
             open_server_log: "Afficher le journal du serveur (server.log)",
             check_update: "Rechercher les mises à jour…",
             quit: "Quitter Asanagi",
+            about: "À propos d’Asanagi",
+            services: "Services",
+            hide: "Masquer Asanagi",
+            hide_others: "Masquer les autres",
+            show_all: "Tout afficher",
+            undo: "Annuler",
+            redo: "Rétablir",
+            cut: "Couper",
+            copy: "Copier",
+            paste: "Coller",
+            select_all: "Tout sélectionner",
+            fullscreen: "Activer le mode plein écran",
+            minimize: "Réduire",
+            zoom: "Zoom",
         },
         "zh" => MenuStrings {
             file: "文件",
@@ -638,6 +686,20 @@ fn menu_strings(lang: &str) -> MenuStrings {
             open_server_log: "查看服务器日志 (server.log)",
             check_update: "检查更新…",
             quit: "退出 Asanagi",
+            about: "关于 Asanagi",
+            services: "服务",
+            hide: "隐藏 Asanagi",
+            hide_others: "隐藏其他",
+            show_all: "全部显示",
+            undo: "撤销",
+            redo: "重做",
+            cut: "剪切",
+            copy: "拷贝",
+            paste: "粘贴",
+            select_all: "全选",
+            fullscreen: "进入全屏幕",
+            minimize: "最小化",
+            zoom: "缩放",
         },
         // 既定（ja）。未知の lang もここに落とす。
         _ => MenuStrings {
@@ -652,6 +714,20 @@ fn menu_strings(lang: &str) -> MenuStrings {
             open_server_log: "サーバログを表示 (server.log)",
             check_update: "アップデートを確認…",
             quit: "終了する",
+            about: "Asanagi について",
+            services: "サービス",
+            hide: "Asanagi を隠す",
+            hide_others: "ほかを隠す",
+            show_all: "すべてを表示",
+            undo: "取り消す",
+            redo: "やり直す",
+            cut: "カット",
+            copy: "コピー",
+            paste: "ペースト",
+            select_all: "すべてを選択",
+            fullscreen: "フルスクリーンにする",
+            minimize: "しまう",
+            zoom: "拡大/縮小",
         },
     }
 }
@@ -675,15 +751,15 @@ fn build_menu<R: tauri::Runtime, M: tauri::Manager<R>>(
     // 「アップデートを確認…」は macOS 慣習に合わせ About の近く（アプリメニュー）に置く。
     let app_menu = SubmenuBuilder::new(m, &m.package_info().name)
         .items(&[
-            &PredefinedMenuItem::about(m, None, None)?,
+            &PredefinedMenuItem::about(m, Some(s.about), None)?,
             &PredefinedMenuItem::separator(m)?,
             &check_update,
             &PredefinedMenuItem::separator(m)?,
-            &PredefinedMenuItem::services(m, None)?,
+            &PredefinedMenuItem::services(m, Some(s.services))?,
             &PredefinedMenuItem::separator(m)?,
-            &PredefinedMenuItem::hide(m, None)?,
-            &PredefinedMenuItem::hide_others(m, None)?,
-            &PredefinedMenuItem::show_all(m, None)?,
+            &PredefinedMenuItem::hide(m, Some(s.hide))?,
+            &PredefinedMenuItem::hide_others(m, Some(s.hide_others))?,
+            &PredefinedMenuItem::show_all(m, Some(s.show_all))?,
             &PredefinedMenuItem::separator(m)?,
             &PredefinedMenuItem::quit(m, Some(s.quit))?,
         ])
@@ -696,24 +772,24 @@ fn build_menu<R: tauri::Runtime, M: tauri::Manager<R>>(
     // できない不具合の原因）。Predefined ロールで OS 標準の挙動になる。
     let edit = SubmenuBuilder::new(m, s.edit)
         .items(&[
-            &PredefinedMenuItem::undo(m, None)?,
-            &PredefinedMenuItem::redo(m, None)?,
+            &PredefinedMenuItem::undo(m, Some(s.undo))?,
+            &PredefinedMenuItem::redo(m, Some(s.redo))?,
             &PredefinedMenuItem::separator(m)?,
-            &PredefinedMenuItem::cut(m, None)?,
-            &PredefinedMenuItem::copy(m, None)?,
-            &PredefinedMenuItem::paste(m, None)?,
-            &PredefinedMenuItem::select_all(m, None)?,
+            &PredefinedMenuItem::cut(m, Some(s.cut))?,
+            &PredefinedMenuItem::copy(m, Some(s.copy))?,
+            &PredefinedMenuItem::paste(m, Some(s.paste))?,
+            &PredefinedMenuItem::select_all(m, Some(s.select_all))?,
         ])
         .build()?;
     // 表示
     let view = SubmenuBuilder::new(m, s.view)
-        .items(&[&PredefinedMenuItem::fullscreen(m, None)?])
+        .items(&[&PredefinedMenuItem::fullscreen(m, Some(s.fullscreen))?])
         .build()?;
     // ウィンドウ
     let window = SubmenuBuilder::new(m, s.window)
         .items(&[
-            &PredefinedMenuItem::minimize(m, None)?,
-            &PredefinedMenuItem::maximize(m, None)?,
+            &PredefinedMenuItem::minimize(m, Some(s.minimize))?,
+            &PredefinedMenuItem::maximize(m, Some(s.zoom))?,
         ])
         .build()?;
     let help = SubmenuBuilder::new(m, s.help)
