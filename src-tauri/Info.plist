@@ -6,9 +6,24 @@
   it as the default email app; incoming mailto URLs are delivered to the Rust
   side via the deep-link plugin (see src-tauri/src/lib.rs). CFBundleURLName uses
   the app's bundle id as a unique handler identifier.
+
+  CFBundleDevelopmentRegion / CFBundleLocalizations: declare that the bundle
+  supports Japanese so AppKit localizes the Edit-menu items IT injects itself
+  (Writing Tools / AutoFill / Start Dictation / Emoji & Symbols). With no
+  declared localizations AppKit falls back to the development region (English)
+  for those auto items, leaving them English amid our localized menu. 要検証:
+  公式ドキュメントに確証は無く、他者検証ベース（.lproj 同梱が必要な可能性あり）。
+  ビルド後に macOS 日本語環境で実機確認する。
 -->
 <plist version="1.0">
 <dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>ja</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>ja</string>
+    <string>en</string>
+  </array>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>

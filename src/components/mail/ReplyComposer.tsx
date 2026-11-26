@@ -17,6 +17,7 @@ import {
   Minimize2,
   Maximize2,
   ShieldCheck,
+  Languages,
 } from "lucide-react";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { SendConfirmDialog } from "./SendConfirmDialog";
@@ -257,6 +258,57 @@ export function ReplyComposer({
       });
     }
   }
+
+  // 下書きを翻訳して確認（書き換えない・既定は英訳）。海外の相手に出す前の
+  // チェック用。translate は逐語ストリーム＋内部で構造化PIIをマスクするので
+  // 本文がそのまま外部AIに渡らない（local-first）。引用部は除いて新規本文だけ訳す。
+  const [trCheck, setTrCheck] = useState<{
+    loading: boolean;
+    text: string;
+    error?: string;
+  } | null>(null);
+  const translateCheck = async () => {
+    const current = richMode
+      ? (richEditorRef.current?.getText() ?? richText)
+      : splitQuotedDraft(body, init.quote ?? "").head;
+    if (!current.trim()) {
+      setNote(t("composer.toast.noBody"));
+      return;
+    }
+    if (trCheck?.loading) return;
+    setTrCheck({ loading: true, text: "" });
+    try {
+      const res = await fetch("/api/ai/translate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: current, target: "en", part: "main" }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? t("composer.toast.suggestFailed"));
+      }
+      // text/plain の逐語ストリームを読み、届いた端からプレビューに反映。
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      if (reader) {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          acc += decoder.decode(value, { stream: true });
+          setTrCheck({ loading: true, text: acc });
+        }
+        acc += decoder.decode();
+      }
+      setTrCheck({ loading: false, text: acc });
+    } catch (e) {
+      setTrCheck({
+        loading: false,
+        text: "",
+        error: e instanceof Error ? e.message : t("composer.toast.suggestFailed"),
+      });
+    }
+  };
 
   const cancelAi = () => abortRef.current?.abort();
 
@@ -1308,6 +1360,33 @@ export function ReplyComposer({
             </div>
           ))}
           {note && <div className="text-xs text-fg-subtle">{note}</div>}
+          {trCheck && (
+            <div className="rounded-lg border border-border bg-surface px-3 py-2 text-xs">
+              <div className="mb-1 flex items-center gap-1.5">
+                <Languages className="size-3.5 text-accent" />
+                <span className="font-medium text-fg-muted">
+                  {t("composer.translateCheckTitle")}
+                </span>
+                <button
+                  onClick={() => setTrCheck(null)}
+                  className="ml-auto text-fg-subtle hover:text-fg"
+                  title={t("composer.close")}
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+              {trCheck.error ? (
+                <p className="text-high">{trCheck.error}</p>
+              ) : (
+                <p className="whitespace-pre-wrap leading-6 text-fg/90">
+                  {trCheck.text}
+                  {trCheck.loading && (
+                    <span className="ml-0.5 inline-block h-3.5 w-1 animate-pulse bg-accent/60 align-text-bottom" />
+                  )}
+                </p>
+              )}
+            </div>
+          )}
           {polite && !polite.loading && (
             <div className="rounded-lg border border-accent/30 bg-accent-soft/40 px-3 py-2 text-xs">
               <div className="mb-1 flex items-center gap-1.5">
@@ -1377,19 +1456,34 @@ export function ReplyComposer({
               </button>
             );
           })}
-          {/* 失礼チェック: 書き換えではなく、問題箇所＋理由をコメントで返す。 */}
-          <button
-            onClick={runReview}
-            disabled={busy || generating || reviewing || polite?.loading}
-            className="ml-auto inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:opacity-90 disabled:opacity-50"
-          >
-            {polite?.loading ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <ShieldCheck className="size-3" />
-            )}
-            {t("composer.review")}
-          </button>
+          <div className="ml-auto flex items-center gap-1.5">
+            {/* 訳して確認: 書き換えず、下書きの英訳をプレビュー（海外の相手向け）。 */}
+            <button
+              onClick={translateCheck}
+              disabled={busy || generating || reviewing || trCheck?.loading}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-medium text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+            >
+              {trCheck?.loading ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Languages className="size-3" />
+              )}
+              {t("composer.translateCheck")}
+            </button>
+            {/* 失礼チェック: 書き換えではなく、問題箇所＋理由をコメントで返す。 */}
+            <button
+              onClick={runReview}
+              disabled={busy || generating || reviewing || polite?.loading}
+              className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:opacity-90 disabled:opacity-50"
+            >
+              {polite?.loading ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <ShieldCheck className="size-3" />
+              )}
+              {t("composer.review")}
+            </button>
+          </div>
         </div>
 
         <div className="border-t border-border p-3">
