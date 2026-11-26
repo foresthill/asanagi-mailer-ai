@@ -17,6 +17,7 @@ import {
   Minimize2,
   Maximize2,
   ShieldCheck,
+  Languages,
 } from "lucide-react";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { SendConfirmDialog } from "./SendConfirmDialog";
@@ -151,6 +152,9 @@ export function ReplyComposer({
   const [body, setBody] = useState("");
   const [pending, setPending] = useState(0);
   const [generating, setGenerating] = useState(init.mode === "ai");
+  // 下書きが逐次到着し始めたら true。全面オーバーレイを外してエディタに流れる
+  // 本文を見せる（＝逐語の意味）。生成完了まで送信はロックしたまま。
+  const [streamingDraft, setStreamingDraft] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   // Persistent send error (draft is kept) — clearer than a transient alert
@@ -255,6 +259,57 @@ export function ReplyComposer({
     }
   }
 
+  // 下書きを翻訳して確認（書き換えない・既定は英訳）。海外の相手に出す前の
+  // チェック用。translate は逐語ストリーム＋内部で構造化PIIをマスクするので
+  // 本文がそのまま外部AIに渡らない（local-first）。引用部は除いて新規本文だけ訳す。
+  const [trCheck, setTrCheck] = useState<{
+    loading: boolean;
+    text: string;
+    error?: string;
+  } | null>(null);
+  const translateCheck = async () => {
+    const current = richMode
+      ? (richEditorRef.current?.getText() ?? richText)
+      : splitQuotedDraft(body, init.quote ?? "").head;
+    if (!current.trim()) {
+      setNote(t("composer.toast.noBody"));
+      return;
+    }
+    if (trCheck?.loading) return;
+    setTrCheck({ loading: true, text: "" });
+    try {
+      const res = await fetch("/api/ai/translate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: current, target: "en", part: "main" }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? t("composer.toast.suggestFailed"));
+      }
+      // text/plain の逐語ストリームを読み、届いた端からプレビューに反映。
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      if (reader) {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          acc += decoder.decode(value, { stream: true });
+          setTrCheck({ loading: true, text: acc });
+        }
+        acc += decoder.decode();
+      }
+      setTrCheck({ loading: false, text: acc });
+    } catch (e) {
+      setTrCheck({
+        loading: false,
+        text: "",
+        error: e instanceof Error ? e.message : t("composer.toast.suggestFailed"),
+      });
+    }
+  };
+
   const cancelAi = () => abortRef.current?.abort();
 
   // Initial draft. Plain modes start from the prepared body; "ai" asks the
@@ -293,24 +348,73 @@ export function ReplyComposer({
               : undefined,
           }),
         });
-        const data = await res.json().catch(() => ({}));
-        if (!active) return;
-        if (data.draft) {
-          if (isForward) {
-            // Keep the Fwd: subject; the AI note sits above the quote block.
-            setInitialDraft(`${data.draft.body.trim()}\n${init.body}`);
-          } else {
-            setSubject(data.draft.subject);
-            setInitialDraft(withQuote(data.draft.body));
-            // Remember the AI's own text (pre-quote) so send-time can learn the
-            // diff against what the user actually sends. Only genuine AI drafts.
-            if (data.ai) aiBaselineRef.current = data.draft.body;
-          }
-        } else {
-          // AI生成が失敗（クレジット切れ等で500）でも、引用付きの定型文を必ず
-          // 用意して手書きできるようにする（引用が消える問題の修正）。
+        if (!res.ok) {
+          // 生成前エラー（設定不備等）はJSONで返る。定型文にフォールバック。
+          const data = await res.json().catch(() => ({}));
+          if (!active) return;
           setInitialDraft(isForward ? init.body : withQuote(init.body));
           if (data.error) setNote(t("composer.toast.genFailed"));
+          return;
+        }
+        // NDJSON（1行＝下書きスナップショット）を逐次読みし、届いた端から
+        // エディタへ流し込む（生成中はエディタはオーバーレイでロック）。
+        const applySnap = (o: { subject?: string; body?: string }) => {
+          if (isForward) {
+            // Keep the Fwd: subject; the AI note sits above the quote block.
+            setInitialDraft(`${(o.body ?? "").trim()}\n${init.body}`);
+          } else {
+            if (o.subject) setSubject(o.subject);
+            setInitialDraft(withQuote(o.body ?? ""));
+          }
+        };
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let got = false; // 使えるスナップショットを1つでも受け取ったか
+        let failed = false;
+        const handleLine = (line: string) => {
+          const s = line.trim();
+          if (!s) return;
+          let o: {
+            subject?: string;
+            body?: string;
+            done?: boolean;
+            ai?: boolean;
+            error?: string;
+          };
+          try {
+            o = JSON.parse(s);
+          } catch {
+            return; // 不完全行は無視（通常は buf 側に残る）
+          }
+          if (o.error) {
+            failed = true;
+            return;
+          }
+          if (!got) setStreamingDraft(true); // 初回スナップ→エディタを表に出す
+          got = true;
+          applySnap(o);
+          // AIの本文（引用前）を控え、送信時に実送信との差分を学習する。
+          if (o.done && o.ai && !isForward && o.body) aiBaselineRef.current = o.body;
+        };
+        if (reader) {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (!active) return;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop() ?? ""; // 末尾の未完行は次回へ
+            for (const ln of lines) handleLine(ln);
+          }
+          if (buf) handleLine(buf); // 最終行
+        }
+        if (!active) return;
+        if (failed || !got) {
+          // AI生成が失敗（クレジット切れ等）でも、引用付きの定型文を必ず用意して
+          // 手書きできるようにする（引用が消える問題の修正）。
+          setInitialDraft(isForward ? init.body : withQuote(init.body));
+          if (failed) setNote(t("composer.toast.genFailed"));
         }
       } catch (e) {
         // Cancelled or failed → fall back to the plain template (editable).
@@ -319,7 +423,10 @@ export function ReplyComposer({
           if ((e as Error).name === "AbortError") setNote(t("composer.toast.genCancelled"));
         }
       } finally {
-        if (active) setGenerating(false);
+        if (active) {
+          setGenerating(false);
+          setStreamingDraft(false);
+        }
       }
     })();
     return () => {
@@ -1021,7 +1128,9 @@ export function ReplyComposer({
                 onSelectionChange={setSelectionText}
               />
             )}
-            {generating && (
+            {/* 生成開始〜初回トークンまでは全面オーバーレイ。逐次が流れ始めたら
+                外して、エディタに溜まっていく下書きを見せる。 */}
+            {generating && !streamingDraft && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg text-fg-subtle">
                 <Loader2 className="size-5 animate-spin text-accent" />
                 <p className="text-sm">{t("composer.aiDrafting")}</p>
@@ -1032,6 +1141,22 @@ export function ReplyComposer({
                   {t("composer.cancelWriteSelf")}
                 </button>
               </div>
+            )}
+            {/* 逐次中: 本文は見せたまま、透明シールドで編集だけ止める（setContent が
+                カーソルを奪うのを防ぐ）。送信ロックは generating で継続。 */}
+            {generating && streamingDraft && (
+              <>
+                <div className="absolute inset-0 z-10 cursor-default bg-transparent" />
+                <div className="absolute right-2 top-0 z-20 flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs text-accent">
+                  <Loader2 className="size-3 animate-spin" /> {t("composer.aiDrafting")}
+                  <button
+                    onClick={cancelAi}
+                    className="rounded-full px-1.5 font-medium underline-offset-2 hover:underline"
+                  >
+                    {t("composer.cancelShort")}
+                  </button>
+                </div>
+              </>
             )}
             {busy && (
               <div className="absolute right-2 top-0 flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs text-accent">
@@ -1235,6 +1360,33 @@ export function ReplyComposer({
             </div>
           ))}
           {note && <div className="text-xs text-fg-subtle">{note}</div>}
+          {trCheck && (
+            <div className="rounded-lg border border-border bg-surface px-3 py-2 text-xs">
+              <div className="mb-1 flex items-center gap-1.5">
+                <Languages className="size-3.5 text-accent" />
+                <span className="font-medium text-fg-muted">
+                  {t("composer.translateCheckTitle")}
+                </span>
+                <button
+                  onClick={() => setTrCheck(null)}
+                  className="ml-auto text-fg-subtle hover:text-fg"
+                  title={t("composer.close")}
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+              {trCheck.error ? (
+                <p className="text-high">{trCheck.error}</p>
+              ) : (
+                <p className="whitespace-pre-wrap leading-6 text-fg/90">
+                  {trCheck.text}
+                  {trCheck.loading && (
+                    <span className="ml-0.5 inline-block h-3.5 w-1 animate-pulse bg-accent/60 align-text-bottom" />
+                  )}
+                </p>
+              )}
+            </div>
+          )}
           {polite && !polite.loading && (
             <div className="rounded-lg border border-accent/30 bg-accent-soft/40 px-3 py-2 text-xs">
               <div className="mb-1 flex items-center gap-1.5">
@@ -1304,19 +1456,34 @@ export function ReplyComposer({
               </button>
             );
           })}
-          {/* 失礼チェック: 書き換えではなく、問題箇所＋理由をコメントで返す。 */}
-          <button
-            onClick={runReview}
-            disabled={busy || generating || reviewing || polite?.loading}
-            className="ml-auto inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:opacity-90 disabled:opacity-50"
-          >
-            {polite?.loading ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <ShieldCheck className="size-3" />
-            )}
-            {t("composer.review")}
-          </button>
+          <div className="ml-auto flex items-center gap-1.5">
+            {/* 訳して確認: 書き換えず、下書きの英訳をプレビュー（海外の相手向け）。 */}
+            <button
+              onClick={translateCheck}
+              disabled={busy || generating || reviewing || trCheck?.loading}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-medium text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+            >
+              {trCheck?.loading ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Languages className="size-3" />
+              )}
+              {t("composer.translateCheck")}
+            </button>
+            {/* 失礼チェック: 書き換えではなく、問題箇所＋理由をコメントで返す。 */}
+            <button
+              onClick={runReview}
+              disabled={busy || generating || reviewing || polite?.loading}
+              className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:opacity-90 disabled:opacity-50"
+            >
+              {polite?.loading ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <ShieldCheck className="size-3" />
+              )}
+              {t("composer.review")}
+            </button>
+          </div>
         </div>
 
         <div className="border-t border-border p-3">

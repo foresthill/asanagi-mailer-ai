@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateObject } from "ai";
+import { streamObject } from "ai";
 import { z } from "zod";
 import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import {
@@ -20,18 +20,38 @@ import { logAiUsage } from "@/lib/db";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
 import type { DraftRequest } from "@/lib/types";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const draftSchema = z.object({
   subject: z.string(),
   body: z.string(),
 });
 
+/** 下書きの逐次配信フォーマット（NDJSON・1行＝1スナップショット）。 */
+type DraftSnapshot = {
+  subject?: string;
+  body?: string;
+  done?: boolean;
+  ai?: boolean;
+  error?: string;
+};
+
+/** 単発（AI未設定のフォールバック等）を同じNDJSON形式で返す。 */
+function ndjsonOnce(obj: DraftSnapshot): Response {
+  return new Response(JSON.stringify(obj) + "\n", {
+    headers: {
+      "content-type": "application/x-ndjson; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
 export async function POST(req: Request) {
   const { email, guidance, history } = (await req.json()) as DraftRequest;
   const cfg = await loadActiveAIConfig();
 
   // Graceful fallback so the app works before any API key is configured.
+  // Streaming clients read NDJSON uniformly, so the fallback is a single line.
   if (!cfg.configured) {
     const subject = email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`;
     const body = `${email.from.name ?? email.from.email} 様
@@ -41,7 +61,7 @@ export async function POST(req: Request) {
 （ここに返信内容が入ります。AIキーを設定すると自動で下書きが生成されます。）
 
 よろしくお願いいたします。`;
-    return NextResponse.json({ draft: { subject, body }, ai: false });
+    return ndjsonOnce({ subject, body, done: true, ai: false });
   }
 
   try {
@@ -111,7 +131,7 @@ export async function POST(req: Request) {
     ]
       .filter(Boolean)
       .join("\n");
-    const { object, usage } = await generateObject({
+    const result = streamObject({
       model: resolveModel(cfg),
       // Explicit output budget: without it some providers reserve the model max
       // (64k) and fail the affordability check when credits run low.
@@ -121,14 +141,58 @@ export async function POST(req: Request) {
       prompt,
     });
     const logged = `[system]\n${REPLY_SYSTEM}\n\n[prompt]\n${prompt}`;
-    logAiUsage("reply", cfg.model, usage?.inputTokens, usage?.outputTokens, {
-      prompt: logged,
-      response: JSON.stringify(object, null, 2),
-      maskAudit: cfg.piiMask ? auditOutgoing("reply", masker, logged) : undefined,
+
+    // マスクトークンが途中で切れている末尾は保留し、完成部分だけ復元して流す
+    // （部分JSONの subject/body それぞれに適用）。translate/ask と同じ方針。
+    const safeUnmask = (s: string | undefined, final: boolean): string => {
+      if (!s) return "";
+      let end = s.length;
+      if (!final) {
+        const open = s.lastIndexOf("[");
+        if (open !== -1 && s.indexOf("]", open) === -1) end = open;
+      }
+      const safe = s.slice(0, end);
+      return cfg.piiMask ? masker.unmask(safe) : safe;
+    };
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (o: DraftSnapshot) =>
+          controller.enqueue(encoder.encode(JSON.stringify(o) + "\n"));
+        try {
+          for await (const partial of result.partialObjectStream) {
+            send({
+              subject: safeUnmask(partial.subject, false),
+              body: safeUnmask(partial.body, false),
+              done: false,
+            });
+          }
+          const object = await result.object;
+          const subject = cfg.piiMask ? masker.unmask(object.subject) : object.subject;
+          const body = cfg.piiMask ? masker.unmask(object.body) : object.body;
+          send({ subject, body, done: true, ai: true });
+          const usage = await result.usage;
+          logAiUsage("reply", cfg.model, usage?.inputTokens, usage?.outputTokens, {
+            prompt: logged,
+            response: JSON.stringify({ subject, body }, null, 2),
+            maskAudit: cfg.piiMask
+              ? auditOutgoing("reply", masker, logged)
+              : undefined,
+          });
+        } catch (e) {
+          send({ error: e instanceof Error ? e.message : "generation failed" });
+        } finally {
+          controller.close();
+        }
+      },
     });
-    return NextResponse.json({
-      draft: { subject: masker.unmask(object.subject), body: masker.unmask(object.body) },
-      ai: true,
+
+    return new Response(stream, {
+      headers: {
+        "content-type": "application/x-ndjson; charset=utf-8",
+        "cache-control": "no-store",
+      },
     });
   } catch (err) {
     return NextResponse.json(
