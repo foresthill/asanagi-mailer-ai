@@ -151,6 +151,9 @@ export function ReplyComposer({
   const [body, setBody] = useState("");
   const [pending, setPending] = useState(0);
   const [generating, setGenerating] = useState(init.mode === "ai");
+  // 下書きが逐次到着し始めたら true。全面オーバーレイを外してエディタに流れる
+  // 本文を見せる（＝逐語の意味）。生成完了まで送信はロックしたまま。
+  const [streamingDraft, setStreamingDraft] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   // Persistent send error (draft is kept) — clearer than a transient alert
@@ -293,24 +296,73 @@ export function ReplyComposer({
               : undefined,
           }),
         });
-        const data = await res.json().catch(() => ({}));
-        if (!active) return;
-        if (data.draft) {
-          if (isForward) {
-            // Keep the Fwd: subject; the AI note sits above the quote block.
-            setInitialDraft(`${data.draft.body.trim()}\n${init.body}`);
-          } else {
-            setSubject(data.draft.subject);
-            setInitialDraft(withQuote(data.draft.body));
-            // Remember the AI's own text (pre-quote) so send-time can learn the
-            // diff against what the user actually sends. Only genuine AI drafts.
-            if (data.ai) aiBaselineRef.current = data.draft.body;
-          }
-        } else {
-          // AI生成が失敗（クレジット切れ等で500）でも、引用付きの定型文を必ず
-          // 用意して手書きできるようにする（引用が消える問題の修正）。
+        if (!res.ok) {
+          // 生成前エラー（設定不備等）はJSONで返る。定型文にフォールバック。
+          const data = await res.json().catch(() => ({}));
+          if (!active) return;
           setInitialDraft(isForward ? init.body : withQuote(init.body));
           if (data.error) setNote(t("composer.toast.genFailed"));
+          return;
+        }
+        // NDJSON（1行＝下書きスナップショット）を逐次読みし、届いた端から
+        // エディタへ流し込む（生成中はエディタはオーバーレイでロック）。
+        const applySnap = (o: { subject?: string; body?: string }) => {
+          if (isForward) {
+            // Keep the Fwd: subject; the AI note sits above the quote block.
+            setInitialDraft(`${(o.body ?? "").trim()}\n${init.body}`);
+          } else {
+            if (o.subject) setSubject(o.subject);
+            setInitialDraft(withQuote(o.body ?? ""));
+          }
+        };
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let got = false; // 使えるスナップショットを1つでも受け取ったか
+        let failed = false;
+        const handleLine = (line: string) => {
+          const s = line.trim();
+          if (!s) return;
+          let o: {
+            subject?: string;
+            body?: string;
+            done?: boolean;
+            ai?: boolean;
+            error?: string;
+          };
+          try {
+            o = JSON.parse(s);
+          } catch {
+            return; // 不完全行は無視（通常は buf 側に残る）
+          }
+          if (o.error) {
+            failed = true;
+            return;
+          }
+          if (!got) setStreamingDraft(true); // 初回スナップ→エディタを表に出す
+          got = true;
+          applySnap(o);
+          // AIの本文（引用前）を控え、送信時に実送信との差分を学習する。
+          if (o.done && o.ai && !isForward && o.body) aiBaselineRef.current = o.body;
+        };
+        if (reader) {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (!active) return;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop() ?? ""; // 末尾の未完行は次回へ
+            for (const ln of lines) handleLine(ln);
+          }
+          if (buf) handleLine(buf); // 最終行
+        }
+        if (!active) return;
+        if (failed || !got) {
+          // AI生成が失敗（クレジット切れ等）でも、引用付きの定型文を必ず用意して
+          // 手書きできるようにする（引用が消える問題の修正）。
+          setInitialDraft(isForward ? init.body : withQuote(init.body));
+          if (failed) setNote(t("composer.toast.genFailed"));
         }
       } catch (e) {
         // Cancelled or failed → fall back to the plain template (editable).
@@ -319,7 +371,10 @@ export function ReplyComposer({
           if ((e as Error).name === "AbortError") setNote(t("composer.toast.genCancelled"));
         }
       } finally {
-        if (active) setGenerating(false);
+        if (active) {
+          setGenerating(false);
+          setStreamingDraft(false);
+        }
       }
     })();
     return () => {
@@ -1021,7 +1076,9 @@ export function ReplyComposer({
                 onSelectionChange={setSelectionText}
               />
             )}
-            {generating && (
+            {/* 生成開始〜初回トークンまでは全面オーバーレイ。逐次が流れ始めたら
+                外して、エディタに溜まっていく下書きを見せる。 */}
+            {generating && !streamingDraft && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg text-fg-subtle">
                 <Loader2 className="size-5 animate-spin text-accent" />
                 <p className="text-sm">{t("composer.aiDrafting")}</p>
@@ -1032,6 +1089,22 @@ export function ReplyComposer({
                   {t("composer.cancelWriteSelf")}
                 </button>
               </div>
+            )}
+            {/* 逐次中: 本文は見せたまま、透明シールドで編集だけ止める（setContent が
+                カーソルを奪うのを防ぐ）。送信ロックは generating で継続。 */}
+            {generating && streamingDraft && (
+              <>
+                <div className="absolute inset-0 z-10 cursor-default bg-transparent" />
+                <div className="absolute right-2 top-0 z-20 flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs text-accent">
+                  <Loader2 className="size-3 animate-spin" /> {t("composer.aiDrafting")}
+                  <button
+                    onClick={cancelAi}
+                    className="rounded-full px-1.5 font-medium underline-offset-2 hover:underline"
+                  >
+                    {t("composer.cancelShort")}
+                  </button>
+                </div>
+              </>
             )}
             {busy && (
               <div className="absolute right-2 top-0 flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs text-accent">
