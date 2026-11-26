@@ -8,6 +8,8 @@ import {
   AlertCircle,
   KeyRound,
   Sparkles,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import type { AIProvider } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
@@ -174,6 +176,26 @@ export function ConnectionsSettings({
   // Jev (TypeSafe) key typed this session; undefined = untouched, "" = clear.
   const [jevKeyInput, setJevKeyInput] = useState<string | undefined>(undefined);
   const [test, setTest] = useState<{ ok: boolean; msg: string } | null>(null);
+  // 判定・分類AI（判定用モデル/Jev）は任意の二次設定で「設定しない人も多い」ため、
+  // 既定で畳んでメインAIの保存ボタンを埋もれさせない。開閉は端末ごとのUI都合として保持。
+  const ADV_OPEN_KEY = "asanagi:conn-judge-open";
+  const [advOpen, setAdvOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(ADV_OPEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleAdv = () =>
+    setAdvOpen((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(ADV_OPEN_KEY, next ? "1" : "0");
+      } catch {
+        /* private mode / blocked storage: in-memory only */
+      }
+      return next;
+    });
   // On-prem endpoint (Ollama /v1): model discovery + connection check. The
   // picker removes hand-typed-model 404s; the status line makes a dead tunnel
   // obvious ("未接続") instead of a cryptic fetch error later.
@@ -768,6 +790,76 @@ export function ConnectionsSettings({
               </div>
             )}
 
+            {/* 現在の有効設定（＝保存済みの実効設定）。保存ボタンのすぐ上に置いて
+                結果と操作を近接させる。判定/Jev の詳細はこの下に畳んである。 */}
+            {view && (
+              <div className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-muted">
+                {t("conn.active.current")}
+                <span className="font-mono">
+                  {view.active.provider === "openai" &&
+                  (view.baseUrl ?? "").trim()
+                    ? t("conn.provider.onprem.label")
+                    : view.active.provider}
+                  :{view.active.model}
+                </span>{" "}
+                {view.active.configured ? (
+                  <span className="text-emerald-600">
+                    {t("conn.active.ok").replace(
+                      "{source}",
+                      view.active.source,
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-high">{t("conn.active.noKey")}</span>
+                )}
+                {view.active.judgmentModel !== view.active.model && (
+                  <span className="mt-0.5 block">
+                    {t("conn.active.judge")}
+                    <span className="font-mono">
+                      {view.active.judgmentModel}
+                    </span>
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* メインAI設定の保存。以前は判定/Jev の下（最下部）で埋もれていたため、
+                メイン設定の直下へ移動（この1ボタンで判定/Jev を含む全AI設定を保存）。 */}
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={handleSave}
+                disabled={loading || saving || testing}
+                className="ml-auto flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                {t("conn.save")}
+              </button>
+            </div>
+
+            {/* 判定・分類AI（判定用モデル / Jev）は任意の二次設定。「設定しない人も
+                多い」ため既定で畳み、メイン設定と保存ボタンを埋もれさせない。 */}
+            <div className="border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={toggleAdv}
+                aria-expanded={advOpen}
+                className="flex w-full items-center gap-1.5 text-left"
+              >
+                {advOpen ? (
+                  <ChevronDown className="size-4 text-fg-subtle" />
+                ) : (
+                  <ChevronRight className="size-4 text-fg-subtle" />
+                )}
+                <span className="text-xs font-semibold">{t("conn.advanced")}</span>
+              </button>
+              {!advOpen && (
+                <p className="mt-1 pl-5 text-[11px] leading-relaxed text-fg-subtle">
+                  {t("conn.advanced.hint")}
+                </p>
+              )}
+            </div>
+            {advOpen && (
+            <div className="flex flex-col gap-4">
             {/* Judgment model — cheap model for 朝の一凪 / 重要度判定 */}
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-fg-muted">
@@ -895,6 +987,8 @@ export function ConnectionsSettings({
 
             {/* Jev プレイグラウンド（Claude と比較・sandbox） */}
             <JevPlayground />
+            </div>
+            )}
 
             <label className="flex items-start gap-2 rounded-xl border border-border bg-bg px-3 py-2.5">
               <input
@@ -953,50 +1047,6 @@ export function ConnectionsSettings({
               </span>
             </label>
 
-            {/* 保存済みの実効設定（＝「現在の有効設定」）。上の「選択中」プレビューと
-                役割を分け、保存ボタンのすぐ上に置いて結果と操作を近接させる。 */}
-            {view && (
-              <div className="rounded-lg bg-surface-2 px-3 py-2 text-[11px] text-fg-muted">
-                {t("conn.active.current")}
-                <span className="font-mono">
-                  {view.active.provider === "openai" &&
-                  (view.baseUrl ?? "").trim()
-                    ? t("conn.provider.onprem.label")
-                    : view.active.provider}
-                  :{view.active.model}
-                </span>{" "}
-                {view.active.configured ? (
-                  <span className="text-emerald-600">
-                    {t("conn.active.ok").replace(
-                      "{source}",
-                      view.active.source,
-                    )}
-                  </span>
-                ) : (
-                  <span className="text-high">{t("conn.active.noKey")}</span>
-                )}
-                {view.active.judgmentModel !== view.active.model && (
-                  <span className="mt-0.5 block">
-                    {t("conn.active.judge")}
-                    <span className="font-mono">
-                      {view.active.judgmentModel}
-                    </span>
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* この AI 設定の保存（接続テストは AI(BYOK) 見出しの横へ移動済み）。 */}
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                onClick={handleSave}
-                disabled={loading || saving || testing}
-                className="ml-auto flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                {t("conn.save")}
-              </button>
-            </div>
             </div>
 
             {/* 右カラム: 動作・通知・使用量・署名・文体・連携。 */}

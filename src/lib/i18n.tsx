@@ -493,6 +493,9 @@ const ja: Dict = {
   "conn.fallback.none": "なし（AIを停止・最も安全／既定）",
   "conn.fallback.note":
     "トンネルが落ちた時だけ、選んだクラウドに自動で切替えます。本文がクラウドに出るため、発動中はPIIマスクを強制し、画面にも「クラウド代替中」と表示します。選んだプロバイダにキーが必要です。",
+  "conn.advanced": "判定・分類AI（任意）",
+  "conn.advanced.hint":
+    "重要度判定・朝の一凪・スパム/フィッシング検知を高速・安価にするための任意設定。未設定ならメインAIで判定します。設定しない場合は開かなくて構いません。",
   "conn.judge": "判定用モデル ID（朝の一凪・重要度判定／任意）",
   "conn.judge.placeholder.cheap": "安価な例: {model}",
   "conn.judge.placeholder.same": "空欄ならメインと同じ",
@@ -1486,6 +1489,9 @@ const en: Dict = {
   "conn.fallback.none": "None (stop AI · safest · default)",
   "conn.fallback.note":
     "Only when the tunnel drops, automatically switch to the chosen cloud provider. Bodies then leave the LAN, so PII masking is forced on and the UI shows “Cloud fallback”. The chosen provider needs a key.",
+  "conn.advanced": "Classification AI (optional)",
+  "conn.advanced.hint":
+    "Optional: make importance scoring, Morning Sweep and spam/phishing detection faster and cheaper. Falls back to the main AI when unset — leave this closed if you don't use it.",
   "conn.judge": "Judgment model ID (Morning Sweep / importance / optional)",
   "conn.judge.placeholder.cheap": "Cheap example: {model}",
   "conn.judge.placeholder.same": "Empty = same as main",
@@ -2554,6 +2560,9 @@ const fr: Dict = {
   "conn.fallback.none": "Aucun (arrêter l’IA · le plus sûr · défaut)",
   "conn.fallback.note":
     "Uniquement quand le tunnel tombe, bascule automatiquement vers le fournisseur cloud choisi. Les contenus quittent alors le LAN : le masquage PII est forcé et l’interface affiche « Secours cloud ». Le fournisseur choisi doit avoir une clé.",
+  "conn.advanced": "IA de classification (facultatif)",
+  "conn.advanced.hint":
+    "Facultatif : rend le tri d’importance, l’Accalmie du matin et la détection spam/phishing plus rapides et moins chers. Repli sur l’IA principale si non défini — laissez fermé si vous ne l’utilisez pas.",
   "conn.judge":
     "ID du modèle de tri (Accalmie du matin / importance / facultatif)",
   "conn.judge.placeholder.cheap": "Exemple économique : {model}",
@@ -3607,6 +3616,9 @@ const zh: Dict = {
   "conn.fallback.none": "无（停止 AI・最安全・默认）",
   "conn.fallback.note":
     "仅当隧道断开时，自动切换到所选云端提供商。正文将离开局域网，因此回退期间强制启用 PII 脱敏，界面会显示“云端备用中”。所选提供商需要密钥。",
+  "conn.advanced": "判定・分类AI（可选）",
+  "conn.advanced.hint":
+    "可选：让重要度判定、晨间一凪、垃圾/钓鱼检测更快更省。未设置时回退到主AI。不使用可不展开。",
   "conn.judge": "判定用模型 ID（晨间一凪・重要度判定／可选）",
   "conn.judge.placeholder.cheap": "便宜示例：{model}",
   "conn.judge.placeholder.same": "留空＝与主模型相同",
