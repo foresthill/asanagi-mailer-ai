@@ -156,11 +156,29 @@ export function ReaderAiPanel({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ messages, question: q, locale }),
       });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error ?? t("translate.failed"));
-      setAnswer(d.answer as string);
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error ?? t("translate.failed"));
+      }
+      // text/plain のストリーム。受信した端から answer に流し込む（逐語表示）。
+      const reader = r.body?.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      setAnswer(""); // プレースホルダ（空）を出してストリーム中の枠を表示
+      if (reader) {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          acc += decoder.decode(value, { stream: true });
+          setAnswer(acc);
+        }
+        acc += decoder.decode();
+        setAnswer(acc);
+      }
+      if (!acc.trim()) setAnswer(null);
     } catch (e) {
       setAskErr(e instanceof Error ? e.message : t("translate.failed"));
+      setAnswer(null);
     } finally {
       setAsking(false);
     }
@@ -431,7 +449,7 @@ export function ReaderAiPanel({
             送信
           </button>
           {askErr && <p className="text-xs text-high">{askErr}</p>}
-          {answer && (
+          {answer !== null && (
             <div className="rounded-lg border border-border bg-surface p-3">
               <div className="mb-1.5 flex items-center">
                 <CopyBtn text={answer} />
@@ -441,6 +459,9 @@ export function ReaderAiPanel({
               </div>
               <div className="whitespace-pre-wrap text-sm leading-6 text-fg/90">
                 {answer}
+                {asking && (
+                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent/60 align-text-bottom" />
+                )}
               </div>
             </div>
           )}

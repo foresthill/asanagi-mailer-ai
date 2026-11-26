@@ -1648,8 +1648,12 @@ export function MailApp({
           }
         });
     };
-    document.addEventListener("click", onClick);
-    return () => document.removeEventListener("click", onClick);
+    // Capture phase: plain-text autolinks (LinkedText) call stopPropagation() on
+    // their own onClick to avoid triggering the row/card click, which would stop
+    // a bubble-phase listener here from ever firing (→ those links did nothing).
+    // Capturing runs before the anchor's handler, so we route the click first.
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
   }, []);
 
   // Widen the current search to the providers' full history (#40).

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateText } from "ai";
+import { streamText } from "ai";
 import { loadActiveAIConfig, resolveModel } from "@/lib/ai/model";
 import { langDirective } from "@/lib/ai/prompts";
 import { PiiMasker, auditOutgoing } from "@/lib/ai/pii";
@@ -13,6 +13,8 @@ export const maxDuration = 60;
  * 読む時のAI「このメールについて質問」(Q&A)。開いているメール（または会話）を
  * 文脈に、ユーザーの自由質問へ答える。要約と同じく PII マスクの関所を通し、
  * クリック時だけ呼ぶ（自動生成しない）。回答生成なのでメインモデルを使う。
+ * 回答は text/plain でストリーミング（遅いローカルAIでも最初の数行がすぐ出る）。
+ * 構造化PIIはマスクして送り、マスクトークンが完成した安全な部分だけ逐次復元する。
  */
 const MAX_MESSAGES = 40;
 // 1通表示なら本文を丸ごと（長いメルマガも全部）見られるよう大きく取る。会話
@@ -89,23 +91,67 @@ export async function POST(req: Request) {
     ].join("\n");
 
     const system = SYSTEM + langDirective(locale);
-    const { text, usage } = await generateText({
+    const result = streamText({
       model: resolveModel(cfg),
       maxOutputTokens: 1200,
       system,
       prompt,
     });
 
-    const answer = masker.unmask(text);
-
     const logged = `[system]\n${system}\n\n[prompt]\n${prompt}`;
-    logAiUsage("ask", cfg.model, usage?.inputTokens, usage?.outputTokens, {
-      prompt: logged,
-      response: answer,
-      maskAudit: cfg.piiMask ? auditOutgoing("ask", masker, logged) : undefined,
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let acc = ""; // masked tokens, as received
+        let sent = 0; // length of unmasked text already emitted
+        const flush = (final: boolean) => {
+          // マスクトークンが途中で切れている末尾は保留し、完成部分だけ復元して送る。
+          let safeEnd = acc.length;
+          if (!final) {
+            const open = acc.lastIndexOf("[");
+            if (open !== -1 && acc.indexOf("]", open) === -1) safeEnd = open;
+          }
+          const safe = acc.slice(0, safeEnd);
+          const un = cfg.piiMask ? masker.unmask(safe) : safe;
+          if (un.length > sent) {
+            controller.enqueue(encoder.encode(un.slice(sent)));
+            sent = un.length;
+          }
+        };
+        try {
+          for await (const chunk of result.textStream) {
+            acc += chunk;
+            flush(false);
+          }
+          flush(true);
+          // ストリーム完了後に使用量と全文（復元済み）をログへ。
+          const usage = await result.usage;
+          const answer = cfg.piiMask ? masker.unmask(acc) : acc;
+          logAiUsage("ask", cfg.model, usage?.inputTokens, usage?.outputTokens, {
+            prompt: logged,
+            response: answer,
+            maskAudit: cfg.piiMask
+              ? auditOutgoing("ask", masker, logged)
+              : undefined,
+          });
+        } catch (e) {
+          controller.enqueue(
+            encoder.encode(
+              `\n[エラー: ${e instanceof Error ? e.message : "回答の生成に失敗しました"}]`,
+            ),
+          );
+        } finally {
+          controller.close();
+        }
+      },
     });
 
-    return NextResponse.json({ answer });
+    return new Response(stream, {
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    });
   } catch (err) {
     console.warn("[ask] AI失敗:", err instanceof Error ? err.message : err);
     return NextResponse.json(
