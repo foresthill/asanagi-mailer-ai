@@ -60,6 +60,7 @@ export function Sidebar({
   failedDraftsCount,
   failedScheduledCount,
   todosCount,
+  overdueTodosCount,
   emailConfigured,
   accounts,
   account,
@@ -85,8 +86,10 @@ export function Sidebar({
   /** 送信/予約に失敗して「未送信」になっている件数（事故防止の警告バッジ）。 */
   failedDraftsCount: number;
   failedScheduledCount: number;
-  /** 未完了 TODO 件数（サイドバーのバッジ）。 */
+  /** 未完了 TODO 件数（サイドバーのバッジ・総数）。 */
   todosCount: number;
+  /** うち期限切れの件数（赤バッジで先頭に出す・0なら非表示）。 */
+  overdueTodosCount: number;
   /** メール接続済みか（最初に必要な必須設定）。AIはあくまで任意の二次設定。 */
   emailConfigured: boolean;
   accounts: AccountInfo[];
@@ -374,8 +377,18 @@ export function Sidebar({
           />
           <span className="flex-1 text-left">{t("nav.todo")}</span>
           {todosCount ? (
-            <span className="rounded-full bg-accent-soft px-1.5 text-xs tabular-nums text-accent">
-              {todosCount}
+            <span className="flex items-center gap-1">
+              {overdueTodosCount > 0 ? (
+                <span
+                  className="rounded-full bg-high-soft px-1.5 text-xs font-medium tabular-nums text-high"
+                  title={t("todo.badge.overdue")}
+                >
+                  {overdueTodosCount}
+                </span>
+              ) : null}
+              <span className="rounded-full bg-accent-soft px-1.5 text-xs tabular-nums text-accent">
+                {todosCount}
+              </span>
             </span>
           ) : null}
         </button>

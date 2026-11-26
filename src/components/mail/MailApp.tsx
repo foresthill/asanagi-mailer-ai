@@ -2685,6 +2685,7 @@ export function MailApp({
         failedDraftsCount={failedDraftsCount}
         failedScheduledCount={failedScheduledCount}
         todosCount={openTodoCount}
+        overdueTodosCount={overdueTodoCount}
         emailConfigured={emailConfigured}
         accounts={accounts}
         account={account}

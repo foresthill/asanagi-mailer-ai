@@ -45,6 +45,44 @@ function dueState(due?: string): "overdue" | "soon" | "later" | "none" {
   return "later";
 }
 
+/**
+ * 見出し用の内訳集計: 期限切れ / 今日(暦日) / それ以降 / 期限なし。
+ * "今日" は now〜当日 23:59:59 を暦日で判定（行バッジの soon=24h 判定とは別軸）。
+ * Date.now() を含むためモジュール関数に閉じ込める（render 内直呼びは不純と扱われる）。
+ */
+function countDueBreakdown(open: TodoItem[]): {
+  overdue: number;
+  today: number;
+  later: number;
+  noDue: number;
+} {
+  const now = Date.now();
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+  const todayEnd = endOfToday.getTime();
+  let overdue = 0;
+  let today = 0;
+  let later = 0;
+  let noDue = 0;
+  for (const x of open) {
+    if (!x.due) {
+      noDue++;
+      continue;
+    }
+    const ms = new Date(x.due).getTime();
+    if (Number.isNaN(ms)) {
+      noDue++;
+    } else if (ms < now) {
+      overdue++;
+    } else if (ms <= todayEnd) {
+      today++;
+    } else {
+      later++;
+    }
+  }
+  return { overdue, today, later, noDue };
+}
+
 /** Open first, sorted by due (overdue→soon→later→no-due); done last. */
 function sortTodos(todos: TodoItem[]): TodoItem[] {
   const rank = (t: TodoItem) => {
@@ -126,7 +164,9 @@ export function TodoView({
 }) {
   const { t } = useI18n();
   const ordered = sortTodos(todos);
-  const openCount = todos.filter((x) => !x.done).length;
+  const open = todos.filter((x) => !x.done);
+  const openCount = open.length;
+  const dueBreakdown = countDueBreakdown(open);
 
   // 会話ごとに1行。この1通TODOが、同じ会話のスレッドTODO配下にあるなら、その
   // スレッド行の下にネスト表示する（＝一覧で同じ会話が重複しない）。親スレッド
@@ -162,6 +202,34 @@ export function TodoView({
         <span className="text-xs text-fg-subtle">
           {t("todo.openCount").replace("{n}", String(openCount))}
         </span>
+        {openCount > 0 ? (
+          <span className="ml-auto flex items-center gap-3 text-[11px] tabular-nums">
+            <span
+              className={cn(
+                dueBreakdown.overdue > 0
+                  ? "font-medium text-high"
+                  : "text-fg-subtle",
+              )}
+            >
+              {t("todo.badge.overdue")} {dueBreakdown.overdue}
+            </span>
+            <span
+              className={cn(
+                dueBreakdown.today > 0
+                  ? "font-medium text-amber-600 dark:text-amber-300"
+                  : "text-fg-subtle",
+              )}
+            >
+              {t("todo.badge.today")} {dueBreakdown.today}
+            </span>
+            <span className="text-fg-subtle">
+              {t("todo.badge.later")} {dueBreakdown.later}
+            </span>
+            <span className="text-fg-subtle">
+              {t("todo.badge.noDue")} {dueBreakdown.noDue}
+            </span>
+          </span>
+        ) : null}
       </header>
       <p className="border-b border-border bg-surface-2 px-6 py-2 text-[11px] text-fg-muted">
         {t("todo.intro")}

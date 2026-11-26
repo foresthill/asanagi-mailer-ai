@@ -273,6 +273,10 @@ const ja: Dict = {
   "todo.unit.thread": "この会話（スレッド）",
   "todo.unit.message": "この1通だけ",
   "todo.overdueBanner": "⏰ 期限切れの TODO が {n} 件あります — 確認する",
+  "todo.badge.overdue": "期限切れ",
+  "todo.badge.today": "今日",
+  "todo.badge.later": "それ以降",
+  "todo.badge.noDue": "期限なし",
   // OpenProject 連携
   "op.title": "OpenProject 連携",
   "op.intro":
@@ -1314,6 +1318,10 @@ const en: Dict = {
   "todo.unit.thread": "This conversation (thread)",
   "todo.unit.message": "This message only",
   "todo.overdueBanner": "⏰ {n} overdue TODO(s) — review",
+  "todo.badge.overdue": "Overdue",
+  "todo.badge.today": "Today",
+  "todo.badge.later": "Later",
+  "todo.badge.noDue": "No due",
   // OpenProject integration
   "op.title": "OpenProject integration",
   "op.intro":
@@ -2377,6 +2385,10 @@ const fr: Dict = {
   "todo.unit.thread": "Cette conversation (fil)",
   "todo.unit.message": "Ce message uniquement",
   "todo.overdueBanner": "⏰ {n} TODO en retard — vérifier",
+  "todo.badge.overdue": "En retard",
+  "todo.badge.today": "Aujourd'hui",
+  "todo.badge.later": "Plus tard",
+  "todo.badge.noDue": "Sans échéance",
   // Intégration OpenProject
   "op.title": "Intégration OpenProject",
   "op.intro":
@@ -3444,6 +3456,10 @@ const zh: Dict = {
   "todo.unit.thread": "整个会话（线程）",
   "todo.unit.message": "仅此一封",
   "todo.overdueBanner": "⏰ 有 {n} 项已过期的 TODO — 查看",
+  "todo.badge.overdue": "已过期",
+  "todo.badge.today": "今天",
+  "todo.badge.later": "以后",
+  "todo.badge.noDue": "无期限",
   // OpenProject 集成
   "op.title": "OpenProject 集成",
   "op.intro":
