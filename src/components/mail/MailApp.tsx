@@ -1635,9 +1635,18 @@ export function MailApp({
       if (!/^https?:\/\//i.test(a.href)) return; // only http(s)
       if (a.hostname === window.location.hostname) return; // internal
       e.preventDefault();
-      void import("@tauri-apps/api/core").then(({ invoke }) =>
-        invoke("open_external", { url: a.href }).catch(() => {}),
-      );
+      const href = a.href;
+      void import("@tauri-apps/api/core")
+        .then(({ invoke }) => invoke("open_external", { url: href }))
+        .catch((err) => {
+          // 従来は握り潰していた。原因をログに残し、window.open へフォールバック。
+          console.error("[asanagi] open_external failed; falling back", err);
+          try {
+            window.open(href, "_blank", "noopener,noreferrer");
+          } catch {
+            /* nothing more we can do */
+          }
+        });
     };
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);

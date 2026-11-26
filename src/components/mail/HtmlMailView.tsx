@@ -237,11 +237,26 @@ export function HtmlMailView({
     if (!a) return;
     const href = a.href; // resolved absolute
     if (!/^https?:\/\//i.test(href)) return; // only http(s)
-    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-      e.preventDefault();
-      void import("@tauri-apps/api/core").then(({ invoke }) =>
-        invoke("open_external", { url: href }).catch(() => {}),
-      );
+    const isDesktop =
+      typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+    // 既定のナビゲーション（WKWebView では target=_blank が無反応で「リンクが開かない」
+    // の原因）を必ず止めてから明示的にルートする。デスクトップは open_external で OS
+    // ブラウザへ。invoke が落ちたとき（従来は .catch で握り潰して無言で失敗していた）は
+    // 原因をログに残しつつ window.open にフォールバック。ブラウザ版は window.open で新規タブ。
+    e.preventDefault();
+    if (isDesktop) {
+      void import("@tauri-apps/api/core")
+        .then(({ invoke }) => invoke("open_external", { url: href }))
+        .catch((err) => {
+          console.error("[asanagi] open_external failed; falling back", err);
+          try {
+            window.open(href, "_blank", "noopener,noreferrer");
+          } catch {
+            /* last resort: nothing more we can do */
+          }
+        });
+    } else {
+      window.open(href, "_blank", "noopener,noreferrer");
     }
   };
 

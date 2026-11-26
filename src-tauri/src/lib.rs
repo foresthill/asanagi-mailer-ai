@@ -1006,17 +1006,25 @@ fn open_external(url: String) -> Result<(), String> {
     if !(u.starts_with("https://") || u.starts_with("http://")) {
         return Err("unsupported url scheme".into());
     }
+    // GUI アプリ（Finder/Dock 起動）は PATH が最小のことがあり、`open`/`xdg-open` を
+    // 名前解決できず spawn が失敗する → 従来はフロントの .catch で握り潰され「リンクが
+    // 開かない」になっていた。macOS は絶対パスで確実に起動する。失敗はログに残す。
     #[cfg(target_os = "linux")]
     let prog = "xdg-open";
     #[cfg(target_os = "macos")]
-    let prog = "open";
+    let prog = "/usr/bin/open";
     #[cfg(target_os = "windows")]
     let prog = "explorer";
-    std::process::Command::new(prog)
-        .arg(u)
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    match std::process::Command::new(prog).arg(u).spawn() {
+        Ok(_) => {
+            log::info!("open_external: launched {prog} for {u}");
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("open_external failed: {prog} {u}: {e}");
+            Err(e.to_string())
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
