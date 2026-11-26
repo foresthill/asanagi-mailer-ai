@@ -30,6 +30,8 @@ export async function POST(req: Request) {
   const patch: AiCacheEntry = {};
   if (body.translations && typeof body.translations === "object")
     patch.translations = body.translations;
+  if (body.translationsQuote && typeof body.translationsQuote === "object")
+    patch.translationsQuote = body.translationsQuote;
   if (body.summaries && typeof body.summaries === "object")
     patch.summaries = body.summaries;
   return NextResponse.json({ ok: true, cache: await saveAiCache(body.id, patch) });
@@ -40,9 +42,18 @@ export async function DELETE(req: Request) {
   const id = u.get("id");
   const kind = u.get("kind");
   const key = u.get("key");
-  if (!id || (kind !== "translation" && kind !== "summary") || !key) {
+  if (
+    !id ||
+    (kind !== "translation" &&
+      kind !== "translationQuote" &&
+      kind !== "summary") ||
+    !key
+  ) {
     return NextResponse.json(
-      { error: "id / kind(translation|summary) / key が必要です" },
+      {
+        error:
+          "id / kind(translation|translationQuote|summary) / key が必要です",
+      },
       { status: 400 },
     );
   }

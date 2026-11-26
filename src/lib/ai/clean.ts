@@ -57,3 +57,58 @@ export function cleanForAI(input: string): string {
     .trim();
   return s;
 }
+
+/** HTML中の「引用（過去のやりとり）ブロック」開始位置のマーカー。 */
+const HTML_QUOTE_MARKERS = [
+  /<blockquote[^>]*type=["']?cite/i, // Gmail / Apple Mail
+  /<div[^>]*class=["'][^"']*gmail_quote/i, // Gmail
+  /<div[^>]*class=["'][^"']*moz-cite-prefix/i, // Thunderbird
+  /<div[^>]*id=["']?(?:divRplyFwdMsg|appendonsend)/i, // Outlook
+];
+
+/** プレーンテキストで「ここから下は引用」と判断する行パターン。 */
+const PLAIN_QUOTE_MARKERS = [
+  /^>/, // quoted line
+  /^On\b.+\bwrote:\s*$/i, // "On ... wrote:"
+  /^-{2,}\s*Original Message\s*-{2,}/i, // Outlook delimiter
+  /^_{5,}\s*$/, // Outlook underline divider
+  /^\d{4}年\d{1,2}月\d{1,2}日.*(?:wrote|書きました)/, // 日本語の引用ヘッダ
+  /^.{0,80}<[^>\s@]+@[^>\s]+>\s*$/, // "Name <addr@host>" だけの行（引用ヘッダ末尾）
+];
+
+/**
+ * メール本文を「本文（最新の発言）」と「引用（過去のやりとり）」に分ける。
+ * 翻訳の既定は本文のみ・引用は別ボタンで、という方針のため（遅いAIで全文を
+ * 毎回訳さない）。完全な分離は不可能だが、閲覧補助として実用的に切る。
+ * HTMLは引用ラッパ（blockquote cite / gmail_quote 等）で、プレーンは行頭パターンで判定。
+ * 戻り値はどちらも cleanForAI 済み。quote が無ければ quote="".
+ */
+export function splitQuoted(raw: string): { main: string; quote: string } {
+  if (!raw) return { main: "", quote: "" };
+  // 1) HTMLの引用ラッパがあれば、生HTMLの最初のマーカー位置で割ってから整形。
+  let cut = -1;
+  for (const re of HTML_QUOTE_MARKERS) {
+    const m = raw.search(re);
+    if (m > 0 && (cut === -1 || m < cut)) cut = m;
+  }
+  if (cut > 0) {
+    return {
+      main: cleanForAI(raw.slice(0, cut)),
+      quote: cleanForAI(raw.slice(cut)),
+    };
+  }
+  // 2) プレーン: 整形してから行頭パターンで引用境界を探す（先頭行は対象外）。
+  const clean = cleanForAI(raw);
+  const lines = clean.split("\n");
+  for (let i = 1; i < lines.length; i++) {
+    const ln = lines[i].trim();
+    if (!ln) continue;
+    if (PLAIN_QUOTE_MARKERS.some((re) => re.test(ln))) {
+      return {
+        main: lines.slice(0, i).join("\n").trim(),
+        quote: lines.slice(i).join("\n").trim(),
+      };
+    }
+  }
+  return { main: clean, quote: "" };
+}

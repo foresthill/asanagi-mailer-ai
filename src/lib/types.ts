@@ -575,8 +575,10 @@ export interface AiSummary {
  * local-first: AIへ送るのは本文（PIIマスク済）だが、保存するのは生成結果のみ。
  */
 export interface AiCacheEntry {
-  /** 言語コード → 訳文。 */
+  /** 言語コード → 本文（引用を除く）の訳文。 */
   translations?: Record<string, string>;
+  /** 言語コード → 引用（過去のやりとり）の訳文。「引用も訳す」で別途生成。 */
+  translationsQuote?: Record<string, string>;
   /** スコープ（"message" | "thread"）→ 要約。 */
   summaries?: Partial<Record<"message" | "thread", AiSummary>>;
   updatedAt?: string;

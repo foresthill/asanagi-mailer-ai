@@ -1389,6 +1389,10 @@ export async function saveAiCache(
   const cur = all[id] ?? {};
   const next: AiCacheEntry = {
     translations: { ...(cur.translations ?? {}), ...(patch.translations ?? {}) },
+    translationsQuote: {
+      ...(cur.translationsQuote ?? {}),
+      ...(patch.translationsQuote ?? {}),
+    },
     summaries: { ...(cur.summaries ?? {}), ...(patch.summaries ?? {}) },
     updatedAt: now.toISOString(),
   };
@@ -1409,13 +1413,15 @@ export async function saveAiCache(
 /** 保存済みの1項目を削除（translation の1言語、または summary の1スコープ）。 */
 export async function deleteAiCacheItem(
   id: string,
-  kind: "translation" | "summary",
+  kind: "translation" | "translationQuote" | "summary",
   key: string,
 ): Promise<AiCacheEntry> {
   const all = await readJson<Record<string, AiCacheEntry>>(AI_CACHE, {});
   const cur = all[id];
   if (!cur) return {};
   if (kind === "translation" && cur.translations) delete cur.translations[key];
+  if (kind === "translationQuote" && cur.translationsQuote)
+    delete cur.translationsQuote[key];
   if (kind === "summary" && cur.summaries)
     delete cur.summaries[key as "message" | "thread"];
   cur.updatedAt = new Date().toISOString();
