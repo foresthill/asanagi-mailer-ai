@@ -14,6 +14,7 @@ import {
   Check,
   Trash2,
   RotateCcw,
+  ChevronDown,
 } from "lucide-react";
 import type { Email, AiSummary, AiCacheEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,10 @@ export function ReaderAiPanel({
 
   // 保存済み出力（メールごと）。マウント時に読み込む（email.id で remount）。
   const [trMap, setTrMap] = useState<Record<string, string>>({});
+  // 引用（過去のやりとり）の訳文は別持ち。「引用も訳す」で逐次生成。
+  const [trQuoteMap, setTrQuoteMap] = useState<Record<string, string>>({});
+  // 引用部が存在するか（翻訳レスポンスの X-Has-Quote で判明）。null=未取得。
+  const [hasQuote, setHasQuote] = useState<boolean | null>(null);
   const [sumMap, setSumMap] = useState<Partial<Record<Scope, AiSummary>>>({});
   const [trLang, setTrLang] = useState<string | null>(null);
   const [sumScope, setSumScope] = useState<Scope | null>(null);
@@ -66,6 +71,7 @@ export function ReaderAiPanel({
         if (!alive) return;
         const c = (d?.cache ?? {}) as AiCacheEntry;
         setTrMap(c.translations ?? {});
+        setTrQuoteMap(c.translationsQuote ?? {});
         setSumMap(c.summaries ?? {});
         const langs = Object.keys(c.translations ?? {});
         if (langs.length) setTrLang(langs[0]);
@@ -87,7 +93,10 @@ export function ReaderAiPanel({
       body: JSON.stringify({ id: email.id, ...patch }),
     }).catch(() => {});
   };
-  const deleteCache = (kind: "translation" | "summary", key: string) => {
+  const deleteCache = (
+    kind: "translation" | "translationQuote" | "summary",
+    key: string,
+  ) => {
     void fetch(
       `/api/ai/cache?id=${encodeURIComponent(email.id)}&kind=${kind}&key=${encodeURIComponent(key)}`,
       { method: "DELETE" },
@@ -157,34 +166,82 @@ export function ReaderAiPanel({
     }
   };
 
-  // --- 翻訳（結果は保存。保存済みは即表示） ---
-  const [trLoading, setTrLoading] = useState(false);
+  // --- 翻訳（ストリーミング。本文は既定、引用は別ボタン。結果は保存） ---
+  const [trLoading, setTrLoading] = useState(false); // 本文ストリーム中
+  const [trqLoading, setTrqLoading] = useState(false); // 引用ストリーム中
   const [trErr, setTrErr] = useState<string | null>(null);
+
+  /** /api/ai/translate をストリームで読み、受信した全文を逐次 onDelta に渡す。 */
+  const streamTranslate = async (
+    code: string,
+    part: "main" | "quote",
+    onDelta: (full: string) => void,
+  ): Promise<{ text: string; hasQuote: boolean }> => {
+    const r = await fetch("/api/ai/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        text: email.html || email.body || email.snippet,
+        target: code,
+        part,
+      }),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d?.error ?? t("translate.failed"));
+    }
+    const hq = r.headers.get("x-has-quote") === "1";
+    const reader = r.body?.getReader();
+    const decoder = new TextDecoder();
+    let acc = "";
+    if (reader) {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        onDelta(acc);
+      }
+      acc += decoder.decode();
+      onDelta(acc);
+    }
+    return { text: acc, hasQuote: hq };
+  };
+
+  const runMain = async (code: string) => {
+    setTrLang(code);
+    setTrErr(null);
+    setTrLoading(true);
+    setTrMap((m) => ({ ...m, [code]: "" })); // 空の箱を出して以降に流し込む
+    try {
+      const { text, hasQuote: hq } = await streamTranslate(code, "main", (full) =>
+        setTrMap((m) => ({ ...m, [code]: full })),
+      );
+      setHasQuote(hq);
+      if (text.trim()) saveCache({ translations: { [code]: text } });
+      else
+        setTrMap((m) => {
+          const n = { ...m };
+          delete n[code];
+          return n;
+        });
+    } catch (e) {
+      setTrErr(e instanceof Error ? e.message : t("translate.failed"));
+      setTrMap((m) => {
+        const n = { ...m };
+        delete n[code];
+        return n;
+      });
+    } finally {
+      setTrLoading(false);
+    }
+  };
+
   const translate = async (code: string) => {
     setTrLang(code);
     setTrErr(null);
     // 保存済みがあれば即表示（再取得しない）。
     if (trMap[code]) return;
-    setTrLoading(true);
-    try {
-      const r = await fetch("/api/ai/translate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          text: email.html || email.body || email.snippet,
-          target: code,
-        }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d?.error ?? t("translate.failed"));
-      const text = d.text as string;
-      setTrMap((m) => ({ ...m, [code]: text }));
-      saveCache({ translations: { [code]: text } });
-    } catch (e) {
-      setTrErr(e instanceof Error ? e.message : t("translate.failed"));
-    } finally {
-      setTrLoading(false);
-    }
+    await runMain(code);
   };
   const retranslate = async (code: string) => {
     setTrMap((m) => {
@@ -193,28 +250,35 @@ export function ReaderAiPanel({
       return next;
     });
     deleteCache("translation", code);
-    // 消してから取り直す。
-    setTrLang(code);
+    await runMain(code);
+  };
+
+  /** 引用（過去のやりとり）を訳す。本文とは別に逐次生成し、別領域に表示・保存。 */
+  const translateQuote = async (code: string) => {
     setTrErr(null);
-    setTrLoading(true);
+    if (trQuoteMap[code]) return; // 保存済みは即表示
+    setTrqLoading(true);
+    setTrQuoteMap((m) => ({ ...m, [code]: "" }));
     try {
-      const r = await fetch("/api/ai/translate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          text: email.html || email.body || email.snippet,
-          target: code,
-        }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d?.error ?? t("translate.failed"));
-      const text = d.text as string;
-      setTrMap((m) => ({ ...m, [code]: text }));
-      saveCache({ translations: { [code]: text } });
+      const { text } = await streamTranslate(code, "quote", (full) =>
+        setTrQuoteMap((m) => ({ ...m, [code]: full })),
+      );
+      if (text.trim()) saveCache({ translationsQuote: { [code]: text } });
+      else
+        setTrQuoteMap((m) => {
+          const n = { ...m };
+          delete n[code];
+          return n;
+        });
     } catch (e) {
       setTrErr(e instanceof Error ? e.message : t("translate.failed"));
+      setTrQuoteMap((m) => {
+        const n = { ...m };
+        delete n[code];
+        return n;
+      });
     } finally {
-      setTrLoading(false);
+      setTrqLoading(false);
     }
   };
   const clearTranslation = (code: string) => {
@@ -223,8 +287,14 @@ export function ReaderAiPanel({
       delete next[code];
       return next;
     });
+    setTrQuoteMap((m) => {
+      const next = { ...m };
+      delete next[code];
+      return next;
+    });
     if (trLang === code) setTrLang(null);
     deleteCache("translation", code);
+    deleteCache("translationQuote", code);
   };
 
   const renderTab = (id: Tab, Icon: typeof FileText, label: string) => (
@@ -245,6 +315,7 @@ export function ReaderAiPanel({
 
   const shownSummary = sumScope ? sumMap[sumScope] : undefined;
   const shownTranslation = trLang ? trMap[trLang] : undefined;
+  const shownQuote = trLang ? trQuoteMap[trLang] : undefined;
 
   return (
     <div className="rounded-xl border border-accent/30 bg-accent-soft/40 p-3">
@@ -403,30 +474,68 @@ export function ReaderAiPanel({
             )}
           </div>
           {trErr && <p className="text-[11px] text-high">{trErr}</p>}
-          {shownTranslation && trLang && (
+          {shownTranslation !== undefined && trLang && (
             <div className="rounded-lg border border-border bg-surface p-3">
               <div className="mb-1.5 flex items-center gap-1">
                 <CopyBtn text={shownTranslation} />
                 <button
                   onClick={() => retranslate(trLang)}
-                  title="翻訳し直す"
-                  className="grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
+                  disabled={trLoading}
+                  title={t("translate.redo")}
+                  className="grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg disabled:opacity-50"
                 >
                   <RotateCcw className="size-3.5" />
                 </button>
                 <button
                   onClick={() => clearTranslation(trLang)}
-                  title="この翻訳を削除"
+                  title={t("translate.remove")}
                   className="grid size-6 place-items-center rounded-md text-fg-subtle hover:bg-surface-2 hover:text-high"
                 >
                   <Trash2 className="size-3.5" />
                 </button>
-                <span className="ml-auto text-[10px] text-fg-subtle">保存済み</span>
+                <span className="ml-auto text-[10px] text-fg-subtle">
+                  {trLoading ? t("translate.streaming") : t("translate.saved")}
+                </span>
               </div>
               <div className="whitespace-pre-wrap text-sm leading-relaxed text-fg">
                 {shownTranslation}
+                {trLoading && (
+                  <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-accent align-middle" />
+                )}
               </div>
             </div>
+          )}
+          {/* 引用（過去のやりとり）は既定で訳さない。ボタンで続けて訳す。 */}
+          {trLang && shownTranslation !== undefined && !trLoading && hasQuote && (
+            <>
+              {shownQuote === undefined ? (
+                <button
+                  onClick={() => translateQuote(trLang)}
+                  disabled={trqLoading}
+                  className="inline-flex items-center gap-1.5 self-start rounded-md border border-border px-2.5 py-1 text-[11px] text-fg-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+                >
+                  <ChevronDown className="size-3.5" />
+                  {t("translate.quote")}
+                </button>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border bg-surface-2 p-3">
+                  <div className="mb-1.5 flex items-center gap-1">
+                    <span className="text-[10px] font-medium text-fg-subtle">
+                      {t("translate.quoteSection")}
+                    </span>
+                    <span className="ml-auto text-[10px] text-fg-subtle">
+                      {trqLoading ? t("translate.streaming") : t("translate.saved")}
+                    </span>
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-fg-muted">
+                    {shownQuote}
+                    {trqLoading && (
+                      <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-accent align-middle" />
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
           <span className="text-[10px] text-fg-subtle">{t("translate.note")}</span>
         </div>
