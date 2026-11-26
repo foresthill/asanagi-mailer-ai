@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { RefreshCw } from "lucide-react";
 
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -53,39 +54,55 @@ export function AiStatusChip({
   const { t } = useI18n();
   const [s, setS] = useState<AiStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [checking, setChecking] = useState(false); // re-check in flight (click/poll)
   const [open, setOpen] = useState(false); // detail panel (why amber/red)
 
-  useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      try {
-        const res = await fetch("/api/ai/status", { cache: "no-store" });
-        if (alive && res.ok) setS((await res.json()) as AiStatus);
-      } catch {
-        /* keep the last snapshot on a transient error */
-      } finally {
-        if (alive) setLoaded(true);
+  // マウント状態だけ ref で持ち、refresh を useCallback 化して「ポーリング」と
+  // 「クリック即再チェック」で同じ取得処理を共有する。
+  const mounted = useRef(true);
+  const refresh = useCallback(async () => {
+    setChecking(true);
+    try {
+      const res = await fetch("/api/ai/status", { cache: "no-store" });
+      if (mounted.current && res.ok) setS((await res.json()) as AiStatus);
+    } catch {
+      /* keep the last snapshot on a transient error */
+    } finally {
+      if (mounted.current) {
+        setLoaded(true);
+        setChecking(false);
       }
-    };
-    // Kick off via timers / events only — setState never runs synchronously in
-    // the effect body (keeps react-hooks/set-state-in-effect happy).
-    const first = setTimeout(load, 0);
+    }
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    // Kick off via timer — setState never runs synchronously in the effect body
+    // (keeps react-hooks/set-state-in-effect happy).
+    const first = setTimeout(() => void refresh(), 0);
     const poll = setInterval(() => {
-      if (document.visibilityState === "visible") void load();
+      if (document.visibilityState === "visible") void refresh();
     }, POLL_MS);
-    const onFocus = () => void load();
+    const onFocus = () => void refresh();
     window.addEventListener("focus", onFocus);
     // 接続設定でAI設定を保存した直後に即再取得する。これが無いと、プロバイダを
     // 切替えても最大45秒（次のポーリング）まで旧プロバイダ表示のままになる。
     window.addEventListener(AI_STATUS_REFRESH_EVENT, onFocus);
     return () => {
-      alive = false;
+      mounted.current = false;
       clearTimeout(first);
       clearInterval(poll);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener(AI_STATUS_REFRESH_EVENT, onFocus);
     };
-  }, []);
+  }, [refresh]);
+
+  // チップをクリックしてパネルを開くたびに即再チェック（45秒ポーリングを待たない）。
+  // ユーザー要望: チェックしたいときにクリックでぱっと最新化したい。
+  const onChipClick = () => {
+    if (!open) void refresh(); // closed → opening: re-check now
+    setOpen((o) => !o);
+  };
 
   // Dot colour + what's actually serving + short status word from the snapshot.
   let dot = "bg-fg-subtle";
@@ -159,6 +176,15 @@ export function AiStatusChip({
         <span className="truncate text-fg-subtle">· {label}</span>
       </div>
       {reason && <p className="mt-2 text-[11px] leading-snug text-fg-muted">{reason}</p>}
+      {/* クリックで即再チェック（45秒ポーリングを待たない）。 */}
+      <button
+        onClick={() => void refresh()}
+        disabled={checking}
+        className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-fg-muted transition-colors hover:bg-bg hover:text-fg disabled:opacity-60"
+      >
+        <RefreshCw className={cn("size-3", checking && "animate-spin")} />
+        {checking ? t("aistatus.checking") : t("aistatus.recheck")}
+      </button>
       {/* Concrete specifics so the user can act (合わせる / 再接続). */}
       {(s?.modelAvailable === false || s?.reachable === false) && endpoint && (
         <div className="mt-1.5 break-all text-[10px] text-fg-subtle">{endpoint}</div>
@@ -183,7 +209,11 @@ export function AiStatusChip({
 
   const dotEl = (
     <span
-      className={cn("size-1.5 shrink-0 rounded-full", dot, !loaded && "animate-pulse")}
+      className={cn(
+        "size-1.5 shrink-0 rounded-full",
+        dot,
+        (!loaded || checking) && "animate-pulse",
+      )}
     />
   );
 
@@ -193,7 +223,7 @@ export function AiStatusChip({
     return (
       <div className="relative inline-flex">
         <button
-          onClick={() => setOpen((o) => !o)}
+          onClick={onChipClick}
           title={title}
           className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11px] text-fg-muted transition-colors hover:bg-surface hover:text-fg"
         >
@@ -219,7 +249,7 @@ export function AiStatusChip({
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={onChipClick}
         title={title}
         className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-fg-subtle transition-colors hover:bg-surface hover:text-fg"
       >
