@@ -26,15 +26,26 @@ export function langDirective(locale?: string): string {
   return `\n\n## 出力言語（最優先）\nユーザーの表示言語は ${name} です。要約・説明・理由など、ユーザーに見せる文章は必ず ${name} で書いてください。ただしマスクトークン（[NAME_1] や [EMAIL_2] 等）・固有名詞・原文引用はそのまま残します。`;
 }
 
+// 返信ドラフト・レビュー・提案では、元メールは「文脈」として渡す。長文メルマガ等を
+// 丸ごと入れるとプロンプトが肥大し、AIの初動（prefill＝最初のトークンが返るまでの時間
+// ＝あの「数秒の無」）が延びる。返信に必要な要旨は冒頭に集まるので上限で切る（履歴と
+// 同方針）。通常の実メールは数百〜2千字程度なので大半は無変化で、肥大ケースだけ速くなる。
+const EMAIL_BODY_CAP = 2500;
+
 /** Render an email into a compact context block for the model. */
 export function emailContext(email: Email): string {
+  const body = email.body.trim();
+  const capped =
+    body.length > EMAIL_BODY_CAP
+      ? `${body.slice(0, EMAIL_BODY_CAP)}\n…（長いため以下省略）`
+      : body;
   return [
     `From: ${formatAddr(email.from)}`,
     `To: ${email.to.map(formatAddr).join(", ")}`,
     `Date: ${email.date}`,
     `Subject: ${email.subject}`,
     "",
-    email.body.trim(),
+    capped,
   ].join("\n");
 }
 
