@@ -617,10 +617,12 @@ export function ReplyComposer({
    * real HTML is preserved in a <blockquote> (sanitized), else the plain quote
    * is escaped. Returns undefined when HTML送信 is off.
    */
-  function buildHtml(): string | undefined {
+  function buildHtml(plain?: string): string | undefined {
     if (!htmlSend) return undefined;
-    const { head, tail } = splitQuotedDraft(body, init.quote ?? "");
-    const headHtml = plainTextToHtml(head || body);
+    // 送信本文は debounce 中の body state ではなく editor ref を直読み（確実に最新）。
+    const src = plain ?? editorRef.current?.getText() ?? body;
+    const { head, tail } = splitQuotedDraft(src, init.quote ?? "");
+    const headHtml = plainTextToHtml(head || src);
     let quoteHtml = "";
     if (init.quote) {
       if (init.source?.html) {
@@ -696,10 +698,12 @@ export function ReplyComposer({
         attachments: all.length ? all : undefined,
       };
     }
+    // 送信本文は debounce 中の body state ではなく editor ref を直読みして確定。
+    const text = editorRef.current?.getText() ?? body;
     return {
       ...common,
-      body,
-      html: buildHtml(),
+      body: text,
+      html: buildHtml(text),
       attachments: attachments.length ? attachments : undefined,
     };
   }

@@ -27,7 +27,12 @@ export interface DraftEditorHandle {
   loadReview: (segments: Segment[]) => void;
   setText: (text: string) => void;
   resolveAll: (which: "before" | "after") => void;
+  /** Sync the parent (body/pending) immediately, cancelling the debounce. */
+  flush: () => void;
 }
+
+// タイピング中の親同期は debounce。この間隔でまとめて反映する。
+const EMIT_DEBOUNCE_MS = 150;
 
 export interface DraftEditorChange {
   text: string;
@@ -108,6 +113,12 @@ export const DraftEditor = forwardRef<
           ime.onCompositionEnd();
           return false;
         },
+        // フォーカスを外したら保留中の同期を即確定（送信ボタンの活性やレビュー
+        // 判定を最新に。送信本文自体は editor ref を直読みするので別途保証）。
+        blur: () => {
+          flushEmit();
+          return false;
+        },
       },
       // トリプルクリック=その行を選択（単一段落なので既定は全文選択になる）。
       handleTripleClick: handleTripleClickLine,
@@ -132,8 +143,11 @@ export const DraftEditor = forwardRef<
       // カーソル位置を乱すため。確定後の transaction で本文stateは同期される）。
       // RichEditor と同方針。
       if (editor.view.composing) return;
-      const json = editor.getJSON();
-      onChangeRef.current({ text: serializeDoc(json), pending: countSuggestions(json) });
+      // キー入力ごとに getJSON→直列化→countSuggestions→親の再描画まで全部やると、
+      // 長文（引用込み）＋WKWebView で入力がもたつく。短いアイドルでまとめて反映し、
+      // タイピング中は contenteditable の編集そのものを妨げない。送信など本文を
+      // 確定読みする箇所は editor ref を直読みするので、debounce の遅れに依存しない。
+      scheduleEmit();
     },
     onSelectionUpdate({ editor }) {
       const { from, to } = editor.state.selection;
@@ -141,23 +155,41 @@ export const DraftEditor = forwardRef<
     },
   });
 
-  function emit() {
+  // 親同期（body/pending）。即時版と debounce 版。構造変更系は即時、タイピングは
+  // debounce。emitTimerRef で保留中タイマを管理する。
+  const emitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function emitNow() {
+    if (emitTimerRef.current) {
+      clearTimeout(emitTimerRef.current);
+      emitTimerRef.current = null;
+    }
     if (!editor) return;
     const json = editor.getJSON();
     onChangeRef.current({ text: serializeDoc(json), pending: countSuggestions(json) });
   }
+  function scheduleEmit() {
+    if (emitTimerRef.current) clearTimeout(emitTimerRef.current);
+    emitTimerRef.current = setTimeout(() => {
+      emitTimerRef.current = null;
+      emitNow();
+    }, EMIT_DEBOUNCE_MS);
+  }
+  function flushEmit() {
+    if (emitTimerRef.current) emitNow();
+  }
 
   useImperativeHandle(ref, () => ({
     getText: () => (editor ? serializeDoc(editor.getJSON()) : ""),
+    flush: flushEmit,
     setText: (text: string) => {
       if (!editor) return;
       editor.commands.setContent(docFromText(text));
-      emit();
+      emitNow();
     },
     loadReview: (segments: Segment[]) => {
       if (!editor) return;
       editor.commands.setContent(reviewDoc(segments));
-      emit();
+      emitNow();
     },
     resolveAll: (which: "before" | "after") => {
       if (!editor) return;
@@ -174,7 +206,7 @@ export const DraftEditor = forwardRef<
         type: "doc",
         content: [{ type: "paragraph", content }],
       });
-      emit();
+      emitNow();
     },
   }));
 
@@ -184,12 +216,13 @@ export const DraftEditor = forwardRef<
     if (appliedTextRef.current === loadText) return;
     appliedTextRef.current = loadText;
     editor.commands.setContent(docFromText(loadText));
-    emit();
+    emitNow();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, loadText]);
 
   useEffect(() => {
     return () => {
+      if (emitTimerRef.current) clearTimeout(emitTimerRef.current);
       editor?.destroy();
     };
   }, [editor]);
